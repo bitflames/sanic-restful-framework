@@ -134,7 +134,7 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
 
 ## 支持的依赖版本
 
-### v1.0.0
+### v0.0.1
 
 | 依赖 | 版本要求 |
 |------|---------|
@@ -149,9 +149,9 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
 
 ## 获取更新
 
-- **GitHub**: https://github.com/bitblames/sanic-restful-framework/sanic-restful-framework
+- **GitHub**: https://github.com/bitblames/sanic-restful-framework/
 - **PyPI**: https://pypi.org/project/sanic-restful-framework/
-- **文档**: https://sanic-restful-framework.readthedocs.io/
+- **文档**: https://sanic-restful-framework.bitflames.com/
 
 
 ## 反馈和建议

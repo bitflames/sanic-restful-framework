@@ -1,4 +1,5 @@
 """Unit tests for srf.views.base (ViewSet mixins and BaseViewSet)."""
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -32,6 +33,7 @@ class TestCreateModelMixin:
         request = MagicMock()
         request.json = None
         from sanic.response import HTTPResponse
+
         response = await mixin.create(request)
         assert isinstance(response, HTTPResponse)
         assert response.status == HTTPStatus.HTTP_400_BAD_REQUEST
@@ -67,6 +69,7 @@ class TestUpdateModelMixin:
         request = MagicMock()
         request.json = None
         from sanic.response import HTTPResponse
+
         response = await mixin.update(request, pk=1)
         assert isinstance(response, HTTPResponse)
         assert response.status == HTTPStatus.HTTP_400_BAD_REQUEST
@@ -120,6 +123,7 @@ class TestBaseViewSet:
         perm.has_permission = MagicMock(return_value=False)
         request = MagicMock()
         from sanic.exceptions import Forbidden
+
         with pytest.raises(Forbidden):
             await view.check_permissions(request)
 

@@ -1,4 +1,5 @@
 """Unit tests for srf.paginator."""
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -74,13 +75,9 @@ class TestPaginationHandler:
     async def test_paginate_returns_result(self):
         handler = PaginationHandler(queryset=MagicMock(), page=1, page_size=10)
         handler.queryset.count = AsyncMock(return_value=5)
-        handler.queryset.offset.return_value.limit = AsyncMock(
-            return_value=[MagicMock(id=1), MagicMock(id=2)]
-        )
+        handler.queryset.offset.return_value.limit = AsyncMock(return_value=[MagicMock(id=1), MagicMock(id=2)])
         schema = MagicMock()
-        schema.model_validate.side_effect = lambda obj: MagicMock(
-            model_dump=MagicMock(return_value={"id": getattr(obj, "id", None)})
-        )
+        schema.model_validate.side_effect = lambda obj: MagicMock(model_dump=MagicMock(return_value={"id": getattr(obj, "id", None)}))
         result = await handler.paginate(sch_model=schema)
         assert result.count == 5
         assert result.next is False

@@ -2,6 +2,10 @@
 
 A RESTful API framework based on [Sanic](https://sanic.dev/), providing a Django REST Framework-like development experience to help you quickly build high-performance Web APIs.
 
+- **GitHub**: https://github.com/bitblames/sanic-restful-framework
+- **PyPI**: https://pypi.org/project/sanic-restful-framework/
+- **Documentation**: https://sanic-restful-framework.bitflames.com/
+
 ## Features
 
 - 🚀 **Base ViewSets** - Complete CRUD operations (Create, Retrieve, Update, Destroy, List).

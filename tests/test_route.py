@@ -1,4 +1,5 @@
 """Unit tests for srf.route.SanicRouter."""
+
 import pytest
 from unittest.mock import MagicMock
 

@@ -47,6 +47,7 @@ class TestBaseHealthCheck:
     @pytest.mark.asyncio
     async def test_base_check_raises(self):
         """BaseHealthCheck.check() must be overridden."""
+
         class Incomplete(BaseHealthCheck):
             name = "incomplete"
 

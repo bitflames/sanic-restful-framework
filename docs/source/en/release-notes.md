@@ -134,7 +134,7 @@ Thank you to the following contributors for their contributions to SRF:
 
 ## Supported Dependency Versions
 
-### v1.0.0
+### v0.0.1
 
 | Dependency | Version Requirements |
 |------|---------|
@@ -149,9 +149,9 @@ Thank you to the following contributors for their contributions to SRF:
 
 ## Get Updates
 
-- **GitHub**: https://github.com/bitblames/sanic-restful-framework/sanic-restful-framework
+- **GitHub**: https://github.com/bitblames/sanic-restful-framework/
 - **PyPI**: https://pypi.org/project/sanic-restful-framework/
-- **Documentation**: https://sanic-restful-framework.readthedocs.io/
+- **Documentation**: https://sanic-restful-framework.bitflames.com/
 
 
 ## Feedback and Suggestions

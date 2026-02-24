@@ -1,4 +1,5 @@
 """Unit tests for srf.permission.permission."""
+
 import pytest
 from unittest.mock import MagicMock
 

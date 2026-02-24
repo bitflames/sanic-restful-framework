@@ -2,6 +2,7 @@
 Pytest configuration and shared fixtures.
 Set SECRET_KEY before any srf config is loaded.
 """
+
 import os
 
 import pytest
@@ -14,6 +15,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest")
 def mock_request():
     """Minimal Sanic request-like object for unit tests."""
     from unittest.mock import MagicMock
+
     req = MagicMock()
     req.method = "GET"
     req.args = {}

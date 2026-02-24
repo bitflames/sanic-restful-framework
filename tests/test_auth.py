@@ -1,4 +1,5 @@
 """Unit tests for srf.auth (authenticate, retrieve_user, verify_password)."""
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,6 +13,7 @@ class TestAuthenticate:
         request = MagicMock()
         request.json = None
         from sanic.exceptions import BadRequest
+
         with pytest.raises(BadRequest, match="Request body is required"):
             await authenticate(request)
 
@@ -22,6 +24,7 @@ class TestAuthenticate:
         with patch("srf.auth.auth.User") as UserMock:
             UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=None)
             from sanic.exceptions import NotFound
+
             with pytest.raises(NotFound):
                 await authenticate(request)
 
@@ -76,6 +79,7 @@ class TestUserVerifyPassword:
 
     def test_verify_password_uses_bcrypt(self):
         import bcrypt
+
         pwd = b"secret"
         hashed = bcrypt.hashpw(pwd, bcrypt.gensalt())
         user = object.__new__(User)
