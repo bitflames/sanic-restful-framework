@@ -104,7 +104,7 @@ This creates a complete RESTful API:
 
 ## Community and Support
 
-- **GitHub**: [github.com/\*](https://github.com/bitblames/sanic-restful-framework)
+- **GitHub**: [github.com/\*](https://github.com/bitflames/sanic-restful-framework)
 - **Issue Feedback**: If you find a bug or have a feature suggestion, please submit an issue on GitHub
 - **Contribute Code**: Welcome to submit Pull Requests to help improve SRF
 

@@ -2,7 +2,7 @@ import sanic
 from packaging.version import Version
 
 __title__ = ' Sanic RESTful Framework'
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 __author__ = 'Chacer'
 __author_email__ = '1364707405c@gmail.com'
 

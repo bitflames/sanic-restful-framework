@@ -105,7 +105,7 @@ app.blueprint(router.get_blueprint())
 
 ## 社区与支持
 
-- **GitHub**: [github.com/*](https://github.com/bitblames/sanic-restful-framework)
+- **GitHub**: [github.com/*](https://github.com/bitflames/sanic-restful-framework)
 - **问题反馈**: 如果您发现 bug 或有功能建议，请在 GitHub 上提交 issue
 - **贡献代码**: 欢迎提交 Pull Request 来帮助改进 SRF
 

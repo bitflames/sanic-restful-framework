@@ -14,7 +14,7 @@ Format: `Major Version.Minor Version.Patch Version`
 
 ## Version History
 
-### v0.0.1 (2026-02-07)
+### v0.0.2 (2026-02-07)
 
 **First official release** 🎉
 
@@ -107,7 +107,7 @@ Format: `Major Version.Minor Version.Patch Version`
 
 ## Known Issues
 
-### v0.0.1
+### v0.0.2
 
 | Issue | Severity | Status | Estimated Fix Version |
 |------|--------|------|-------------|
@@ -134,7 +134,7 @@ Thank you to the following contributors for their contributions to SRF:
 
 ## Supported Dependency Versions
 
-### v0.0.1
+### v0.0.2
 
 | Dependency | Version Requirements |
 |------|---------|
@@ -149,7 +149,7 @@ Thank you to the following contributors for their contributions to SRF:
 
 ## Get Updates
 
-- **GitHub**: https://github.com/bitblames/sanic-restful-framework/
+- **GitHub**: https://github.com/bitflames/sanic-restful-framework/
 - **PyPI**: https://pypi.org/project/sanic-restful-framework/
 - **Documentation**: https://sanic-restful-framework.bitflames.com/
 

@@ -2,7 +2,7 @@ site_name:  Sanic RESTful Framework
 
 # Repository
 repo_name:  Sanic RESTful Framework
-repo_url: https://github.com/bitblames/sanic-restful-framework
+repo_url: https://github.com/bitflames/sanic-restful-framework
 
 docs_dir: source
 
