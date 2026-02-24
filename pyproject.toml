@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=58", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sanic-restful-framework"
+description = "An extensible, high-performance web framework based on Sanic, designed to bring the best parts of Django REST Framework into the world of asynchronous programming. Ideal for building fast, scalable APIs with minimal setup."
+readme = {file = "README.md", content-type = "text/markdown"}
+dynamic = ["version"]
+license = {text = "MIT"}
+authors = [{name = "Chacer", email = "1364707405c@gmail.com"}]
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.13,<4",
+    "bcrypt>=4.1.2",
+    "packaging>=26,<27",
+    "pydantic>=2.6.1,<3",
+    "pydantic_core>=2.41,<3",
+    "PyJWT>=2.10,<3",
+    "redis>=7.1,<8",
+    "sanic>=25.0.0,<26",
+    "sanic_jwt>=1.8.0,<2",
+    "tortoise-orm==0.25.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0,<10",
+    "pytest-asyncio>=1.3,<2",
+    "black",
+    "isort",
+    "ruff",
+    "build",
+]
+
+[project.urls]
+Homepage = "https://github.com/bitblames/sanic-restful-framework"
+
+[tool.setuptools]
+packages = { find = { where = ["."] } }
+
+[tool.setuptools.dynamic]
+version = { attr = "srf.__version__" }
+
+[tool.black]
+line-length = 150
+skip-string-normalization = true
+
+[tool.isort]
+profile = "black"
+line_length = 150
+known_first_party = ["srf"]
+
+[tool.ruff]
+line-length = 150

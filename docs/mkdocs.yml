@@ -1,0 +1,157 @@
+site_name:  Sanic RESTful Framework
+
+# Repository
+repo_name:  Sanic RESTful Framework
+repo_url: https://github.com/bitblames/sanic-restful-framework
+
+docs_dir: source
+
+# Copyright
+copyright: Copyright &copy; 2026 Chacer
+
+# Theme
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/lightbulb-outline
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/lightbulb
+        name: Switch to light mode
+
+# Plugins
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          setup_commands:
+            - import sys
+            - sys.path.insert(0, '../')
+          options:
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            show_source: true
+            separate_signature: true
+            show_category_heading: true
+  - i18n:
+      docs_structure: folder
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: zh
+          name: 中文
+          build: true
+          nav_translations:
+            Home: 主页
+            Features: 特点
+            Usage: 用法
+            Getting Started: 快速开始
+            Project Setup: 项目设置
+            Core Concepts: 核心概念
+            Views: 视图
+            ViewSet: viewset
+            Decorators: 装饰器
+            Routing: 路由
+            Schema: 校验
+            Authentication: 认证
+            JWT Authentication: 基本JWT验证
+            Social Login: 社交登录
+            API Permissions: 接口权限验证
+            Permissions: 权限
+            Pagination: 分页
+            Filtering: 过滤
+            Advanced: 其他功能
+            Advanced Features: 高级功能
+            Health Check: 健康检查
+            Middleware: 中间件
+            Exceptions: 异常
+            HTTP Status: 状态码
+            API Reference: API参考
+            Configuration: 配置项
+            Release Notes: 发布说明
+
+# Navigation
+nav:
+  - Home: index.md
+  - Features: features.md
+
+  - Usage:
+      - Getting Started: usage/getting-started.md
+      - Project Setup: usage/project-setup.md
+
+      - Core Concepts:
+          - Views:
+              - ViewSet: usage/core/viewsets.md
+              - Decorators: usage/core/viewset-actions.md
+          - Routing: usage/core/routing.md
+          - Schema: usage/core/schema.md
+          - Authentication:
+              - JWT Authentication: usage/core/authentication.md
+              - Social Login: usage/core/social-login.md
+              - API Permissions: usage/core/auth-permissions.md
+          - Permissions: usage/core/permissions.md
+          - Pagination: usage/core/pagination.md
+          - Filtering: usage/core/filtering.md
+
+      - Advanced:
+          - Advanced Features: usage/advanced/advanced-features.md
+          - Health Check: usage/advanced/health-check.md
+          - Middleware:
+              - Authentication: usage/advanced/middleware/auth-middleware.md
+              - CSRF: usage/advanced/middleware/csrf-middleware.md
+              - Rate Limiting: usage/advanced/middleware/rate-limiting.md
+          - Exceptions: usage/advanced/exceptions.md
+          - HTTP Status: usage/advanced/http-status.md
+
+  - API Reference: api-reference.md
+  - Configuration: config.md
+  - Release Notes: release-notes.md
+
+# Extra
+extra:
+  alternate:
+    - name: English
+      link: /
+      lang: en
+    - name: 中文
+      link: /zh/
+      lang: zh
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+      baselevel: 2

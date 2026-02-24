@@ -1,0 +1,27 @@
+action_log/
+docs/site/
+sanic_restful_framework.egg-info/
+
+# Python
+**/__pycache__
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.ruff_cache/
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
