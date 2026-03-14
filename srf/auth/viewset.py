@@ -22,7 +22,7 @@ from .auth import authenticate, retrieve_user
 from .schema import UserSchemaReader, UserSchemaWriter
 
 
-def setup_auth(app: Sanic, *args, **kwargs):
+def setup_auth(app: Sanic, *args, **kwargs) -> Initialize:
     url_prefix = kwargs.pop("url_prefix", "/api/auth")
     secret = kwargs.pop("secret", srfconfig.JWT_SECRET)
     path_to_authenticate = kwargs.pop(
@@ -78,7 +78,7 @@ async def register(request: Request):
 
     # Generate JWT payload with serializable role (name string, not FK object)
     role_name = user_db.role.name if user_db.role else None
-    aut = Authentication(request.app, request.app.ctx.jwt.config)
+    aut = Authentication(request.app, srfconfig.JWT.config or request.app.ctx.JWT.config)
     access_token = await aut.generate_access_token(
         user={
             "user_id": user_db.id,

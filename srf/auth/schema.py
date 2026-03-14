@@ -33,7 +33,7 @@ class UserSchemaWriter(SchemaBaseTime):
     is_active: bool = True
     is_staff: bool = False
     is_superuser: bool = False
-    password: Optional[str]
+    password: Optional[str] = Field(None, alias="password1")
     role_name: str = Field(default="user")
 
     model_config = ConfigDict(

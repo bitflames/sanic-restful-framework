@@ -18,7 +18,7 @@ class VerifyEmailRequest(BaseModel):
     # expire_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(minutes=10))
 
 
-def send_email(to_email, subject="", content=""):
+async def send_email(to_email, subject="", content=""):
     """
     send email by SMTP
 
@@ -59,10 +59,10 @@ def send_email(to_email, subject="", content=""):
         return False
 
 
-def send_verify_code(to_email, verify_code):
+async def send_verify_code(to_email, verify_code):
     content = f"""your code:{verify_code}, valid within one minute"""
     subject = "platform verification code"
     try:
-        send_email(to_email, subject, content)
+        await send_email(to_email, subject, content)
     except Exception:
         logger.exception("Email send failed")

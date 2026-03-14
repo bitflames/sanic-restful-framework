@@ -55,7 +55,7 @@ class User(TorModel):
                 raise ValueError("Role 'user' not found. Please ensure the role exists in the database.")
             user_db = cls(**user_info, role=role)
             try:
-                user_db = await user_db.save(using_db=conn)
+                await user_db.save(using_db=conn)
             except exceptions.IntegrityError:
                 raise TargetObjectAlreadyExist(message="user already exists")
             return user_db
