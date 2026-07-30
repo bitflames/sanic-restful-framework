@@ -59,7 +59,7 @@ class CreateModelMixin:
         """Handle POST requests"""
         pass
 
-    async def perform_create(self, request, schema):
+    async def perform_create(self, schema, request, *args, **kwargs):
         """Perform creation (can be overridden)"""
         pass
 ```

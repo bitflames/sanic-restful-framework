@@ -1,6 +1,6 @@
 # CSRF Middleware
 
-The CSRF (Cross-Site Request Forgery, Cross-Site Request Forgery) middleware is used to protect the application from CSRF attacks.
+The CSRF (Cross-Site Request Forgery) middleware is used to protect the application from CSRF attacks.
 
 ## Overview
 

@@ -6,7 +6,7 @@ This guide will take you from zero to your first project based on the Sanic REST
 
 Before starting, ensure your environment meets the following requirements:
 
-- **Python**: 3.9 or higher
+- **Python**: 3.11 or higher
 - **pip**: Python package management tool
 - **Database**: PostgreSQL, MySQL, SQLite, etc. (This tutorial uses SQLite)
 

@@ -30,7 +30,7 @@ myproject/
 ├── routes.py                   # 路由配置
 ├── permissions.py              # 自定义权限类
 ├── filters.py                  # 自定义过滤器
-├── middlewares.py              # 自定义中间件
+├── middleware.py              # 自定义中间件
 ├── utils/                      # 工具函数
 │   ├── __init__.py
 │   ├── helpers.py
@@ -610,7 +610,7 @@ gunicorn app:app \
 创建 `Dockerfile`：
 
 ```dockerfile
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 

@@ -6,7 +6,7 @@
 
 在开始之前，请确保您的环境满足以下要求：
 
-- **Python**: 3.9 或更高版本
+- **Python**: 3.11 或更高版本
 - **pip**: Python 包管理工具
 - **数据库**: PostgreSQL、MySQL、SQLite 等（本教程使用 SQLite）
 

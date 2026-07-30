@@ -55,11 +55,11 @@ class BaseViewSet(HTTPMethodView, ModelMixin):
 class CreateModelMixin:
     """创建 Mixin"""
     
-    async def create(self, request):
+    async def create(self, request, *args, **kwargs):
         """处理 POST 请求"""
         pass
     
-    async def perform_create(self, request, schema):
+    async def perform_create(self, schema, *args, **kwargs):
         """执行创建（可重写）"""
         pass
 ```

@@ -375,7 +375,7 @@ class ArticleViewSet(BaseViewSet):
     def get_schema(self, request, is_safe=False):
         return ArticleSchemaReader if is_safe else ArticleSchemaWriter
     
-    async def perform_create(self, request, schema):
+    async def perform_create(self, schema, request):
         """创建文章时自动设置作者"""
         user = self.get_current_user(request)
         data = schema.dict()

@@ -74,7 +74,7 @@ def queryset(self):
 ```python
 def get_schema(self, request, is_safe=False):
     """
-    在同一个请求中可能使用不用的schema，比如输入或输出要控制不同的字段，输入就使用不安全的schema
+    在同一个请求中可能使用不同的schema，比如输入或输出要控制不同的字段，输入就使用不安全的schema
 
     is_safe=True: 读取操作（GET），使用 Reader Schema
     is_safe=False: 写入操作（POST/PUT/PATCH），使用 Writer Schema
@@ -208,7 +208,7 @@ class ProductViewSet(BaseViewSet):
 
 ```python
 class ProductViewSet(BaseViewSet):
-    async def perform_create(self, request, schema):
+    async def perform_create(self, schema, request):
         """自定义创建逻辑
         
         Args:
@@ -551,7 +551,7 @@ class ProductViewSet(BaseViewSet):
         return ProductSchemaReader if is_safe else ProductSchemaWriter
     
     # 自定义创建逻辑
-    async def perform_create(self, request, schema):
+    async def perform_create(self, schema, request):
         """创建产品"""
         data = schema.dict()
         data["created_by"] = request.ctx.user.id

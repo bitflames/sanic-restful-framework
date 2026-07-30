@@ -206,7 +206,7 @@ class ProductViewSet(BaseViewSet):
 
 ```python
 class ProductViewSet(BaseViewSet):
-    async def perform_create(self, request, schema):
+    async def perform_create(self, schema, request):
         """Custom create logic
         
         Args:
@@ -549,7 +549,7 @@ class ProductViewSet(BaseViewSet):
         return ProductSchemaReader if is_safe else ProductSchemaWriter
     
     # Custom create logic
-    async def perform_create(self, request, schema):
+    async def perform_create(self, schema, request):
         """Create product"""
         data = schema.dict()
         data["created_by"] = request.ctx.user.id

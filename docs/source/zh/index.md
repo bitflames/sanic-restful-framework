@@ -6,7 +6,7 @@
 
 Sanic RESTful Framework 是一个基于 [Sanic](https://sanic.dev/) 应用设计的现代化 RESTful API 开发框架，它提供了一套完整的工具和最佳实践，帮助您快速构建高性能的 Web API。
 
-SRF 受到 Django REST Framework 的启发，将其优秀的设计理念移植到了异步的 Sanic 生态系统中，如果您熟悉DRF框架，那您很快就能上手使用SRF，即使您不熟悉Django REST Framework,也没关系，SRF的便捷性一定能帮您快速构建您的应用！
+SRF 受到 Django REST Framework 的启发，将其优秀的设计理念移植到了异步的 Sanic 生态系统中，如果您熟悉DRF框架，那您很快就能上手使用SRF，即使您不熟悉Django REST Framework也没关系，SRF的便捷性一定能帮您快速构建您的应用！
 
 ## 为什么选择 SRF？
 
@@ -105,7 +105,7 @@ app.blueprint(router.get_blueprint())
 
 ## 社区与支持
 
-- **GitHub**: [github.com/*](https://github.com/bitflames/sanic-restful-framework)
+- **GitHub**: [转到GitHub](https://github.com/bitflames/sanic-restful-framework)
 - **问题反馈**: 如果您发现 bug 或有功能建议，请在 GitHub 上提交 issue
 - **贡献代码**: 欢迎提交 Pull Request 来帮助改进 SRF
 

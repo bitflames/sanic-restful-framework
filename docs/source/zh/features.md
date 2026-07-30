@@ -14,7 +14,7 @@ ViewSet 是 SRF 的核心概念，它提供了一种优雅的方式来组织和�
 - 内置 CRUD 基本视图函数（Create, Read, Update, Delete, List）
 - 支持 Mixin 模式，灵活组合功能
 - 通过 `@action` 装饰器轻松添加自定义路由视图函数
-- 快速开发，接近 Django REST Framework的开发体验
+- 快速开发，接近 Django REST Framework 的开发体验
 
 **优势：**
 
@@ -174,7 +174,7 @@ SRF 采用模块化设计，每个功能都是独立的模块，可以根据需�
 ## 开发体验
 
 ### 生态完善
-- 基于Sanic为基础框架，可以和生态中各种框架完美融合
+- 以 Sanic 为基础框架，可以和生态中各种框架完美融合
 
 ### IDE 友好
 
