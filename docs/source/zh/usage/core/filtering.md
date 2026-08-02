@@ -410,7 +410,7 @@ GET /api/products?search=手机&category=1&min_price=1000&max_price=5000&sort=-p
 2. 应用精确过滤（QueryParamFilter）
 3. 应用 JSON 过滤（JsonLogicFilter）
 4. 应用排序（OrderingFactory）
-5. 应用分页（PaginationHandler）
+5. 应用分页（PageNumberPagination）
 
 ## 自定义过滤器
 

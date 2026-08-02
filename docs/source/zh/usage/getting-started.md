@@ -187,7 +187,7 @@ from viewsets import BookViewSet
 
 app = Sanic("BookStore")
 
- # 应用我们的SRF框架
+# 应用我们的SRF框架
 srfconfig.set_app(app)
 
 # 注册数据库

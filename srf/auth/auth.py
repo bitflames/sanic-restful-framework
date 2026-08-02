@@ -9,14 +9,17 @@ async def authenticate(request: Request, *args, **kwargs):
     """Validate credentials and return JWT payload (user_id, username, role). Used by sanic_jwt."""
     if request.json is None:
         raise BadRequest("Request body is required")
-    sch_user = UserLoginSchema.model_validate(request.json, by_alias=True)  # TODO, form login
+    try:
+        sch_user = UserLoginSchema.model_validate(request.json, by_alias=True)  # TODO, form login
+    except Exception as e:
+        raise NotFound("Unable to log in with provided credentials.")
 
     user = await User.filter(email=sch_user.email).select_related("role").first()
     if user is None or not await check_active(user):
         raise NotFound("User not found.")
 
     if not user.verify_password(sch_user.password):
-        raise BadRequest("Login information is incorrect. Login failed")
+        raise NotFound("Login information is incorrect. Login failed")
 
     role_name = user.role.name if user.role else None
     return {"user_id": user.id, "username": user.name, "role": role_name}

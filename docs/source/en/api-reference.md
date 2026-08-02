@@ -218,12 +218,12 @@ from srf.permission.permission import (
 
 ## Pagination
 
-### PaginationHandler
+### PageNumberPagination
 
 ```python
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 
-class PaginationHandler:
+class PageNumberPagination:
     """Pagination handler"""
 
     page_size = 10                      # Default number per page

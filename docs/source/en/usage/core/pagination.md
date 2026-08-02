@@ -13,9 +13,9 @@ Pagination divides large amounts of data into multiple pages, returning only one
 - **Configurable**: Supports customizing the number of items per page and maximum limit
 - **Standardized Response**: Returns a standardized pagination response format
 
-## PaginationHandler
+## PageNumberPagination
 
-`PaginationHandler` is the pagination handler class in SRF.
+`PageNumberPagination` is the pagination handler class in SRF.
 
 ### Basic Usage
 
@@ -82,7 +82,7 @@ GET /api/products?page_size=10
 ### Default Configuration
 
 ```python
-class PaginationHandler:
+class PageNumberPagination:
     page_size = 10              # Default number of items per page
     max_page_size = 100         # Maximum number of items per page
     page_query_param = 'page'   # Page number parameter name
@@ -102,9 +102,9 @@ class ProductViewSet(BaseViewSet):
 #### Method 2: Create a Custom Pagination Class
 
 ```python
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 
-class CustomPagination(PaginationHandler):
+class CustomPagination(PageNumberPagination):
     page_size = 20
     max_page_size = 50
     page_query_param = 'p'
@@ -121,7 +121,7 @@ Apply pagination manually in custom operations:
 ```python
 from srf.views import BaseViewSet
 from srf.views.decorators import action
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 from sanic.response import json
 
 class ProductViewSet(BaseViewSet):
@@ -132,7 +132,7 @@ class ProductViewSet(BaseViewSet):
         queryset = Product.filter(is_featured=True)
         
         # Create paginator
-        paginator = PaginationHandler.from_queryset(queryset, request)
+        paginator = PageNumberPagination.from_queryset(queryset, request)
         
         # Get Schema
         schema = self.get_schema(request, is_safe=True)
@@ -150,10 +150,10 @@ class ProductViewSet(BaseViewSet):
 Create a paginator instance from a query set and request:
 
 ```python
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 
 # Create paginator
-paginator = PaginationHandler.from_queryset(
+paginator = PageNumberPagination.from_queryset(
     queryset=Product.all(),
     request=request
 )
@@ -166,7 +166,7 @@ Execute pagination and return a `PaginationResult` object:
 ```python
 from schemas import ProductSchemaReader
 
-paginator = PaginationHandler.from_queryset(queryset, request)
+paginator = PageNumberPagination.from_queryset(queryset, request)
 result = await paginator.paginate(sch_model=ProductSchemaReader)
 
 # result is a PaginationResult object
@@ -183,7 +183,7 @@ Execute pagination and return a dictionary format:
 ```python
 from schemas import ProductSchemaReader
 
-paginator = PaginationHandler.from_queryset(queryset, request)
+paginator = PageNumberPagination.from_queryset(queryset, request)
 result_dict = await paginator.to_dict(sch_model=ProductSchemaReader)
 
 # result_dict is a dictionary
@@ -226,7 +226,7 @@ class ProductViewSet(BaseViewSet):
 ### Example 1: Adding Extra Metadata
 
 ```python
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 from sanic.response import json
 
 class ProductViewSet(BaseViewSet):
@@ -238,7 +238,7 @@ class ProductViewSet(BaseViewSet):
             queryset = await filter_class().filter_queryset(request, queryset)
         
         # Pagination
-        paginator = PaginationHandler.from_queryset(queryset, request)
+        paginator = PageNumberPagination.from_queryset(queryset, request)
         schema = self.get_schema(request, is_safe=True)
         result = await paginator.to_dict(schema)
         
@@ -307,7 +307,7 @@ class ProductViewSet(BaseViewSet):
 from srf.views import BaseViewSet
 from srf.views.decorators import action
 from srf.permission.permission import IsAuthenticated
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 from sanic.response import json
 from models import Product
 from schemas import ProductSchemaReader, ProductSchemaWriter
@@ -353,7 +353,7 @@ class ProductViewSet(BaseViewSet):
         queryset = Product.filter(name__icontains=keyword)
         
         # Pagination
-        paginator = PaginationHandler.from_queryset(queryset, request)
+        paginator = PageNumberPagination.from_queryset(queryset, request)
         schema = self.get_schema(request, is_safe=True)
         result = await paginator.to_dict(schema)
         

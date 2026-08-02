@@ -163,8 +163,8 @@ class ProductViewSet(BaseViewSet):
             queryset = await filter_class().filter_queryset(request, queryset)
         
         # Pagination
-        from srf.paginator import PaginationHandler
-        paginator = PaginationHandler.from_queryset(queryset, request)
+        from srf.paginator import PageNumberPagination
+        paginator = PageNumberPagination.from_queryset(queryset, request)
         schema = self.get_schema(request, is_safe=True)
         result = await paginator.to_dict(schema)
         

@@ -13,9 +13,9 @@ SRF 提供了基于页码的分页功能，用于处理大量数据的列表查�
 - **可配置**：支持自定义每页数量和最大数量限制
 - **统一响应**：返回标准化的分页响应格式
 
-## PaginationHandler
+## PageNumberPagination
 
-`PaginationHandler` 是 SRF 的分页处理类。
+`PageNumberPagination` 是 SRF 的分页处理类。
 
 ### 基本用法
 
@@ -82,7 +82,7 @@ GET /api/products?page_size=10
 ### 默认配置
 
 ```python
-class PaginationHandler:
+class PageNumberPagination:
     page_size = 10              # 默认每页数量
     max_page_size = 100         # 最大每页数量
     page_query_param = 'page'   # 页码参数名
@@ -102,9 +102,9 @@ class ProductViewSet(BaseViewSet):
 #### 方法 2：创建自定义分页类
 
 ```python
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 
-class CustomPagination(PaginationHandler):
+class CustomPagination(PageNumberPagination):
     page_size = 20
     max_page_size = 50
     page_query_param = 'p'
@@ -121,7 +121,7 @@ class ProductViewSet(BaseViewSet):
 ```python
 from srf.views import BaseViewSet
 from srf.views.decorators import action
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 from sanic.response import json
 
 class ProductViewSet(BaseViewSet):
@@ -132,7 +132,7 @@ class ProductViewSet(BaseViewSet):
         queryset = Product.filter(is_featured=True)
         
         # 创建分页器
-        paginator = PaginationHandler.from_queryset(queryset, request)
+        paginator = PageNumberPagination.from_queryset(queryset, request)
         
         # 获取 Schema
         schema = self.get_schema(request, is_safe=True)
@@ -150,10 +150,10 @@ class ProductViewSet(BaseViewSet):
 从查询集和请求创建分页器实例：
 
 ```python
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 
 # 创建分页器
-paginator = PaginationHandler.from_queryset(
+paginator = PageNumberPagination.from_queryset(
     queryset=Product.all(),
     request=request
 )
@@ -166,7 +166,7 @@ paginator = PaginationHandler.from_queryset(
 ```python
 from schemas import ProductSchemaReader
 
-paginator = PaginationHandler.from_queryset(queryset, request)
+paginator = PageNumberPagination.from_queryset(queryset, request)
 result = await paginator.paginate(sch_model=ProductSchemaReader)
 
 # result 是 PaginationResult 对象
@@ -183,7 +183,7 @@ print(result.results)    # 当前页数据（已序列化）
 ```python
 from schemas import ProductSchemaReader
 
-paginator = PaginationHandler.from_queryset(queryset, request)
+paginator = PageNumberPagination.from_queryset(queryset, request)
 result_dict = await paginator.to_dict(sch_model=ProductSchemaReader)
 
 # result_dict 是字典
@@ -226,7 +226,7 @@ class ProductViewSet(BaseViewSet):
 ### 示例 1：添加额外的元数据
 
 ```python
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 from sanic.response import json
 
 class ProductViewSet(BaseViewSet):
@@ -238,7 +238,7 @@ class ProductViewSet(BaseViewSet):
             queryset = await filter_class().filter_queryset(request, queryset)
         
         # 分页
-        paginator = PaginationHandler.from_queryset(queryset, request)
+        paginator = PageNumberPagination.from_queryset(queryset, request)
         schema = self.get_schema(request, is_safe=True)
         result = await paginator.to_dict(schema)
         
@@ -307,7 +307,7 @@ class ProductViewSet(BaseViewSet):
 from srf.views import BaseViewSet
 from srf.views.decorators import action
 from srf.permission.permission import IsAuthenticated
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 from sanic.response import json
 from models import Product
 from schemas import ProductSchemaReader, ProductSchemaWriter
@@ -353,7 +353,7 @@ class ProductViewSet(BaseViewSet):
         queryset = Product.filter(name__icontains=keyword)
         
         # 分页
-        paginator = PaginationHandler.from_queryset(queryset, request)
+        paginator = PageNumberPagination.from_queryset(queryset, request)
         schema = self.get_schema(request, is_safe=True)
         result = await paginator.to_dict(schema)
         

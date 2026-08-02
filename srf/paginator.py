@@ -1,5 +1,5 @@
 from math import ceil
-from typing import Any, Dict, Generic, TypeVar
+from typing import Any, Dict, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel, field_validator
 from sanic.request import Request
@@ -26,7 +26,24 @@ class PaginationResult(BaseModel):
     results: list[Any]
 
 
-class PaginationHandler(Generic[T]):
+@runtime_checkable
+class BasePagination(Protocol):
+
+    @classmethod
+    def from_queryset(self, queryset: QuerySet[T], request: Request) -> "BasePagination":
+        pass
+
+    def paginate(self, sch_model: BaseModel = None) -> PaginationResult:
+        pass
+
+    def to_dict(self, sch_model: BaseModel = None) -> Dict[str, Any]:
+        pass
+
+    def num_pages(self, total_count: int = None) -> int:
+        pass
+
+
+class PageNumberPagination(BasePagination):
     """
     A simple page number based style that supports page numbers as query parameters. For example:
 
@@ -34,17 +51,16 @@ class PaginationHandler(Generic[T]):
     /api/users/?page=2&page_size=100
     """
 
-    page_size = 10
-    max_page_size = 100
-    page_query_param = 'page'
-    page_size_query_param = 'page_size'
+    MAX_PAGE_SIZE: int = 100  # TODO chacnge to config
+    PAGE_QUERY_PARAM: str = 'page'
+    PAGE_SIZE_QUERY_PARAM: str = 'page_size'
 
     def __init__(
         self,
         queryset: QuerySet[T],
         page: int = 1,
-        page_size: int = page_size,
-        max_page_size: int = max_page_size,
+        page_size: int = 10,
+        max_page_size: int = MAX_PAGE_SIZE,
     ):
         """
         :param queryset: Tortoise ORM queryset
@@ -58,20 +74,14 @@ class PaginationHandler(Generic[T]):
         self.max_page_size = max_page_size
 
     @classmethod
-    def from_queryset(cls, queryset: QuerySet[T], request: Request) -> "PaginationHandler":
+    def from_queryset(cls, queryset: QuerySet[T], request: Request) -> "PageNumberPagination":
         """Parse page and page_size from request; ensure they are positive and within limits."""
         try:
-            page = int(request.args.get(cls.page_query_param, 1))
-            page_size = int(request.args.get(cls.page_size_query_param, cls.page_size))
-            if page < 1:
-                page = 1
-            if page_size < 1:
-                page_size = cls.page_size
-            if page_size > cls.max_page_size:
-                page_size = cls.max_page_size
+            page = max(int(request.args.get(cls.PAGE_QUERY_PARAM, 1)), 1)
+            page_size = min(max(int(request.args.get(cls.PAGE_SIZE_QUERY_PARAM)), 1), cls.MAX_PAGE_SIZE)
         except (TypeError, ValueError):
             page = 1
-            page_size = cls.page_size
+            page_size = 10
         return cls(queryset=queryset, page=page, page_size=page_size)
 
     async def paginate(self, sch_model: BaseModel = None) -> PaginationResult:

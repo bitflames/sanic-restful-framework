@@ -13,7 +13,7 @@ from tortoise.queryset import QuerySet as QuerySetType
 
 from srf.config import srfconfig
 from srf.filters.filter import BaseFilter
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 from srf.permission.permission import BasePermission
 from srf.views.http_status import HTTPStatus
 
@@ -62,13 +62,20 @@ class UpdateModelMixin:
         data: Dict = request.json
         sch_model_in: BaseModel = self._get_schema(request).model_validate(data, strict=True, by_alias=True)
         orm_model: TorModel = await self.get_object(request, pk)
-        for key, val in sch_model_in.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"]).items():
-            # The detailed parameters of model_dump here need to be customized in pydantic model: sch_model_in
+        orm_model = await self.perform_update(sch_model_in, orm_model)
+        sch_model_out: BaseModel = self._get_schema(request, is_safe=True).model_validate(orm_model, from_attributes=True)
+        return JSONResponse(sch_model_out.model_dump(by_alias=True))
+
+    async def perform_update(self, sch_model: BaseModel, orm_model: TorModel) -> TorModel:
+        """
+        sch_model: instance of BaseModel
+        orm_model: instance of TorModel
+        """
+        for key, val in sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"]).items():
             if hasattr(orm_model, key):
                 setattr(orm_model, key, val)
         await orm_model.save()
-        sch_model_out: BaseModel = self._get_schema(request, is_safe=True).model_validate(orm_model, from_attributes=True)
-        return JSONResponse(sch_model_out.model_dump(by_alias=True))
+        return orm_model
 
 
 class DestroyModelMixin:
@@ -88,7 +95,7 @@ class ListModelMixin:
             for filter_class in self.filter_class:
                 filter_class = cast(BaseFilter, filter_class)
                 queryset = filter_class(self).filter_queryset(request, queryset)
-        paginator = PaginationHandler.from_queryset(queryset, request)
+        paginator = PageNumberPagination.from_queryset(queryset, request)
         result = await paginator.paginate(sch_model=sch_model)
         return JSONResponse(result.model_dump(by_alias=True))
 

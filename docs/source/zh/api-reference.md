@@ -218,12 +218,12 @@ from srf.permission.permission import (
 
 ## 分页（Pagination）
 
-### PaginationHandler
+### PageNumberPagination
 
 ```python
-from srf.paginator import PaginationHandler
+from srf.paginator import PageNumberPagination
 
-class PaginationHandler:
+class PageNumberPagination:
     """分页处理器"""
     
     page_size = 10                      # 默认每页数量

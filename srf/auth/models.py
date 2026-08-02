@@ -49,16 +49,18 @@ class User(TorModel):
         user_info = dict(user_info)
         user_info.pop("id", None)
         user_info["password"] = cls.hash_password(user_info["password"])
+
         async with in_transaction() as conn:
+            if await cls.filter(email=user_info["email"]).using_db(conn).exists():
+                raise TargetObjectAlreadyExist(message="user already exists")
+
             role = await Role.filter(name=user_info.pop("role_name", "user")).using_db(conn).first()
             if not role:
-                raise ValueError("Role 'user' not found. Please ensure the role exists in the database.")
-            user_db = cls(**user_info, role=role)
-            try:
-                await user_db.save(using_db=conn)
-            except exceptions.IntegrityError:
-                raise TargetObjectAlreadyExist(message="user already exists")
-            return user_db
+                raise ValueError("Role not found. Please ensure the role you chooseexists in the database.")
+
+            user_orm = cls(**user_info, role=role)
+            await user_orm.save(using_db=conn)
+            return user_orm
 
 
 class UserRoles(TorModel):

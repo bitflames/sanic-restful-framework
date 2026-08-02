@@ -410,7 +410,7 @@ Execution order:
 2. Apply exact filter (QueryParamFilter)
 3. Apply JSON filter (JsonLogicFilter)
 4. Apply sorting (OrderingFactory)
-5. Apply pagination (PaginationHandler)
+5. Apply pagination (PageNumberPagination)
 
 ## Custom Filters
 
