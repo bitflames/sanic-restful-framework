@@ -42,9 +42,7 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          setup_commands:
-            - import sys
-            - sys.path.insert(0, '../')
+          paths: ['../']
           options:
             show_root_heading: true
             show_root_full_path: false
