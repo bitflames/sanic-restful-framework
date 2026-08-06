@@ -36,7 +36,7 @@ class GenericAPIView(BaseViewSet):
         ...
 
     def check_object_permissions(self, request, obj):
-        """Check object-level permissions (optional)"""
+        """Check object-level permissions (optional), raise Forbidden if permission is not permitted"""
         ...
 
     async def get_object(self, request, id: int):

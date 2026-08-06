@@ -139,10 +139,12 @@ class GenericAPIView(HTTPMethodView):
 
         return None
 
-    def check_object_permissions(self, request: Request, obj):
+    async def check_object_permissions(self, request: Request, obj):
         """
         Check object-level permissions
         Subclasses should override this method to implement specific permission checking logic
+        
+        Raise Forbidden if permission is not permitted
         """
         ...
 
@@ -167,9 +169,8 @@ class GenericAPIView(HTTPMethodView):
         if instance is None:
             raise NotFound(message=f"Object with id={id} not found")
 
-        result = self.check_object_permissions(request, instance)
-        if asyncio.iscoroutine(result):
-            await result
+        # await self.check_object_permissions(request, instance)
+
         return instance
 
     @property

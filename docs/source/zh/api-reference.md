@@ -36,7 +36,7 @@ class GenericAPIView(BaseViewSet):
         ...
 
     def check_object_permissions(self, request, obj):
-        """检查对象级权限（可选）"""
+        """检查对象级权限（可选），鉴权失败 raise error """
         ...
 
     async def get_object(self, request, id: int):

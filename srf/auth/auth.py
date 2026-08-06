@@ -1,10 +1,11 @@
-from sanic.exceptions import BadRequest, NotFound
+from sanic.exceptions import BadRequest, Unauthorized
 from sanic.request import Request
 from tortoise.expressions import Q
 
 from .models import User
 from .schema import UserLoginSchema
 
+LOGIN_FAILED_MESSAGE = "Unable to log in with provided credentials."
 
 async def authenticate(request: Request, *args, **kwargs):
     """Validate credentials and return JWT payload (user_id, username, role). Used by sanic_jwt."""
@@ -13,7 +14,7 @@ async def authenticate(request: Request, *args, **kwargs):
     try:
         sch_user = UserLoginSchema.model_validate(request.json, by_alias=True)  # TODO, form login
     except Exception as e:
-        raise NotFound("Unable to log in with provided credentials.")
+        raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
     if sch_user.email:
         query = Q(email=sch_user.email)
@@ -23,10 +24,10 @@ async def authenticate(request: Request, *args, **kwargs):
         query = Q(name=sch_user.username)
     user = await User.filter(query).select_related("role").first()
     if user is None or not await check_active(user):
-        raise NotFound("User not found.")
+        raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
     if not user.verify_password(sch_user.password):
-        raise NotFound("Login information is incorrect. Login failed")
+        raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
     role_name = user.role.name if user.role else None
     return {"user_id": user.id, "username": user.name, "role": role_name}

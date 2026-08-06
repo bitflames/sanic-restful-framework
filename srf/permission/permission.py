@@ -6,21 +6,21 @@ class BasePermission(metaclass=type):
     A base class from which all permission classes should inherit.
     """
 
-    def has_permission(self, request, view=None):
+    def has_permission(self, request, view=None) -> bool:
         """
-        Return `True` if permission is granted, `False` otherwise.
+        Return `True` if permission is granted for the access to the request, `False` otherwise.
         """
         return True
 
-    def has_object_permission(self, request, view=None, obj=None):
+    def has_object_permission(self, request, view=None, obj=None) -> bool:
         """
-        Return `True` if permission is granted, `False` otherwise.
+        Return `True` if permission is granted for the access to the object, `False` otherwise.
         """
         return True
 
 
 class IsRoleAdminUser(BasePermission):
-    def has_permission(self, request, view=None):
+    def has_permission(self, request, view=None) -> bool:
         user = getattr(request.ctx, "user", None)
         if user is None:
             return False
@@ -29,7 +29,7 @@ class IsRoleAdminUser(BasePermission):
 
 
 class IsAuthenticated(BasePermission):
-    def has_permission(self, request, view=None):
+    def has_permission(self, request, view=None) -> bool:
         user = getattr(request.ctx, "user", None)
         return user is not None and getattr(user, "is_active", True)
 
@@ -40,5 +40,5 @@ class IsSafeMethodOnly(BasePermission):
     Use for read-only endpoints: anyone can read, all write operations are denied.
     """
 
-    def has_permission(self, request, view=None):
+    def has_permission(self, request, view=None) -> bool:
         return request.method.upper() in SAFE_HTTP_METHODS
