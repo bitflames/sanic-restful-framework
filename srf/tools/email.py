@@ -42,7 +42,7 @@ async def send_email(to_email, subject="", content=""):
     msg.attach(MIMEText(content, 'plain', 'utf-8'))
 
     # Connect to the SMTP server and send mail
-    if smtp_port == 465:
+    if int(smtp_port) == 465:
         # SSL connect
         server = smtplib.SMTP_SSL(smtp_server, smtp_port)
     else:

@@ -54,7 +54,7 @@ sanic
 tortoise-orm
 pydantic
 sanic-jwt
-aioredis
+redis
 bcrypt
 ```
 
@@ -70,13 +70,13 @@ bcrypt
 from sanic import Sanic
 from tortoise.contrib.sanic import register_tortoise
 from srf.route import SanicRouter
-from srf.config import srfconfig
+from srf.config import settings
 
 # 创建 Sanic 应用
 app = Sanic("BookStore")
 
 # 配置 SRF
-srfconfig.set_app(app)
+settings.set_app(app)
 
 # 数据库配置
 register_tortoise(
@@ -156,13 +156,16 @@ class BookViewSet(BaseViewSet):
     """图书 ViewSet"""
     
     search_fields = ["title", "author"]
+    filter_fields = {"author": "author"}
     
     @property
     def queryset(self):
         return Book.all()
     
-    def get_schema(self, request, *args, **kwargs):
-        return BookSchemaReader if request.method.lower() in SAFE_HTTP_METHODS else BookSchemaWriter
+    def get_schema(self, request, *args, is_safe=False, **kwargs):
+        if request.method.upper() in SAFE_HTTP_METHODS or is_safe:
+            return BookSchemaReader
+        return BookSchemaWriter
     
     @action(methods=["get"], detail=False, url_path="search")
     async def search_books(self, request):
@@ -182,13 +185,13 @@ class BookViewSet(BaseViewSet):
 from sanic import Sanic
 from tortoise.contrib.sanic import register_tortoise
 from srf.route import SanicRouter
-from srf.config import srfconfig
+from srf.config import settings
 from viewsets import BookViewSet
 
 app = Sanic("BookStore")
 
 # 应用我们的SRF框架
-srfconfig.set_app(app)
+settings.set_app(app)
 
 # 注册数据库
 register_tortoise(

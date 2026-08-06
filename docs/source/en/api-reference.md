@@ -1,6 +1,6 @@
 # API Reference
 
-This document provides detailed reference for SRF core APIs.
+This document provides a detailed reference for the SRF core API.
 
 ## Views
 
@@ -12,39 +12,36 @@ Base class for all ViewSets.
 from srf.views import BaseViewSet
 from pydantic import BaseModel
 
-class BaseViewSet(HTTPMethodView, ModelMixin):
+class GenericAPIView(BaseViewSet):
     """Base class for ViewSet"""
 
-    # Configuration attributes
-    schema: BaseModel = None
-    permission_classes = ()          # List of permission classes
-    search_fields = []               # Search fields
-    filter_fields = {}               # Filter field mappings
-    ordering_fields = {}             # Ordering field mappings
-    filter_class = []                # List of filter classes
+    # Common configurations for subclasses
+    schema: BaseModel = None         # pydantic model
+    permission_classes = ()          # check_permissions treats as empty list when not declared
+    search_fields = []               # search fields, read by SearchFilter
+    filter_fields = {}               # field mapping for filtering, read by FilterClass
+    ordering_fields = {}             # field mapping for ordering, read by OrderingFactory
 
-    # Core attributes
+    # Core properties
     @property
     def queryset(self):
-        """Return query set (must be implemented)"""
         raise NotImplementedError
 
-    # Core methods
-    def get_schema(self, request, is_safe=False):
-        """Return Schema (optional) """
-        raise NotImplementedError
+    def get_schema(self, request, *args, is_safe=False, **kwargs):
+        """Returns self.schema by default; can be customized based on request method"""
+        return getattr(self, "schema", None)
 
     async def check_permissions(self, request):
         """Check view-level permissions (optional)"""
-        pass
+        ...
 
-    async def check_object_permissions(self, request, obj):
+    def check_object_permissions(self, request, obj):
         """Check object-level permissions (optional)"""
-        pass
+        ...
 
     async def get_object(self, request, id: int):
-        """Get object and check permissions (optional)"""
-        pass
+        """Get an object by id and call object-level permission hooks"""
+        ...
 ```
 
 ### Mixins
@@ -55,13 +52,13 @@ class BaseViewSet(HTTPMethodView, ModelMixin):
 class CreateModelMixin:
     """Create mixin"""
 
-    async def create(self, request):
-        """Handle POST requests"""
-        pass
+    async def create(self, request, *args, **kwargs):
+        """Handle POST requests; call perform_create(sch_model)"""
+        ...
 
-    async def perform_create(self, schema, request, *args, **kwargs):
+    async def perform_create(self, sch_model):
         """Perform creation (can be overridden)"""
-        pass
+        ...
 ```
 
 #### RetrieveModelMixin
@@ -70,9 +67,9 @@ class CreateModelMixin:
 class RetrieveModelMixin:
     """Retrieve mixin"""
 
-    async def retrieve(self, request, pk):
+    async def retrieve(self, request, pk, *args, **kwargs):
         """Handle GET /resource/<pk> requests"""
-        pass
+        ...
 ```
 
 #### UpdateModelMixin
@@ -81,13 +78,13 @@ class RetrieveModelMixin:
 class UpdateModelMixin:
     """Update mixin"""
 
-    async def update(self, request, pk):
+    async def update(self, request, pk, *args, **kwargs):
         """Handle PUT/PATCH requests"""
-        pass
+        ...
 
-    async def perform_update(self, request, obj, schema):
+    async def perform_update(self, sch_model, orm_model):
         """Perform update (can be overridden)"""
-        pass
+        ...
 ```
 
 #### DestroyModelMixin
@@ -96,13 +93,13 @@ class UpdateModelMixin:
 class DestroyModelMixin:
     """Destroy mixin"""
 
-    async def destroy(self, request, pk):
-        """Handle DELETE requests"""
-        pass
+    async def destroy(self, request, pk, *args, **kwargs):
+        """Handle DELETE requests; call perform_destroy(orm_model)"""
+        ...
 
-    async def perform_destroy(self, request, obj):
+    async def perform_destroy(self, orm_model):
         """Perform deletion (can be overridden)"""
-        pass
+        ...
 ```
 
 #### ListModelMixin
@@ -111,9 +108,9 @@ class DestroyModelMixin:
 class ListModelMixin:
     """List mixin"""
 
-    async def list(self, request):
+    async def list(self, request, *args, **kwargs):
         """Handle GET /resource requests"""
-        pass
+        ...
 ```
 
 ### Decorators
@@ -124,10 +121,10 @@ class ListModelMixin:
 from srf.views.decorators import action
 
 @action(
-    methods: list = ["get"],     # List of HTTP methods
-    detail: bool = False,        # Whether it's a detail-level action
+    methods: list = ["get"],     # list of HTTP methods
+    detail: bool = False,        # whether it's a detail-level action
     url_path: str = None,        # URL path
-    url_name: str = None         # Route name
+    url_name: str = None         # route name
 )
 ```
 
@@ -153,27 +150,27 @@ async def publish(self, request, pk):
 from srf.route import SanicRouter
 
 class SanicRouter:
-    """Route manager"""
-
+    """Router manager"""
+    
     def __init__(self, bp: Blueprint = None, prefix: str = ""):
         """Initialize the router
-
+        
         Args:
             bp: Sanic Blueprint instance
             prefix: URL prefix
         """
         pass
-
+    
     def register(self, path: str, view_cls, name: str = None):
         """Register ViewSet
-
+        
         Args:
             path: URL path
             view_cls: ViewSet class
-            name: Route name prefix
+            name: route name prefix
         """
         pass
-
+    
     def get_blueprint(self) -> Blueprint:
         """Get Blueprint"""
         pass
@@ -195,13 +192,13 @@ app.blueprint(router.get_blueprint())
 from srf.permission.permission import BasePermission
 
 class BasePermission:
-    """Base permission class"""
+    """Base class for permissions"""
 
-    def has_permission(self, request, view) -> bool:
+    def has_permission(self, request, view=None) -> bool:
         """View-level permission check"""
         return True
 
-    def has_object_permission(self, request, view, obj) -> bool:
+    def has_object_permission(self, request, view=None, obj=None) -> bool:
         """Object-level permission check"""
         return True
 ```
@@ -224,12 +221,12 @@ from srf.permission.permission import (
 from srf.paginator import PageNumberPagination
 
 class PageNumberPagination:
-    """Pagination handler"""
+    """Paginator."""
 
-    page_size = 10                      # Default number per page
-    max_page_size = 100                 # Maximum number per page
-    page_query_param = 'page'           # Page number parameter name
-    page_size_query_param = 'page_size' # Number per page parameter name
+    MAX_PAGE_SIZE: int = 100
+    PAGE_QUERY_PARAM: str = 'page'
+    PAGE_SIZE_QUERY_PARAM: str = 'page_size'
+    # Default to 10 if page_size is missing or invalid (fallback from_queryset)
 
     @classmethod
     def from_queryset(cls, queryset, request):
@@ -255,7 +252,10 @@ from srf.filters.filter import BaseFilter
 class BaseFilter:
     """Base filter class"""
 
-    async def filter_queryset(self, request, queryset):
+    def __init__(self, view_class):
+        self.view_class = view_class
+
+    def filter_queryset(self, request, queryset):
         """Filter query set"""
         raise NotImplementedError
 ```
@@ -276,15 +276,17 @@ from srf.filters.filter import (
 ### JWT Functions
 
 ```python
-async def authenticate(request):
-    """Validate user credentials and return JWT payload"""
+from srf.auth.auth import authenticate, retrieve_user, store_user
+
+async def authenticate(request, *args, **kwargs):
+    """Validate user credentials, return JWT payload"""
     pass
 
-async def retrieve_user(request, payload, *args, **kwargs):
-    """Retrieve user object from JWT payload"""
+async def retrieve_user(payload, *args, **kwargs):
+    """Get user object from JWT payload"""
     pass
 
-async def store_user(request, user_id):
+async def store_user(request, user_id, *args, **kwargs):
     """Store user in request context"""
     pass
 ```
@@ -295,13 +297,11 @@ async def store_user(request, user_id):
 from srf.auth.viewset import setup_auth
 
 setup_auth(
-    app,                                # Sanic application
-    secret: str,                        # JWT secret
-    expiration_delta: int,              # Expiration time (seconds)
-    url_prefix: str = "/auth",          # URL prefix
-    authenticate: callable,             # Authentication function
-    retrieve_user: callable,            # Retrieve user function
-    store_user: callable                # Store user function
+    app,
+    secret=app.config.JWT_SECRET,  # Required; missing will throw ServerError
+    url_prefix="/api/auth",        # Default /api/auth
+    login_path="login",            # Path passed to sanic-jwt for authentication
+    # Other keyword arguments for sanic-jwt Initialize...
 )
 ```
 
@@ -331,10 +331,11 @@ from srf.middleware.throttlemiddleware import (
 
 storage = MemoryStorage()
 
-app.config.RequestLimiter = [
+app.config.REQUEST_LIMITERS = [
     IPRateLimit(100, 60, storage),
     UserRateLimit(1000, 60, storage),
 ]
+
 
 @app.middleware("request")
 async def throttle_middleware(request):
@@ -347,37 +348,40 @@ async def throttle_middleware(request):
 ### BaseHealthCheck
 
 ```python
-from srf.health.base import BaseHealthCheck, HealthCheckRegistry
+from srf.health.base import BaseHealthCheck
 
 class BaseHealthCheck:
     """Base health check class"""
 
-    name: str = None
+    name: str = "base"
+    timeout: int = 5  # seconds; built-in checks use asyncio.timeout(self.timeout)
 
     def __init__(self, app):
         self.app = app
+        client = getattr(app.ctx, self.name, None)
+        if client is None:
+            raise ValueError(f"{self.name} not found in app.ctx")
+        setattr(self, self.name, client)
 
-    async def check(self) -> bool:
-        """Perform check"""
+    async def check(self):
+        """Execute check; raises exception on failure"""
         raise NotImplementedError
 
     async def run(self):
-        """Run check and return result"""
-        pass
-
-# Register custom check
-HealthCheckRegistry.register(CustomHealthCheck)
+        """Run check and return (name, status)"""
+        ...
 ```
 
 ### Built-in Health Checks
 
 ```python
 from srf.health.checks import (
-    RedisCheck,       # Redis check
-    PostgresCheck,    # PostgreSQL check
-    MongoCheck,       # MongoDB check
-    SQLiteCheck       # SQLite check
+    RedisCheck,       # Redis check (requires app.ctx.redis)
+    SQLiteCheck,      # SQLite check (requires app.ctx.sqlite)
 )
+
+# Route reads app.config.HEALTH_CHECK_LIST
+app.config.HEALTH_CHECK_LIST = [RedisCheck, SQLiteCheck]
 ```
 
 ## Exceptions
@@ -396,7 +400,14 @@ from srf.exceptions import (
 ### HTTPStatus
 
 ```python
-from srf.views.http_status import HTTPStatus
+from srf.views.http_status import (
+    HTTPStatus,
+    is_informational,
+    is_success,
+    is_redirect,
+    is_client_error,
+    is_server_error,
+)
 
 # Status code constants
 HTTPStatus.HTTP_200_OK
@@ -410,30 +421,38 @@ HTTPStatus.HTTP_422_UNPROCESSABLE_ENTITY
 HTTPStatus.HTTP_429_TOO_MANY_REQUESTS
 HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR
 
-# Helper functions
-HTTPStatus.is_informational(code)  # 1xx
-HTTPStatus.is_success(code)        # 2xx
-HTTPStatus.is_redirect(code)       # 3xx
-HTTPStatus.is_client_error(code)   # 4xx
-HTTPStatus.is_server_error(code)   # 5xx
+# Helper functions (module-level functions, not methods of HTTPStatus)
+is_informational(code)  # 1xx
+is_success(code)        # 2xx
+is_redirect(code)       # 3xx
+is_client_error(code)   # 4xx
+is_server_error(code)   # 5xx
 ```
 
 ## Configuration
 
-### SrfConfig
+### LazySettings (`settings`)
 
 ```python
-from srf.config import srfconfig
+from srf.config import settings
 
-# Set application configuration
-srfconfig.set_app(app)
+# Bind Sanic app.config (optional; request path takes precedence)
+settings.set_app(app)
 
-# Access any configuration of the application
-srfconfig.SECRET_KEY
-srfconfig.JWT_SECRET
-srfconfig.JWT_ACCESS_TOKEN_EXPIRES
-srfconfig.NON_AUTH_ENDPOINTS
-srfconfig.DEFAULT_FILTERS
+# Common configurations (uppercase items come from srf.config.settings, can be overridden by app.config)
+settings.JWT_ACCESS_TOKEN_EXPIRES
+settings.NON_AUTH_ENDPOINTS
+settings.DEFAULT_FILTERS
+settings.EMAIL_CODE_REDIS      # Default "EMAIL_CODE"
+settings.REQUEST_LIMITERS      # Default []
+settings.HEALTH_CHECK_LIST     # Default []
+settings.SOCIAL_CONFIG
+
+# JWT_SECRET must be set by application in app.config, no module-level default
+app.config.JWT_SECRET = "..."
+
+# srfconfig is a deprecated alias (issues DeprecationWarning on first use)
+# from srf.config import srfconfig
 ```
 
 ## Utility Functions
@@ -444,10 +463,9 @@ srfconfig.DEFAULT_FILTERS
 from srf.tools.email import send_email
 
 await send_email(
-    to: str,              # Recipient
-    subject: str,         # Subject
-    content: str,         # Content
-    is_html: bool = False # Whether it's HTML
+    to_email: str,        # Recipient
+    subject: str = "",    # Subject
+    content: str = "",    # Content
 )
 ```
 
@@ -463,11 +481,12 @@ class MyViewSet(BaseViewSet):
     @property
     def queryset(self) -> QuerySet:
         return Product.all()
-
+    
     def get_schema(self, request: Request, is_safe: bool = False) -> Type[BaseModel]:
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
-
-    async def list(self, request: Request) -> json:
+        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
+        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
+    
+    async def list(self, request: Request) -> JSONResponse:
         pass
 ```
 
@@ -480,6 +499,7 @@ from tortoise import fields
 from tortoise.models import Model
 from tortoise.contrib.sanic import register_tortoise
 from pydantic import BaseModel, Field
+from sanic.constants import SAFE_HTTP_METHODS
 from typing import Optional
 
 from srf.views import BaseViewSet
@@ -487,7 +507,7 @@ from srf.views.decorators import action
 from srf.views.http_status import HTTPStatus
 from srf.route import SanicRouter
 from srf.permission.permission import IsAuthenticated
-from srf.config import srfconfig
+from srf.config import settings
 
 # Model
 class Product(Model):
@@ -507,7 +527,7 @@ class ProductSchemaReader(BaseModel):
     name: str
     price: float
     stock: int
-
+    
     class Config:
         from_attributes = True
 
@@ -517,14 +537,16 @@ class ProductViewSet(BaseViewSet):
     search_fields = ["name"]
     filter_fields = {"min_price": "price__gte"}
     ordering_fields = {"price": "price"}
-
+    
     @property
     def queryset(self):
         return Product.all()
-
+    
     def get_schema(self, request, is_safe=False):
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
-
+        if request.method.upper() in SAFE_HTTP_METHODS or is_safe:
+            return ProductSchemaReader
+        return ProductSchemaWriter
+    
     @action(methods=["get"], detail=False)
     async def featured(self, request):
         products = await Product.filter(stock__gt=0).limit(10)
@@ -534,7 +556,8 @@ class ProductViewSet(BaseViewSet):
 
 # Application
 app = Sanic("MyApp")
-srfconfig.set_app(app)
+app.config.JWT_SECRET = "change-me"
+settings.set_app(app)
 
 # Database
 register_tortoise(
@@ -557,4 +580,4 @@ if __name__ == "__main__":
 
 - See [Getting Started](usage/getting-started.md) to create your first project
 - Read [Core Concepts](usage/core/viewsets.md) to understand features in depth
-- Browse [Configuration Options](config.md) to learn about configuration settings
+- Browse [Configuration Options](config.md) to learn about configuration parameters

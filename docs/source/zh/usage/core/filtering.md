@@ -20,14 +20,14 @@ from srf.filters.filter import BaseFilter
 
 class BaseFilter:
     """过滤器基类"""
-    
-    async def filter_queryset(self, request, queryset):
+
+    def filter_queryset(self, request, queryset):
         """过滤查询集
-        
+
         Args:
             request: 请求对象
             queryset: Tortoise ORM 查询集
-        
+
         Returns:
             过滤后的查询集
         """
@@ -120,19 +120,20 @@ GET /api/products?min_price=100&max_price=500
 GET /api/products?category=1&brand=2&min_price=100&is_active=true
 ```
 
-### 支持的查找类型
+### `filter_fields` 与查询参数的映射
 
-| 参数后缀 | Tortoise查找 | 说明 | 示例 |
-|----------|--------------|------|------|
-| 无 | `=` | 精确匹配 | `category=1` |
-| `__gte` | `>=` | 大于等于 | `min_price__gte=100` |
-| `__lte` | `<=` | 小于等于 | `max_price__lte=500` |
-| `__gt` | `>` | 大于 | `stock__gt=0` |
-| `__lt` | `<` | 小于 | `price__lt=1000` |
-| `__in` | `IN` | 包含 | `id__in=1,2,3` |
-| `__contains` | `LIKE %x%` | 包含 | `name__contains=手机` |
-| `__icontains` | `ILIKE %x%` | 不区分大小写包含 | `name__icontains=Phone` |
-| `__startswith` | `LIKE x%` | 以...开头 | `sku__startswith=PRD` |
+查询参数名必须**精确等于** `filter_fields` 的**键**。查找后缀写在映射的**值**里，而不是写在查询参数名上。
+
+| 写在 VALUE 中的查找 | Tortoise | 说明 | `filter_fields` 示例 | 请求 |
+|---------------------|----------|------|----------------------|------|
+| （无） | `=` | 精确匹配 | `"category": "category_id"` | `?category=1` |
+| `__gte` | `>=` | 大于等于 | `"min_price": "price__gte"` | `?min_price=100` |
+| `__lte` | `<=` | 小于等于 | `"max_price": "price__lte"` | `?max_price=500` |
+| `__gt` | `>` | 大于 | `"min_stock": "stock__gt"` | `?min_stock=0` |
+| `__lt` | `<` | 小于 | `"max_price_lt": "price__lt"` | `?max_price_lt=1000` |
+| `__icontains` | `ILIKE %x%` | 不区分大小写包含 | `"name_contains": "name__icontains"` | `?name_contains=Phone` |
+| `__startswith` | `LIKE x%` | 以...开头 | `"sku_starts": "sku__startswith"` | `?sku_starts=PRD` |
+
 
 ### 示例
 
@@ -142,36 +143,39 @@ class ProductViewSet(BaseViewSet):
         # 精确匹配
         "category": "category_id",
         "status": "status",
-        
+
         # 范围查询
         "min_price": "price__gte",
         "max_price": "price__lte",
         "min_stock": "stock__gt",
-        
+
         # 包含查询
         "name_contains": "name__icontains",
         "sku_starts": "sku__startswith",
-        
-        # IN 查询
-        "ids": "id__in",
-        "categories": "category_id__in",
+
+        # 重复同名参数会由 QueryParamFilter 自动追加 __in
+        "ids": "id",
+        "categories": "category_id",
     }
 ```
 
 请求：
 
 ```bash
-# 多个ID
-GET /api/products?ids=1,2,3,4,5
+# 多个 ID（重复键 → id__in）
+GET /api/products?ids=1&ids=2&ids=3&ids=4&ids=5
 
 # 多个分类
-GET /api/products?categories=1,2,3
+GET /api/products?categories=1&categories=2&categories=3
 
 # 名称包含
 GET /api/products?name_contains=手机
 
 # SKU 开头
 GET /api/products?sku_starts=PRD
+
+# 价格范围（键匹配 filter_fields；查找在值里）
+GET /api/products?min_price=100&max_price=500
 ```
 
 ## JsonLogicFilter - 复杂查询
@@ -192,17 +196,18 @@ class ProductViewSet(BaseViewSet):
 
 ### 请求示例
 
-使用 `filter` 参数传递 JSON Logic 表达式：
+使用 `filter` 参数传递 JSON Logic 表达式。比较运算的标准形态为  
+`{"<op>": [{"var": "<字段>"}, <值>]}`（字段名会再经 `filter_fields` 映射）。
 
 ```bash
 # 价格大于100
-GET /api/products?filter={"price": {">": 100}}
+GET /api/products?filter={">": [{"var": "price"}, 100]}
 
 # 价格在100到500之间
-GET /api/products?filter={"and": [{"price": {">=": 100}}, {"price": {"<=": 500}}]}
+GET /api/products?filter={"and": [{">=": [{"var": "price"}, 100]}, {"<=": [{"var": "price"}, 500]}]}
 
 # 分类为1且有库存
-GET /api/products?filter={"and": [{"category": 1}, {"stock": {">": 0}}]}
+GET /api/products?filter={"and": [{"==": [{"var": "category"}, 1]}, {">": [{"var": "stock"}, 0]}]}
 ```
 
 ### 支持的操作符
@@ -211,40 +216,39 @@ GET /api/products?filter={"and": [{"category": 1}, {"stock": {">": 0}}]}
 
 ```bash
 # 等于
-{"price": 100}
-{"price": {"==": 100}}
+{"==": [{"var": "price"}, 100]}
 
 # 不等于
-{"status": {"!=": "draft"}}
+{"!=": [{"var": "status"}, "draft"]}
 
 # 大于
-{"price": {">": 100}}
+{">": [{"var": "price"}, 100]}
 
 # 大于等于
-{"price": {">=": 100}}
+{">=": [{"var": "price"}, 100]}
 
 # 小于
-{"price": {"<": 500}}
+{"<": [{"var": "price"}, 500]}
 
 # 小于等于
-{"price": {"<=": 500}}
+{"<=": [{"var": "price"}, 500]}
 ```
 
 #### IN 操作符
 
 ```bash
 # 在列表中
-{"category": {"in": [1, 2, 3]}}
+{"in": [{"var": "category"}, [1, 2, 3]]}
 
 # 不在列表中
-{"status": {"not in": ["draft", "archived"]}}
+{"not in": [{"var": "status"}, ["draft", "archived"]]}
 ```
 
 #### LIKE 操作符
 
 ```bash
 # 模糊匹配
-{"name": {"like": "%手机%"}}
+{"like": [{"var": "name"}, "手机"]}
 ```
 
 #### 逻辑操作符
@@ -252,19 +256,19 @@ GET /api/products?filter={"and": [{"category": 1}, {"stock": {">": 0}}]}
 ```bash
 # AND（所有条件都满足）
 {"and": [
-  {"price": {">=": 100}},
-  {"price": {"<=": 500}},
-  {"is_active": true}
+  {">=": [{"var": "price"}, 100]},
+  {"<=": [{"var": "price"}, 500]},
+  {"==": [{"var": "is_active"}, true]}
 ]}
 
 # OR（任一条件满足）
 {"or": [
-  {"category": 1},
-  {"category": 2}
+  {"==": [{"var": "category"}, 1]},
+  {"==": [{"var": "category"}, 2]}
 ]}
 
 # NOT（条件不满足）
-{"not": {"status": "archived"}}
+{"not": {"==": [{"var": "status"}, "archived"]}}
 ```
 
 ### 复杂查询示例
@@ -274,10 +278,10 @@ GET /api/products?filter={"and": [{"category": 1}, {"stock": {">": 0}}]}
 ```json
 {
   "and": [
-    {"category": {"in": [1, 2]}},
-    {"price": {">=": 100}},
-    {"price": {"<=": 500}},
-    {"stock": {">": 0}}
+    {"in": [{"var": "category"}, [1, 2]]},
+    {">=": [{"var": "price"}, 100]},
+    {"<=": [{"var": "price"}, 500]},
+    {">": [{"var": "stock"}, 0]}
   ]
 }
 ```
@@ -287,11 +291,11 @@ GET /api/products?filter={"and": [{"category": 1}, {"stock": {">": 0}}]}
 ```json
 {
   "or": [
-    {"category": 1},
+    {"==": [{"var": "category"}, 1]},
     {
       "and": [
-        {"category": 2},
-        {"price": {"<": 200}}
+        {"==": [{"var": "category"}, 2]},
+        {"<": [{"var": "price"}, 200]}
       ]
     }
   ]
@@ -303,8 +307,8 @@ GET /api/products?filter={"and": [{"category": 1}, {"stock": {">": 0}}]}
 ```json
 {
   "and": [
-    {"is_active": true},
-    {"not": {"status": {"in": ["draft", "archived"]}}}
+    {"==": [{"var": "is_active"}, true]},
+    {"not": {"in": [{"var": "status"}, ["draft", "archived"]]}}
   ]
 }
 ```
@@ -318,10 +322,10 @@ import requests
 # 构建过滤条件
 filter_logic = {
     "and": [
-        {"category": {"in": [1, 2, 3]}},
-        {"price": {">=": 100}},
-        {"price": {"<=": 500}},
-        {"is_active": True}
+        {"in": [{"var": "category"}, [1, 2, 3]]},
+        {">=": [{"var": "price"}, 100]},
+        {"<=": [{"var": "price"}, 500]},
+        {"==": [{"var": "is_active"}, True]},
     ]
 }
 
@@ -407,8 +411,8 @@ GET /api/products?search=手机&category=1&min_price=1000&max_price=5000&sort=-p
 执行顺序：
 
 1. 应用搜索（SearchFilter）
-2. 应用精确过滤（QueryParamFilter）
-3. 应用 JSON 过滤（JsonLogicFilter）
+2. 应用 JSON 过滤（JsonLogicFilter）
+3. 应用精确过滤（QueryParamFilter）
 4. 应用排序（OrderingFactory）
 5. 应用分页（PageNumberPagination）
 
@@ -422,14 +426,14 @@ from tortoise.expressions import Q
 
 class PriceRangeFilter(BaseFilter):
     """价格范围过滤器"""
-    
-    async def filter_queryset(self, request, queryset):
-        """按价格范围过滤"""
+
+    def filter_queryset(self, request, queryset):
+        """按价格范围过滤（同步）"""
         price_range = request.args.get('price_range')
-        
+
         if not price_range:
             return queryset
-        
+
         # 解析价格范围: "100-500"
         try:
             min_price, max_price = map(float, price_range.split('-'))
@@ -438,7 +442,7 @@ class PriceRangeFilter(BaseFilter):
             )
         except ValueError:
             pass
-        
+
         return queryset
 ```
 
@@ -449,11 +453,11 @@ from filters import PriceRangeFilter
 
 class ProductViewSet(BaseViewSet):
     filter_class = [
-        PriceRangeFilter,
-        SearchFilter,
-        QueryParamFilter,
-        OrderingFactory,
-    ]
+            PriceRangeFilter,
+            SearchFilter,
+            QueryParamFilter,
+            OrderingFactory,
+        ]
 ```
 
 请求：
@@ -496,15 +500,15 @@ class ProductViewSet(BaseViewSet):
         "min_price": "price__gte",
         "max_price": "price__lte",
         "min_stock": "stock__gte",
-        
+
         # 模糊查询
         "name_contains": "name__icontains",
-        
-        # IN 查询
-        "ids": "id__in",
-        "categories": "category_id__in",
+
+        # 重复同名参数会自动转换为 __in
+        "ids": "id",
+        "categories": "category_id",
     }
-    
+
     # 排序字段
     ordering_fields = {
         "price": "price",
@@ -513,40 +517,38 @@ class ProductViewSet(BaseViewSet):
         "created": "created_at",
         "updated": "updated_at",
     }
-    
+
     # 指定使用的过滤器类
     filter_class = [
-        SearchFilter,
-        JsonLogicFilter,
-        QueryParamFilter,
-        OrderingFactory,
-    ]
-    
+            SearchFilter,
+            JsonLogicFilter,
+            QueryParamFilter,
+            OrderingFactory,
+        ]
+
     @property
     def queryset(self):
         return Product.all().prefetch_related("category", "brand")
-    
+
     def get_schema(self, request, is_safe=False):
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
-    
+        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
+        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
+
     @action(methods=["get"], detail=False, url_path="popular")
     async def popular(self, request):
         """热门产品（自定义过滤）"""
-        # 获取查询集
         queryset = Product.filter(is_active=True, stock__gt=0)
-        
-        # 应用搜索和排序
-        for filter_class in [SearchFilter, OrderingFactory]:
-            queryset = await filter_class().filter_queryset(request, queryset)
-        
-        # 限制数量
+
+        # filter_queryset 是同步的；用 ViewSet 实例构造
+        for filter_cls in [SearchFilter, OrderingFactory]:
+            queryset = filter_cls(self).filter_queryset(request, queryset)
+
         queryset = queryset.limit(10)
-        
-        # 序列化
+
         products = await queryset
         schema = self.get_schema(request, is_safe=True)
         results = [schema.model_validate(p).model_dump() for p in products]
-        
+
         return json({"results": results})
 ```
 
@@ -563,19 +565,19 @@ GET /api/products?search=手机&category=1
 GET /api/products?min_price=1000&max_price=5000&sort=-price
 
 # 4. 复杂过滤（JSON Logic）
-GET /api/products?filter={"and":[{"category":{"in":[1,2]}},{"price":{">=":1000}}]}
+GET /api/products?filter={"and":[{"in":[{"var":"category"},[1,2]]},{">=":[{"var":"price"},1000]}]}
 
 # 5. 组合查询
 GET /api/products?search=苹果&category=1&min_price=3000&sort=-created&page=1&page_size=20
 
-# 6. 多个分类
-GET /api/products?categories=1,2,3&sort=price
+# 6. 多个分类（重复键）
+GET /api/products?categories=1&categories=2&categories=3&sort=price
 
 # 7. 名称包含
 GET /api/products?name_contains=iPhone&is_active=true
 
-# 8. 多个ID
-GET /api/products?ids=1,2,3,4,5
+# 8. 多个 ID（重复键）
+GET /api/products?ids=1&ids=2&ids=3&ids=4&ids=5
 ```
 
 ## 性能优化
@@ -643,7 +645,7 @@ search_fields = ["name", "sku"]
 使用 JSON Logic Filter：
 
 ```bash
-GET /api/products?filter={"or":[{"category":1},{"category":2}]}
+GET /api/products?filter={"or":[{"==":[{"var":"category"},1]},{"==":[{"var":"category"},2]}]}
 ```
 
 ### 如何实现日期范围查询？
@@ -680,10 +682,10 @@ filter_fields = {
 class ProductViewSet(BaseViewSet):
     # 只使用部分过滤器
     filter_class = [
-        SearchFilter,
-        QueryParamFilter,
-        # 不使用 JsonLogicFilter 和 OrderingFactory
-    ]
+            SearchFilter,
+            QueryParamFilter,
+            # 不使用 JsonLogicFilter 和 OrderingFactory
+        ]
 ```
 
 ## 下一步

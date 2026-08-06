@@ -4,7 +4,7 @@ ViewSet decorators are used to extend and customize the behavior of ViewSets, wi
 
 ## @action Decorator
 
-The `@action` decorator is used to add custom operations to a ViewSet, going beyond standard CRUD operations.
+The `@action` decorator is used to add custom operations to a ViewSet beyond the standard CRUD operations.
 
 ### Basic Usage
 
@@ -36,31 +36,32 @@ class ProductViewSet(BaseViewSet):
 ### Decorator Parameters
 
 ```python
-@action(
-    methods: list = ["get"],     # List of HTTP methods
-    detail: bool = False,        # Whether it's a detail-level operation
-    url_path: str = None,        # URL path (default is method name)
-    url_name: str = None         # Route name (default is method name)
+action(
+    methods: list[str] | None = None,  # Default is ["get"]
+    detail: bool | None = None,         # True for detail-level; None/False for collection-level
+    url_path: str | None = None,        # Default "/<method name>"
+    url_name: str | None = None,        # Default method name
+    **kwargs,
 )
 ```
 
 **Parameter Description**:
 
 | Parameter | Type | Default | Description |
-|----------|------|---------|-------------|
-| `methods` | list | `["get"]` | List of HTTP methods, such as `["get"]`, `["post"]`, `["get", "post"]` |
-| `detail` | bool | `False` | `True` for detail-level operation (requires pk), `False` for collection-level operation |
+|---------|------|---------|-------------|
+| `methods` | list | `["get"]` | List of HTTP methods, e.g., `["get"]`, `["post"]`, `["get", "post"]` |
+| `detail` | bool or None | `None` | `True` for detail-level operation (requires pk), `None`/`False` for collection-level operation |
 | `url_path` | str | Method name | Custom URL path |
 | `url_name` | str | Method name | Route name, used for URL reverse resolution |
 
-### Collection-Level Operations vs Detail-Level Operations
+### Collection-Level Operation vs Detail-Level Operation
 
-#### Collection-Level Operations (`detail=False`)
+#### Collection-Level Operation (`detail=False`)
 
-No resource ID is required, operates on the entire collection.
+Does not require a resource ID, operates on the entire collection.
 
 **Characteristics**:
-- No pk parameter needed
+- No pk parameter required
 - URL format: `/api/products/action-name`
 - Suitable for batch operations, statistics, search, etc.
 
@@ -119,14 +120,14 @@ async def advanced_search(self, request):
 - `POST /api/products/bulk-update`
 - `GET /api/products/search`
 
-#### Detail-Level Operations (`detail=True`)
+#### Detail-Level Operation (`detail=True`)
 
 Requires a resource ID, operates on a single resource.
 
 **Characteristics**:
 - Requires pk parameter
 - URL format: `/api/products/<pk>/action-name`
-- Suitable for state changes, related operations, etc.
+- Suitable for status changes, related operations, etc.
 
 **Example**:
 
@@ -194,7 +195,7 @@ async def handle_comments(self, request, pk):
     product = await self.get_object(request, pk)
     
     if request.method == "GET":
-        # Retrieve comments
+        # Get comments
         comments = await product.comments.all()
         return json({"results": [c.to_dict() for c in comments]})
     
@@ -211,7 +212,7 @@ async def handle_comments(self, request, pk):
 
 ### Custom URL Path
 
-Use the `url_path` parameter to define a custom URL:
+Use the `url_path` parameter to customize the URL:
 
 ```python
 @action(methods=["post"], detail=True, url_path="change-status")
@@ -228,7 +229,7 @@ async def change_status(self, request, pk):
 
 URL: `POST /api/products/<pk>/change-status`
 
-If `url_path` is not specified, the default is the method name (converted to kebab-case):
+If `url_path` is not specified, the default is the Python method name, without converting underscores:
 
 ```python
 @action(methods=["post"], detail=True)
@@ -241,7 +242,7 @@ URL: `POST /api/products/<pk>/change_status`
 
 ### Custom Route Name
 
-Use the `url_name` parameter to define a custom route name for URL reverse resolution:
+Use the `url_name` parameter to customize the route name for URL reverse resolution:
 
 ```python
 @action(methods=["get"], detail=False, url_name="featured_list")
@@ -249,13 +250,13 @@ async def featured(self, request):
     """Featured list"""
     pass
 
-# Reverse resolution
-url = request.app.url_for("products-featured_list")
+# Reverse resolution; when default prefix="api", Blueprint name is "api"
+url = request.app.url_for("api.featured_list")
 ```
 
 ### Permission Control
 
-You can perform permission checks within an action:
+Permission checks can be performed within an action:
 
 ```python
 from srf.permission.permission import IsRoleAdminUser
@@ -263,20 +264,20 @@ from sanic.exceptions import Forbidden
 
 @action(methods=["post"], detail=True, url_path="approve")
 async def approve(self, request, pk):
-    """Approve product (only for administrators)"""
-    # Check administrator permissions
+    """Approve product (only admins)"""
+    # Check admin permission
     perm = IsRoleAdminUser()
-    if not perm.has_permission(request, self):
-        raise Forbidden("Administrator privileges are required")
+    if not perm.has_permission(request):
+        raise Forbidden("Admin permission required")
     
     product = await self.get_object(request, pk)
     product.is_approved = True
     await product.save()
     
-    return json({"message": "Approval successful"})
+    return json({"message": "Approved"})
 ```
 
-### Full Example
+### Complete Example
 
 ```python
 from srf.views import BaseViewSet
@@ -284,6 +285,7 @@ from srf.views.decorators import action
 from srf.permission.permission import IsAuthenticated, IsRoleAdminUser
 from sanic.response import json
 from sanic.exceptions import Forbidden
+from sanic.constants import SAFE_HTTP_METHODS
 from datetime import datetime
 from models import Product, Comment
 from schemas import ProductSchemaReader, ProductSchemaWriter
@@ -298,7 +300,9 @@ class ProductViewSet(BaseViewSet):
         return Product.all()
     
     def get_schema(self, request, is_safe=False):
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        if request.method.upper() in SAFE_HTTP_METHODS or is_safe:
+            return ProductSchemaReader
+        return ProductSchemaWriter
     
     # Collection-level operations
     @action(methods=["get"], detail=False, url_path="featured")
@@ -323,11 +327,11 @@ class ProductViewSet(BaseViewSet):
     
     @action(methods=["post"], detail=False, url_path="bulk-delete")
     async def bulk_delete(self, request):
-        """Bulk delete (only for administrators)"""
-        # Check administrator permissions
+        """Bulk delete (only admins)"""
+        # Check admin permission
         user = self.get_current_user(request)
         if not user.role or user.role.name != 'admin':
-            raise Forbidden("Administrator privileges are required")
+            raise Forbidden("Admin permission required")
         
         ids = request.json.get("ids", [])
         count = await Product.filter(id__in=ids).delete()
@@ -394,9 +398,9 @@ class ProductViewSet(BaseViewSet):
 
 1. **Semantic Naming**: Method names should clearly express the intent of the operation.
 2. **Appropriate Grouping**: Use consistent URL path prefixes for related operations.
-3. **Permission Checks**: Add permission validation for sensitive operations.
+3. **Permission Checks**: Add permission verification for sensitive operations.
 4. **Error Handling**: Provide friendly error messages.
-5. **Docstrings**: Add clear documentation for each action.
+5. **Documentation Strings**: Add clear documentation for each action.
 6. **HTTP Methods**: Follow RESTful conventions (GET for queries, POST for creation/operations).
 7. **Idempotency**: GET operations should be idempotent.
 
@@ -441,4 +445,4 @@ async def bulk_update(self, request):
 
 - Read [Routing](routing.md) to understand the routing system
 - Learn [Permissions](permissions.md) to add permission control
-- View [ViewSet](viewsets.md) to understand ViewSet basics
+- View [ViewSet](viewsets.md) to understand the basics of ViewSet

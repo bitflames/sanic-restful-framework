@@ -140,12 +140,13 @@ class ProductSchemaReader(BaseModel):
 
 ```python
 class ProductViewSet(BaseViewSet):
-    def get_schema(self, request, is_safe=False):
+    def get_schema(self, request, *args, is_safe=False, **kwargs):
         """
-        is_safe=True: 读取操作（GET）
-        is_safe=False: 写入操作（POST/PUT/PATCH）
+        create/update 输出会传 is_safe=True；
+        list/retrieve 当前默认 is_safe=False，故同时看 method。
         """
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
+        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
 ```
 
 ## 数据类型
@@ -242,7 +243,7 @@ class ProductSchemaWriter(BaseModel):
     price: float = Field(..., gt=0)
     stock: int = Field(default=0, ge=0)
     category_id: int
-    tags: List[str] = Field(default=[])
+    tags: List[str] = Field(default_factory=list)
     status: ProductStatus = ProductStatus.DRAFT
     
     @field_validator('name')
@@ -279,7 +280,8 @@ class ProductViewSet(BaseViewSet):
         return Product.all()
     
     def get_schema(self, request, is_safe=False):
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
+        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
 ```
 
 ## 最佳实践

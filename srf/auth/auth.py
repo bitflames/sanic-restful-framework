@@ -1,5 +1,6 @@
 from sanic.exceptions import BadRequest, NotFound
 from sanic.request import Request
+from tortoise.expressions import Q
 
 from .models import User
 from .schema import UserLoginSchema
@@ -14,7 +15,13 @@ async def authenticate(request: Request, *args, **kwargs):
     except Exception as e:
         raise NotFound("Unable to log in with provided credentials.")
 
-    user = await User.filter(email=sch_user.email).select_related("role").first()
+    if sch_user.email:
+        query = Q(email=sch_user.email)
+        if sch_user.username:
+            query |= Q(name=sch_user.username)
+    else:
+        query = Q(name=sch_user.username)
+    user = await User.filter(query).select_related("role").first()
     if user is None or not await check_active(user):
         raise NotFound("User not found.")
 

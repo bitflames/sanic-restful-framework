@@ -2,6 +2,7 @@ from .base import (
     BaseViewSet,
     CreateModelMixin,
     DestroyModelMixin,
+    GenericAPIView,
     ListModelMixin,
     ModelMixin,
     RetrieveModelMixin,
@@ -16,6 +17,7 @@ __all__ = [
     "DestroyModelMixin",
     "ListModelMixin",
     "ModelMixin",
+    "GenericAPIView",
     "BaseViewSet",
     "action",
 ]

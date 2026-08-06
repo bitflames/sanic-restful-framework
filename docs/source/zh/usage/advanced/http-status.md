@@ -27,10 +27,10 @@ from srf.views.http_status import HTTPStatus
 | 101 | `HTTP_101_SWITCHING_PROTOCOLS` | 切换协议 |
 
 ```python
-from srf.views.http_status import HTTPStatus
+from srf.views.http_status import is_informational
 
 # 检查是否为信息响应
-if HTTPStatus.is_informational(status_code):
+if is_informational(status_code):
     print("信息响应")
 ```
 
@@ -44,7 +44,7 @@ if HTTPStatus.is_informational(status_code):
 | 204 | `HTTP_204_NO_CONTENT` | 无内容 | DELETE 成功 |
 
 ```python
-from sanic.response import json
+from sanic.response import HTTPResponse, json
 
 # GET 请求成功
 return json(data, status=HTTPStatus.HTTP_200_OK)
@@ -52,8 +52,8 @@ return json(data, status=HTTPStatus.HTTP_200_OK)
 # POST 创建成功
 return json(data, status=HTTPStatus.HTTP_201_CREATED)
 
-# DELETE 成功
-return json({}, status=HTTPStatus.HTTP_204_NO_CONTENT)
+# DELETE 成功（204 不应携带 JSON body）
+return HTTPResponse(status=HTTPStatus.HTTP_204_NO_CONTENT)
 ```
 
 ### 3xx - 重定向
@@ -88,7 +88,7 @@ return redirect('/temp-url', status=HTTPStatus.HTTP_302_FOUND)
 | 429 | `HTTP_429_TOO_MANY_REQUESTS` | 请求过多 | 超过限流限制 |
 
 ```python
-from sanic.response import json
+from sanic.response import HTTPResponse, json
 
 # 参数错误
 if not data:
@@ -150,25 +150,31 @@ if not healthy:
 ### 检查状态码类型
 
 ```python
-from srf.views.http_status import HTTPStatus
+from srf.views.http_status import (
+    is_informational,
+    is_success,
+    is_redirect,
+    is_client_error,
+    is_server_error,
+)
 
 # 是否为信息响应 (1xx)
-HTTPStatus.is_informational(100)  # True
+is_informational(100)  # True
 
 # 是否为成功响应 (2xx)
-HTTPStatus.is_success(200)  # True
-HTTPStatus.is_success(201)  # True
+is_success(200)  # True
+is_success(201)  # True
 
 # 是否为重定向 (3xx)
-HTTPStatus.is_redirect(301)  # True
+is_redirect(301)  # True
 
 # 是否为客户端错误 (4xx)
-HTTPStatus.is_client_error(400)  # True
-HTTPStatus.is_client_error(404)  # True
+is_client_error(400)  # True
+is_client_error(404)  # True
 
 # 是否为服务器错误 (5xx)
-HTTPStatus.is_server_error(500)  # True
-HTTPStatus.is_server_error(503)  # True
+is_server_error(500)  # True
+is_server_error(503)  # True
 ```
 
 ## 在 ViewSet 中使用
@@ -178,7 +184,7 @@ HTTPStatus.is_server_error(503)  # True
 ```python
 from srf.views import BaseViewSet
 from srf.views.http_status import HTTPStatus
-from sanic.response import json
+from sanic.response import HTTPResponse, json
 
 class ProductViewSet(BaseViewSet):
     async def create(self, request):
@@ -201,7 +207,7 @@ class ProductViewSet(BaseViewSet):
             )
         
         # 创建
-        obj = await Product.create(**schema.dict())
+        obj = await Product.create(**schema.model_dump())
         
         # 序列化
         reader_schema = self.get_schema(request, is_safe=True)
@@ -225,7 +231,7 @@ class ProductViewSet(BaseViewSet):
         await obj.delete()
         
         # 返回 204 No Content
-        return json({}, status=HTTPStatus.HTTP_204_NO_CONTENT)
+        return HTTPResponse(status=HTTPStatus.HTTP_204_NO_CONTENT)
 ```
 
 ### 自定义操作
@@ -418,6 +424,8 @@ return json({"message": "deleted"}, status=200)
 ### ✅ 正确做法
 
 ```python
+from sanic.response import HTTPResponse
+
 # 使用语义化常量
 return json(data, status=HTTPStatus.HTTP_201_CREATED)
 
@@ -426,7 +434,7 @@ if not found:
     return json({"error": "not found"}, status=HTTPStatus.HTTP_404_NOT_FOUND)
 
 # 删除成功返回 204
-return json({}, status=HTTPStatus.HTTP_204_NO_CONTENT)
+return HTTPResponse(status=HTTPStatus.HTTP_204_NO_CONTENT)
 ```
 
 ## 下一步

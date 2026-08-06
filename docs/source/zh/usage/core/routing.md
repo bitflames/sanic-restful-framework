@@ -101,7 +101,7 @@ async def list_featured(self, request):
 
 - URL: `/api/products/featured`
 - 方法: GET
-- 路由名称: `products-list_featured`
+- 路由名称: `list_featured`
 
 **详情级操作** (`detail=True`)：
 
@@ -115,7 +115,7 @@ async def publish(self, request, pk):
 
 - URL: `/api/products/<pk:int>/publish`
 - 方法: POST
-- 路由名称: `products-publish`
+- 路由名称: `publish`
 
 ## URL 前缀
 
@@ -233,10 +233,10 @@ url = app.url_for("products-list")
 url = app.url_for("products-detail", pk=1)
 # 结果: /api/products/1
 
-url = app.url_for("products-list_featured")
+url = app.url_for("list_featured")
 # 结果: /api/products/featured
 
-url = app.url_for("products-publish", pk=1)
+url = app.url_for("publish", pk=1)
 # 结果: /api/products/1/publish
 ```
 

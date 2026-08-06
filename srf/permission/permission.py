@@ -6,13 +6,13 @@ class BasePermission(metaclass=type):
     A base class from which all permission classes should inherit.
     """
 
-    def has_permission(self, request, view):
+    def has_permission(self, request, view=None):
         """
         Return `True` if permission is granted, `False` otherwise.
         """
         return True
 
-    def has_object_permission(self, request, view, obj):
+    def has_object_permission(self, request, view=None, obj=None):
         """
         Return `True` if permission is granted, `False` otherwise.
         """

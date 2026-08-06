@@ -57,11 +57,11 @@ REDIS_URL=redis://localhost:6379/0
 JWT_SECRET=your-jwt-secret
 JWT_ACCESS_TOKEN_EXPIRES=86400
 
-# 邮件配置
-SMTP_HOST=smtp.gmail.com
+# 邮件配置（srf.tools.email 实际读取的名称）
+FROM_EMAIL=your-email@gmail.com
+SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-password
+PASSWORD=your-password
 
 # GitHub OAuth
 GITHUB_CLIENT_ID=your-github-client-id
@@ -84,20 +84,22 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite://db.sqlite3")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    
+        
     # JWT 配置
     JWT_SECRET = os.getenv("JWT_SECRET", SECRET_KEY)
-    JWT_ACCESS_TOKEN_EXPIRES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES", 86400))
+    # JWT_ACCESS_TOKEN_EXPIRES 在 srf.config.settings 中有定义；setup_auth 未传给 sanic-jwt
     
-    # 邮件配置
-    SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-    SMTP_USER = os.getenv("SMTP_USER")
-    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+    # 邮件：send_email 读取 srf.config.settings.EmailConfig（FROM_EMAIL/SMTP_SERVER/SMTP_PORT/PASSWORD 环境变量），不是本 Config 类属性
     
-    # 分页配置
-    PAGE_SIZE = 20
-    MAX_PAGE_SIZE = 100
+    # 社交登录（键名大写，与 SOCIAL_CONFIG 一致）
+    SOCIAL_CONFIG = {
+        "github": {
+            "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
+            "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
+            "REDIRECT_URI": os.getenv("GITHUB_REDIRECT_URI"),
+            ...
+        }
+    }
     
     # CORS 配置
     CORS_ORIGINS = ["http://localhost:3000", "http://localhost:8080"]
@@ -139,7 +141,7 @@ config = config_map[env]
 ```python
 from sanic import Sanic
 from tortoise.contrib.sanic import register_tortoise
-from srf.config import srfconfig
+from srf.config import settings
 from config import config
 
 app = Sanic("MyApp")
@@ -148,7 +150,7 @@ app = Sanic("MyApp")
 app.config.update_config(config)
 
 # 配置 SRF
-srfconfig.set_app(app)
+settings.set_app(app)
 
 # 配置数据库
 register_tortoise(
@@ -293,25 +295,24 @@ TORTOISE_ORM = {
 
 ## 认证设置
 
-### JWT 配置
+### JWT 与路由注册（推荐）
+
+优先使用 `register_auth_urls`：它会内部调用 `setup_auth`，并注册登录、注册、验证邮件、社交登录等路由。**不要**先 `setup_auth` 再 `register_auth_urls`（会双重初始化）。
+
+```python
+from srf.auth.route import register_auth_urls
+
+# 初始化 JWT 并注册认证路由（内部已调用 setup_auth）
+register_auth_urls(app, prefix="/api/auth")
+```
+
+仅在不使用 `register_auth_urls`、需要自定义 `sanic-jwt` 参数时，才直接调用 `setup_auth`：
 
 ```python
 from srf.auth.viewset import setup_auth
 
-# 配置 JWT
-setup_auth(
-    app,
-    secret=config.JWT_SECRET,
-    expiration_delta=config.JWT_ACCESS_TOKEN_EXPIRES,
-    url_prefix="/api/auth",
-    class_views=[
-        ("/register", register),
-        ("/send-verification-email", verify_email),
-    ],
-    authenticate=authenticate,
-    retrieve_user=retrieve_user,
-    store_user=store_user,
-)
+jwt = setup_auth(app, url_prefix="/api/auth", secret=config.JWT_SECRET)
+app.config.update({"JWT": jwt})
 ```
 
 ### 社交登录配置
@@ -322,9 +323,13 @@ setup_auth(
 class Config:
     SOCIAL_CONFIG = {
         "github": {
-            "client_id": os.getenv("GITHUB_CLIENT_ID"),
-            "client_secret": os.getenv("GITHUB_CLIENT_SECRET"),
-            "redirect_uri": "http://localhost:8000/api/auth/social/callback",
+            "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
+            "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
+            "REDIRECT_URI": os.getenv(
+                "GITHUB_REDIRECT_URI",
+                "http://localhost:8000/api/auth/social/callback",
+            ),
+            ...
         }
     }
 ```
@@ -341,6 +346,7 @@ class Config:
         "/api/auth/send-verification-email",
         "/api/products",  # 公开的产品列表
         "/health/",       # 健康检查
+        ...
     ]
 ```
 
@@ -371,7 +377,7 @@ from srf.middleware.throttlemiddleware import (
 storage = MemoryStorage()
 
 # 配置限流规则
-app.config.RequestLimiter = [
+app.config.REQUEST_LIMITERS = [
     IPRateLimit(100, 60, storage),      # IP: 100次/分钟
     UserRateLimit(1000, 60, storage),   # 用户: 1000次/分钟
 ]
@@ -458,18 +464,20 @@ def register_routes(app):
 
 ```python
 from srf.health.route import bp as health_bp
+from srf.health.checks import RedisCheck
 
 # 注册健康检查路由
 app.blueprint(health_bp)
+app.config.HEALTH_CHECK_LIST = [RedisCheck] # 可以实现BaseHealthCheck的子类
 
 # 配置健康检查服务
 @app.before_server_start
 async def setup_health_checks(app, loop):
     """设置健康检查依赖的服务"""
-    import aioredis
-    
+    from redis.asyncio import Redis
+
     # Redis 客户端
-    app.ctx.redis = await aioredis.create_redis_pool(config.REDIS_URL)
+    app.ctx.redis = Redis.from_url(config.REDIS_URL)
     
     # PostgreSQL 连接池
     # app.ctx.pg = await asyncpg.create_pool(config.DATABASE_URL)
@@ -537,7 +545,7 @@ async def handle_exception(request, exception):
 from sanic import Sanic
 from sanic_cors import CORS
 from tortoise.contrib.sanic import register_tortoise
-from srf.config import srfconfig
+from srf.config import settings
 from srf.middleware.authmiddleware import set_user_to_request_ctx
 from srf.health.route import bp as health_bp
 from config import config
@@ -549,7 +557,7 @@ app = Sanic("MyApp")
 
 # 应用配置
 app.config.update_config(config)
-srfconfig.set_app(app)
+settings.set_app(app)
 
 # 配置 CORS
 CORS(app, origins=config.CORS_ORIGINS)
@@ -583,8 +591,8 @@ async def handle_exception(request, exception):
 
 if __name__ == "__main__":
     app.run(
-        host=config.get("HOST", "0.0.0.0"),
-        port=config.get("PORT", 8000),
+        host=getattr(config, "HOST", "0.0.0.0"),
+        port=getattr(config, "PORT", 8000),
         debug=config.DEBUG,
         auto_reload=config.DEBUG,
     )

@@ -48,12 +48,13 @@ import os
 class Config:
     SOCIAL_CONFIG = {
         "github": {
-            "client_id": os.getenv("GITHUB_CLIENT_ID"),
-            "client_secret": os.getenv("GITHUB_CLIENT_SECRET"),
-            "redirect_uri": os.getenv(
+            "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
+            "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
+            "REDIRECT_URI": os.getenv(
                 "GITHUB_REDIRECT_URI",
                 "http://localhost:8000/api/auth/social/callback"
             ),
+            ...
         }
     }
 ```
@@ -65,30 +66,32 @@ class Config:
 ```
 1. 用户点击"GitHub 登录"
    ↓
-2. 前端请求 GET /api/auth/social/github/login
+2. 浏览器访问 GET /api/auth/social/github/login
    ↓
-3. 后端返回 GitHub 授权 URL
+3. 后端生成随机 state，将带时间戳的签名 state 写入 HttpOnly Cookie
    ↓
-4. 前端重定向到 GitHub 授权页面
+4. 后端直接重定向到 GitHub 授权页面
    ↓
 5. 用户在 GitHub 上授权
    ↓
-6. GitHub 重定向到 callback URL (带 code)
+6. GitHub 重定向到后端 callback URL（带 OAuth code 和 state）
    ↓
-7. 后端用 code 交换 access_token
+7. 后端验证签名 Cookie、state 和有效期，再用 code 交换 access_token
    ↓
-8. 后端用 access_token 获取用户信息
+8. 后端用 access_token 获取用户信息和已验证邮箱
    ↓
 9. 后端创建/获取用户账户
    ↓
-10. 后端生成临时 code 存储到 Redis
+10. 后端生成随机一次性 code，以 <前缀>:<code> 写入 Redis
    ↓
-11. 前端用临时 code 换取 JWT token
+11. 后端重定向到 OAUTHCALLBACK?code=<临时 code>
+   ↓
+12. 前端用 GET /api/auth/social/github/login_by_code?code=... 换取 JWT
 ```
 
 ### API 端点
 
-SRF 自动注册以下 GitHub OAuth 端点：
+通过 `register_auth_urls(app)` 自动注册以下 GitHub OAuth 端点：
 
 #### 1. 获取授权 URL
 
@@ -97,26 +100,18 @@ SRF 自动注册以下 GitHub OAuth 端点：
 **请求**：
 
 ```bash
-curl http://localhost:8000/api/auth/social/github/login
+curl -i http://localhost:8000/api/auth/social/github/login
 ```
 
-**响应**：
-
-```json
-{
-  "url": "https://github.com/login/oauth/authorize?client_id=xxx&redirect_uri=xxx&scope=user:email"
-}
-```
+响应是 `302` 重定向，同时写入带签名的 OAuth state Cookie。该 Cookie 使用
+`HttpOnly`、`SameSite=Lax`，作用路径来自 `GITHUB_REDIRECT_URI`；`Secure`
+由 `SOCIAL_LOGIN_COOKIE_SECURE` 控制，未配置时根据当前请求是否为 HTTPS
+决定。
 
 **前端处理**：
 
 ```javascript
-// 获取授权 URL
-const response = await fetch('/api/auth/social/github/login');
-const data = await response.json();
-
-// 重定向到 GitHub
-window.location.href = data.url;
+window.location.assign('/api/auth/social/github/login');
 ```
 
 #### 2. 处理回调
@@ -124,13 +119,18 @@ window.location.href = data.url;
 **端点**: `GET /api/auth/social/callback`
 
 这个端点由 GitHub 重定向触发，SRF 会自动：
-1. 用 code 交换 access_token
-2. 获取 GitHub 用户信息
-3. 创建或获取本地用户账户
-4. 生成临时 code
-5. 返回前端页面（带临时 code）
+1. 验证 URL 中的 `state` 与带签名、带有效期的 Cookie
+2. 用 OAuth code 交换 access_token
+3. 获取 GitHub 用户信息，并选择已验证的主邮箱（没有主邮箱时选择首个已验证邮箱）
+4. 使用邮箱创建或获取本地用户账户；数据库中必须已有名为 `user` 的角色
+5. 生成随机一次性 code，写入 `app.ctx.redis`
+6. 重定向到 `SOCIAL_CONFIG['github']['OAUTHCALLBACK']?code=<一次性 code>`
+7. 在正常响应路径中删除 OAuth state Cookie
 
-**URL 格式**：
+Redis key 格式默认为 `social-login:<code>`，有效期默认 300 秒。可通过
+`SOCIAL_LOGIN_REDIS_CODE_PREFIX` 和 `SOCIAL_LOGIN_CODE_MAX_AGE` 覆盖。
+
+**URL 格式**（GitHub → 后端）：
 
 ```
 http://localhost:8000/api/auth/social/callback?code=xxx&state=xxx
@@ -138,27 +138,28 @@ http://localhost:8000/api/auth/social/callback?code=xxx&state=xxx
 
 #### 3. 通过临时 code 登录
 
-**端点**: `POST /api/auth/social/github/login_by_code`
+**端点**: `GET /api/auth/social/github/login_by_code`
 
-**请求**：
+**请求**（query 参数 `code`，不是 JSON body）：
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/social/github/login_by_code \
-  -H "Content-Type: application/json" \
-  -d '{"code": "temporary-code-from-redis"}'
+curl "http://localhost:8000/api/auth/social/github/login_by_code?code=one-time-code"
 ```
 
-**响应**：
+**响应**（扁平结构：用户字段 + `access_token`，不是嵌套的 `{"user": {...}}`）：
 
 ```json
 {
-  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-  "user": {
-    "user_id": 1,
-    "username": "github-user",
-    "email": "user@example.com",
-    "role": "user"
-  }
+  "id": 1,
+  "username": "github-user",
+  "email": "user@example.com",
+  "is_active": true,
+  "is_staff": false,
+  "is_superuser": false,
+  "created_date": "2026-01-01 00:00:00",
+  "updated_date": "2026-01-01 00:00:00",
+  "url": "/users/1",
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
 }
 ```
 
@@ -170,17 +171,9 @@ curl -X POST http://localhost:8000/api/auth/social/github/login_by_code \
 import React, { useEffect } from 'react';
 
 function GitHubLogin() {
-  const handleGitHubLogin = async () => {
-    try {
-      // 1. 获取授权 URL
-      const response = await fetch('/api/auth/social/github/login');
-      const data = await response.json();
-      
-      // 2. 重定向到 GitHub
-      window.location.href = data.url;
-    } catch (error) {
-      console.error('GitHub 登录失败:', error);
-    }
+  const handleGitHubLogin = () => {
+    // 后端会直接重定向到 GitHub，并设置 OAuth state Cookie。
+    window.location.assign('/api/auth/social/github/login');
   };
 
   return (
@@ -190,7 +183,7 @@ function GitHubLogin() {
   );
 }
 
-// 回调页面
+// 回调页面（前端路由，对应 OAUTHCALLBACK）
 function GitHubCallback() {
   useEffect(() => {
     const handleCallback = async () => {
@@ -204,18 +197,14 @@ function GitHubCallback() {
       }
       
       try {
-        // 3. 用临时 code 换取 JWT token
-        const response = await fetch('/api/auth/social/github/login_by_code', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ code }),
-        });
+        // 3. 用临时 code 换取 JWT（GET + query）
+        const response = await fetch(
+          `/api/auth/social/github/login_by_code?code=${encodeURIComponent(code)}`
+        );
         
         const data = await response.json();
         
-        // 4. 保存 token
+        // 4. 保存 token（响应为扁平结构）
         localStorage.setItem('access_token', data.access_token);
         
         // 5. 跳转到首页
@@ -246,17 +235,9 @@ export { GitHubLogin, GitHubCallback };
 <script>
 export default {
   methods: {
-    async handleGitHubLogin() {
-      try {
-        // 获取授权 URL
-        const response = await fetch('/api/auth/social/github/login');
-        const data = await response.json();
-        
-        // 重定向到 GitHub
-        window.location.href = data.url;
-      } catch (error) {
-        console.error('GitHub 登录失败:', error);
-      }
+    handleGitHubLogin() {
+      // 后端会直接重定向到 GitHub，并设置 OAuth state Cookie。
+      window.location.assign('/api/auth/social/github/login');
     }
   }
 }
@@ -281,13 +262,9 @@ export default {
     }
     
     try {
-      const response = await fetch('/api/auth/social/github/login_by_code', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code }),
-      });
+      const response = await fetch(
+        `/api/auth/social/github/login_by_code?code=${encodeURIComponent(code)}`
+      );
       
       const data = await response.json();
       
@@ -305,50 +282,10 @@ export default {
 </script>
 ```
 
-### 自定义用户创建逻辑
-
-如果需要自定义用户创建逻辑，可以修改 `srf/auth/social_auth.py` 中的相关函数。
-
-```python
-from srf.auth.social_auth import github_callback
-from models import Account, Role
-
-async def custom_github_callback(request):
-    """自定义 GitHub 回调处理"""
-    # 获取 GitHub 用户信息
-    github_user = await get_github_user_info(request)
-    
-    # 检查用户是否存在
-    account = await Account.get_or_none(email=github_user['email'])
-    
-    if not account:
-        # 创建新用户，添加自定义逻辑
-        default_role = await Role.get_or_none(name='user')
-        
-        account = await Account.create(
-            name=github_user['name'] or github_user['login'],
-            email=github_user['email'],
-            password=Account.hash_password(secrets.token_urlsafe(32)),
-            role=default_role,
-            # 自定义字段
-            github_id=github_user['id'],
-            github_username=github_user['login'],
-            avatar_url=github_user['avatar_url'],
-        )
-    
-    # 生成临时 code
-    code = secrets.token_urlsafe(32)
-    await request.app.ctx.redis.setex(
-        f"social_login_code:{code}",
-        300,  # 5分钟过期
-        str(account.id)
-    )
-    
-    # 返回前端页面
-    return redirect(f"/auth/callback?code={code}")
-```
 
 ## 添加其他社交登录
+
+以下 Google 示例为**自定义扩展代码**（框架目前只内置 GitHub）。配置键建议与框架 `SOCIAL_CONFIG` 风格一致，使用大写 `CLIENT_ID` 等。
 
 ### Google OAuth 示例
 
@@ -356,63 +293,63 @@ async def custom_github_callback(request):
 # config.py
 SOCIAL_CONFIG = {
     "github": {
-        "client_id": os.getenv("GITHUB_CLIENT_ID"),
-        "client_secret": os.getenv("GITHUB_CLIENT_SECRET"),
-        "redirect_uri": "http://localhost:8000/api/auth/social/callback",
+        "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
+        "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
+        "REDIRECT_URI": "http://localhost:8000/api/auth/social/callback",
     },
     "google": {
-        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-        "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
-        "redirect_uri": "http://localhost:8000/api/auth/social/google/callback",
+        "CLIENT_ID": os.getenv("GOOGLE_CLIENT_ID"),
+        "CLIENT_SECRET": os.getenv("GOOGLE_CLIENT_SECRET"),
+        "REDIRECT_URI": "http://localhost:8000/api/auth/social/google/callback",
     }
 }
 ```
 
 ```python
-# social_auth.py
+# social_auth.py（自定义扩展，非框架内置）
 from sanic import Blueprint
 from sanic.response import json, redirect
 import aiohttp
 
 bp = Blueprint("social_auth", url_prefix="/api/auth/social")
 
-@bp.route("/google/login", methods=["GET"])
+@bp.route("/google/login", methods=["POST"])
 async def google_login(request):
-    """Google 登录"""
-    from srf.config import srfconfig
+    """Google 登录（自定义）"""
+    from srf.config import settings
     
-    config = srfconfig.SOCIAL_CONFIG['google']
+    config = settings.SOCIAL_CONFIG['google']
     
     auth_url = (
         "https://accounts.google.com/o/oauth2/v2/auth"
-        f"?client_id={config['client_id']}"
-        f"&redirect_uri={config['redirect_uri']}"
+        f"?client_id={config['CLIENT_ID']}"
+        f"&redirect_uri={config['REDIRECT_URI']}"
         "&response_type=code"
         "&scope=email profile"
     )
     
-    return json({"url": auth_url})
+    return json({"auth_url": auth_url})
 
 @bp.route("/google/callback", methods=["GET"])
 async def google_callback(request):
-    """Google 回调"""
+    """Google 回调（自定义）"""
     code = request.args.get("code")
     
     if not code:
         return json({"error": "Missing code"}, status=400)
     
-    from srf.config import srfconfig
-    config = srfconfig.SOCIAL_CONFIG['google']
+    from srf.config import settings
+    config = settings.SOCIAL_CONFIG['google']
     
     # 交换 access_token
     async with aiohttp.ClientSession() as session:
         async with session.post(
             "https://oauth2.googleapis.com/token",
             data={
-                "client_id": config['client_id'],
-                "client_secret": config['client_secret'],
+                "client_id": config['CLIENT_ID'],
+                "client_secret": config['CLIENT_SECRET'],
                 "code": code,
-                "redirect_uri": config['redirect_uri'],
+                "redirect_uri": config['REDIRECT_URI'],
                 "grant_type": "authorization_code",
             }
         ) as resp:
@@ -428,8 +365,8 @@ async def google_callback(request):
         ) as resp:
             user_info = await resp.json()
     
-    # 创建或获取用户
-    # ... 类似 GitHub 的逻辑
+    # 创建或获取用户，写入 Redis 一次性 code
+    # ... 类似 GitHub 的逻辑（需使用 app.ctx.redis）
     
     return redirect(f"/auth/callback?code={temp_code}")
 ```
@@ -438,39 +375,19 @@ async def google_callback(request):
 
 1. **验证 state 参数**：防止 CSRF 攻击
 
-```python
-import secrets
+框架会为每次登录生成随机 `state`，使用 HMAC-SHA256 将 state 与签发时间一起
+签名后写入 HttpOnly Cookie。回调时同时验证签名、有效期以及 URL 中的 state；
+验证使用 `hmac.compare_digest()`。Cookie 默认有效期为 600 秒，并在回调正常
+返回时删除。签名只能防止篡改，不会加密 state。
 
-@bp.route("/github/login", methods=["GET"])
-async def github_login(request):
-    # 生成 state
-    state = secrets.token_urlsafe(32)
-    
-    # 存储 state 到 Redis
-    await request.app.ctx.redis.setex(f"oauth_state:{state}", 300, "1")
-    
-    auth_url = f"{base_url}&state={state}"
-    return json({"url": auth_url})
-
-@bp.route("/callback", methods=["GET"])
-async def callback(request):
-    state = request.args.get("state")
-    
-    # 验证 state
-    if not await request.app.ctx.redis.exists(f"oauth_state:{state}"):
-        return json({"error": "Invalid state"}, status=400)
-    
-    # 删除 state
-    await request.app.ctx.redis.delete(f"oauth_state:{state}")
-    
-    # 继续处理...
-```
+建议配置独立的 `SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY`。未配置时框架会回退到
+`JWT_SECRET`，但独立密钥便于轮换和隔离用途。
 
 2. **HTTPS only**：生产环境必须使用 HTTPS
 
 3. **限制作用域**：只请求必要的权限
 
-4. **Token 过期**：临时 code 设置短的过期时间（5分钟）
+4. **一次性兑换**：临时 code 设置短过期时间，并在成功兑换时立即原子删除
 
 ## 最佳实践
 

@@ -6,15 +6,15 @@
 
 Sanic RESTful Framework 是一个基于 [Sanic](https://sanic.dev/) 应用设计的现代化 RESTful API 开发框架，它提供了一套完整的工具和最佳实践，帮助您快速构建高性能的 Web API。
 
-SRF 受到 Django REST Framework 的启发，将其优秀的设计理念移植到了异步的 Sanic 生态系统中，如果您熟悉DRF框架，那您很快就能上手使用SRF，即使您不熟悉Django REST Framework也没关系，SRF的便捷性一定能帮您快速构建您的应用！
+SRF 受到 Django REST Framework 的启发，将其优秀的设计理念移植到了异步的 Sanic 生态系统中，如果您熟悉 DRF(Django REST framework) 框架，那您很快就能上手使用 SRF(Sanic RESTful Framework) ，即使您不熟悉 DRF 也没关系，SRF 的便捷性一定能帮您快速构建您的应用！
 
 ## 为什么选择 SRF？
 
 - **🚀 高性能**：以 [Sanic](https://sanic.dev/) 为基础架构，具有卓越的性能
-- **📦 功能完整**：内置认证、权限、分页、过滤、限流等常用功能
+- **📦 常用组件**：提供认证、权限、分页、过滤、限流等基础组件
 - **🎯 简单易用**：使用体验最接近 Django REST Framework，学习曲线平缓
 - **🔧 灵活可扩展**：模块化设计，可以轻松定制和扩展
-- **🔒 安全可靠**：内置 JWT 认证、CSRF 保护、权限控制等安全特性
+- **🔒 安全扩展点**：提供 JWT、权限和限流组件；生产安全仍需应用配置和审计
 - **📊 开箱即用**：提供健康检查、异常处理、HTTP 状态码等实用工具
 
 ## 主要特性
@@ -52,12 +52,16 @@ SRF 受到 Django REST Framework 的启发，将其优秀的设计理念移植�
 下面是一个简单的示例，展示如何使用 SRF 创建一个 RESTful API：
 
 ```python
+import os
 from sanic import Sanic
+
+os.environ.setdefault("SECRET_KEY", "development-only-change-me")
+
 from srf.views import BaseViewSet
 from srf.route import SanicRouter
 from tortoise import fields
 from tortoise.models import Model
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 # 定义 ORM 模型
 class Product(Model):
@@ -68,14 +72,15 @@ class Product(Model):
 
 # 定义 Schema 模型
 class ProductSchema(BaseModel):
-    id: int = None
+    id: int | None = None
     name: str
     price: float
     description: str
+    model_config = ConfigDict(from_attributes=True)
 
 # 定义 ViewSet
 class ProductViewSet(BaseViewSet):
-    schema: BaseModel = ProductSchema  # 这里也可以定义get_schema函数代替
+    schema = ProductSchema
 
     @property
     def queryset(self):
@@ -105,10 +110,10 @@ app.blueprint(router.get_blueprint())
 
 ## 社区与支持
 
-- **GitHub**: [转到GitHub](https://github.com/bitflames/sanic-restful-framework)
+- **GitHub**: [sanic-restful-framework](https://github.com/bitflames/sanic-restful-framework)
 - **问题反馈**: 如果您发现 bug 或有功能建议，请在 GitHub 上提交 issue
 - **贡献代码**: 欢迎提交 Pull Request 来帮助改进 SRF
 
 ## 许可证
 
-Sanic RESTful Framework 采用开源许可证发布。
+Sanic RESTful Framework 采用 MIT 许可证发布。

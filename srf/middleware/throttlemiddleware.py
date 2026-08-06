@@ -108,7 +108,8 @@ class HeaderRateLimit(BaseRateLimit):
 
 
 async def throttle_rate(request: Request):
-    for limiter in request.app.config.RequestLimiter:
+    limiters = getattr(request.app.config, "REQUEST_LIMITERS", [])
+    for limiter in limiters:
         if not await limiter.allow(request):
             return False
     return True

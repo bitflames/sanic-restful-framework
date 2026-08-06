@@ -4,12 +4,12 @@ SRF provides many advanced features that help you build more robust and feature-
 
 ## Feature Overview
 
-This section covers the following advanced features:
+This chapter covers the following advanced features:
 
-### Operations & Maintenance Related
+### Operations Related
 
 - **[Health Check](health-check.md)**: Monitor the health status of the application and dependent services
-- **[Exception Handling](exceptions.md)**: Unified exception handling mechanism
+- **[Exception Handling](exceptions.md)**: Built-in conversion in ViewSet and Sanic global handling recommendations
 - **[HTTP Status Codes](http-status.md)**: Standardized status code management
 
 ### Middleware
@@ -22,29 +22,29 @@ This section covers the following advanced features:
 
 ### Health Check
 
-Monitor the health status of the application and dependent services (Redis, PostgreSQL, MongoDB, etc.):
+Monitor the health status of the application and dependent services. Built-in checks, registered via `HEALTH_CHECK_LIST`:
 
 ```python
 from srf.health.route import bp as health_bp
 
 app.blueprint(health_bp)
 
-# Access /health/ to check health status
+# Access /health/ to view health status
 ```
 
 ### Exception Handling
 
-SRF provides a unified exception handling mechanism that automatically converts exceptions into standard HTTP responses:
+ViewSet converts some ORM, Pydantic, and HTTP exceptions; others are still handled by Sanic:
 
 ```python
 from srf.exceptions import TargetObjectAlreadyExist
 
-# Raise custom exception
+# Throw a custom exception
 if await Product.filter(sku=sku).exists():
     raise TargetObjectAlreadyExist("This SKU already exists")
 ```
 
-### HTTP Status Codes
+### HTTP Status Code
 
 Use semantic status code constants:
 
@@ -57,7 +57,7 @@ return json(data, status=HTTPStatus.HTTP_201_CREATED)
 
 ### Authentication Middleware
 
-Automatically validate JWT tokens and set user context:
+Automatically verify JWT Token and set user context:
 
 ```python
 from srf.middleware.authmiddleware import set_user_to_request_ctx
@@ -75,7 +75,7 @@ Control API request frequency to prevent abuse:
 from srf.middleware.throttlemiddleware import IPRateLimit, MemoryStorage
 
 storage = MemoryStorage()
-app.config.RequestLimiter = [
+app.config.REQUEST_LIMITERS = [
     IPRateLimit(100, 60, storage),  # 100 requests per 60 seconds
 ]
 ```
@@ -86,29 +86,29 @@ Prevent cross-site request forgery attacks (in development).
 
 ## Usage Recommendations
 
-### Essential for Production Environments
+### Essential for Production Environment
 
-The following features are strongly recommended for production environments:
+The following features are strongly recommended for use in production environments:
 
-1. **Health Check**: Integrate with monitoring systems to understand service status in real-time
+1. **Health Check**: Integrate with monitoring systems to get real-time service status
 2. **Rate Limiting Middleware**: Prevent malicious requests and DDoS attacks
 3. **Exception Handling**: Provide friendly error messages without exposing internal details
 4. **Authentication Middleware**: Automatically handle user authentication
 
-### Useful for Development Environments
+### Development Environment Assistance
 
-The following features can aid in debugging during development:
+The following features are helpful for debugging in the development environment:
 
-1. **HTTP Status Codes**: Use semantic constants for more readable code
+1. **HTTP Status Code**: Use semantic constants, making the code more readable
 2. **Exception Handling**: Quickly locate issues and provide detailed error information
 
 ## Feature Combination Example
 
-### Complete Production Environment Configuration
+### Full Production Environment Configuration
 
 ```python
 from sanic import Sanic
-from srf.config import srfconfig
+from srf.config import settings
 from srf.middleware.authmiddleware import set_user_to_request_ctx
 from srf.middleware.throttlemiddleware import IPRateLimit, UserRateLimit, MemoryStorage, throttle_rate
 from srf.health.route import bp as health_bp
@@ -117,11 +117,11 @@ from sanic.response import json
 from sanic.exceptions import NotFound, Forbidden, Unauthorized
 
 app = Sanic("ProductionApp")
-srfconfig.set_app(app)
+settings.set_app(app)
 
 # 1. Configure rate limiting
 storage = MemoryStorage()
-app.config.RequestLimiter = [
+app.config.REQUEST_LIMITERS = [
     IPRateLimit(100, 60, storage),      # IP: 100 requests per minute
     UserRateLimit(1000, 60, storage),   # User: 1000 requests per minute
 ]
@@ -159,7 +159,7 @@ async def handle_forbidden(request, exception):
 @app.exception(Unauthorized)
 async def handle_unauthorized(request, exception):
     return json(
-        {"error": "Unauthorized", "message": "Please log in"},
+        {"error": "Unauthorized", "message": "Please log in first"},
         status=HTTPStatus.HTTP_401_UNAUTHORIZED
     )
 
@@ -168,7 +168,7 @@ async def handle_exception(request, exception):
     import logging
     logging.error(f"Unhandled exception: {exception}", exc_info=True)
     return json(
-        {"error": "Server internal error"},
+        {"error": "Internal server error"},
         status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR
     )
 ```
@@ -232,7 +232,7 @@ async def add_process_time(request, response):
 
 ### 1. Use HTTPS
 
-HTTPS is required in production environments:
+HTTPS must be used in production environments:
 
 ```python
 # Configure SSL
@@ -268,11 +268,11 @@ app.run(host="0.0.0.0", port=8000, debug=False)
 # Do not expose detailed stack traces in error responses
 @app.exception(Exception)
 async def handle_exception(request, exception):
-    # Log detailed errors to logs
+    # Log detailed error to logs
     logger.error(f"Error: {exception}", exc_info=True)
-    
-    # Return a generic error message to clients
-    return json({"error": "Server internal error"}, status=500)
+
+    # Return a generic error to the client
+    return json({"error": "Internal Server Error"}, status=500)
 ```
 
 ### 5. Validate Input
@@ -283,7 +283,7 @@ from pydantic import BaseModel, validator
 class ProductSchema(BaseModel):
     name: str
     price: float
-    
+
     @validator('price')
     def validate_price(cls, value):
         if value <= 0:
@@ -295,7 +295,7 @@ class ProductSchema(BaseModel):
 
 ## Performance Optimization
 
-### 1. Use Connection Pooling
+### 1. Use Connection Pool
 
 ```python
 # PostgreSQL connection pool
@@ -329,15 +329,12 @@ register_tortoise(
 ### 2. Use Caching
 
 ```python
-import aioredis
+from redis.asyncio import Redis, ConnectionPool
 
 @app.before_server_start
 async def setup_redis(app, loop):
-    app.ctx.redis = await aioredis.create_redis_pool(
-        'redis://localhost:6379',
-        minsize=5,
-        maxsize=10
-    )
+    pool = ConnectionPool.from_url('redis://localhost:6379', max_connections=10)
+    app.ctx.redis = Redis(connection_pool=pool)
 
 # Use cache in ViewSet
 class ProductViewSet(BaseViewSet):
@@ -346,20 +343,20 @@ class ProductViewSet(BaseViewSet):
         redis = request.app.ctx.redis
         cache_key = f"product:{pk}"
         cached = await redis.get(cache_key)
-        
+
         if cached:
             from sanic.response import json
             import json as json_lib
             return json(json_lib.loads(cached))
-        
+
         # Get from database
         obj = await self.get_object(request, pk)
         schema = self.get_schema(request, is_safe=True)
         data = schema.model_validate(obj).model_dump()
-        
+
         # Store in cache (expires in 10 minutes)
         await redis.setex(cache_key, 600, json_lib.dumps(data))
-        
+
         from sanic.response import json
         return json(data)
 ```
@@ -377,11 +374,11 @@ class ProductViewSet(BaseViewSet):
             Category.all(),
             Brand.all()
         )
-        
+
         product_count, categories, brands = results
 ```
 
-## Deployment Recommendations
+## Deployment Suggestions
 
 ### Use Gunicorn
 
@@ -420,7 +417,7 @@ upstream myapp {
 server {
     listen 80;
     server_name example.com;
-    
+
     location / {
         proxy_pass http://myapp;
         proxy_set_header Host $host;
@@ -428,7 +425,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
-    
+
     location /static/ {
         alias /path/to/static/;
     }
@@ -439,5 +436,5 @@ server {
 
 - Learn more about [Health Check](health-check.md)
 - Learn how to use [Rate Limiting Middleware](middleware/rate-limiting.md)
-- Review best practices for [Exception Handling](exceptions.md)
+- View best practices for [Exception Handling](exceptions.md)
 - Read the [HTTP Status Code](http-status.md) reference

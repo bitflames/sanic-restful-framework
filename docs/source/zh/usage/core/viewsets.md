@@ -32,14 +32,17 @@ class ProductViewSet(BaseViewSet):
         """返回查询集"""
         return Product.all()
     
-    def get_schema(self, request, is_safe=False):
+    def get_schema(self, request, *args, is_safe=False, **kwargs):
         """返回 Schema
         
         Args:
             request: 请求对象
-            is_safe: True 表示读取操作，False 表示写入操作
+            is_safe: 见下方 Mixin 实际传参说明；默认 False
         """
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        # 注意：内置 list/retrieve 调用时 is_safe 默认为 False
+        if request.method in ("GET", "HEAD", "OPTIONS") or is_safe:
+            return ProductSchemaReader
+        return ProductSchemaWriter
 ```
 
 ### 必需属性和方法
@@ -72,14 +75,15 @@ def queryset(self):
 返回用于数据验证和序列化的 Pydantic Schema。
 
 ```python
-def get_schema(self, request, is_safe=False):
+def get_schema(self, request, *args, is_safe=False, **kwargs):
     """
     在同一个请求中可能使用不同的schema，比如输入或输出要控制不同的字段，输入就使用不安全的schema
 
     is_safe=True: 读取操作（GET），使用 Reader Schema
     is_safe=False: 写入操作（POST/PUT/PATCH），使用 Writer Schema
     """
-    return ProductSchemaReader if is_safe else ProductSchemaWriter
+    is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
+    return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
 ```
 
 **为什么要分离读写 Schema？**
@@ -162,7 +166,7 @@ class ProductViewSet(BaseViewSet):
         
         # 应用过滤器类
         for filter_class in self.filter_class:
-            queryset = await filter_class().filter_queryset(request, queryset)
+            queryset = filter_class(self).filter_queryset(request, queryset)
         
         # 分页
         from srf.paginator import PageNumberPagination
@@ -208,28 +212,21 @@ class ProductViewSet(BaseViewSet):
 
 ```python
 class ProductViewSet(BaseViewSet):
-    async def perform_create(self, schema, request):
+    async def perform_create(self, sch_model):
         """自定义创建逻辑
-        
+
         Args:
-            request: 请求对象
-            schema: 已验证的 Pydantic Schema 实例
-        
-        Returns:
-            创建的模型实例
+            sch_model: 已验证的 Pydantic Schema 实例
+
+        需要 request 时使用 self.request（as_view 会赋值）。
         """
-        # 添加额外字段
-        data = schema.dict()
-        data["created_by"] = request.ctx.user.id
-        
-        # 创建对象
+        data = sch_model.model_dump(exclude_unset=True)
+        data["created_by"] = self.request.ctx.user.id
+
         obj = await Product.create(**data)
-        
-        # 执行其他操作（如发送通知）
         await self.send_notification(obj)
-        
         return obj
-    
+
     async def send_notification(self, product):
         """发送通知"""
         # 实现通知逻辑
@@ -311,31 +308,31 @@ class ProductViewSet(BaseViewSet):
 
 ```python
 class ProductViewSet(BaseViewSet):
-    async def perform_update(self, request, obj, schema):
+    async def perform_update(self, sch_model, orm_model):
         """自定义更新逻辑
         
         Args:
-            request: 请求对象
-            obj: 要更新的模型实例
-            schema: 已验证的 Pydantic Schema 实例
+            sch_model: 已验证的 Pydantic Schema 实例
+            orm_model: 要更新的 ORM 模型实例
         
         Returns:
             更新后的模型实例
         """
         # 记录变更
-        old_price = obj.price
+        old_price = orm_model.price
         
         # 更新对象
-        update_data = schema.dict(exclude_unset=True)
+        update_data = sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"])
         for field, value in update_data.items():
-            setattr(obj, field, value)
-        await obj.save()
+            if hasattr(orm_model, field):
+                setattr(orm_model, field, value)
+        await orm_model.save()
         
         # 如果价格变化，发送通知
-        if old_price != obj.price:
-            await self.notify_price_change(obj, old_price)
+        if old_price != orm_model.price:
+            await self.notify_price_change(orm_model, old_price)
         
-        return obj
+        return orm_model
     
     async def notify_price_change(self, product, old_price):
         """通知价格变化"""
@@ -355,22 +352,21 @@ class ProductViewSet(BaseViewSet):
 
 ```python
 class ProductViewSet(BaseViewSet):
-    async def perform_destroy(self, request, obj):
+    async def perform_destroy(self, orm_model):
         """自定义删除逻辑
         
         Args:
-            request: 请求对象
-            obj: 要删除的模型实例
+            orm_model: 要删除的 ORM 模型实例
         """
         # 软删除
-        obj.is_deleted = True
-        await obj.save()
+        orm_model.is_deleted = True
+        await orm_model.save()
         
         # 或硬删除
-        # await obj.delete()
+        # await orm_model.delete()
         
         # 清理关联数据
-        await self.cleanup_related(obj)
+        await self.cleanup_related(orm_model)
     
     async def cleanup_related(self, product):
         """清理关联数据"""
@@ -413,7 +409,7 @@ class ProductViewSet(BaseViewSet):
 | 参数 | 类型 | 说明 | 默认值 |
 |------|------|------|--------|
 | `methods` | list | HTTP 方法列表 | `["get"]` |
-| `detail` | bool | 是否为详情级操作 | `False` |
+| `detail` | bool 或 None | 是否为详情级操作 | `None`（按集合级处理） |
 | `url_path` | str | URL 路径 | 方法名 |
 | `url_name` | str | 路由名称 | 方法名 |
 
@@ -500,11 +496,11 @@ from srf.filters.filter import SearchFilter, JsonLogicFilter, QueryParamFilter, 
 
 class ProductViewSet(BaseViewSet):
     filter_class = [
-        SearchFilter,
-        JsonLogicFilter,
-        QueryParamFilter,
-        OrderingFactory,
-    ]
+            SearchFilter,
+            JsonLogicFilter,
+            QueryParamFilter,
+            OrderingFactory,
+        ]
 ```
 
 ## 完整示例
@@ -546,26 +542,29 @@ class ProductViewSet(BaseViewSet):
         """返回查询集"""
         return Product.all().prefetch_related("category")
     
-    def get_schema(self, request, is_safe=False):
-        """返回 Schema"""
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+    def get_schema(self, request, *args, is_safe=False, **kwargs):
+        """返回 Schema（list/retrieve 默认 is_safe=False，勿仅依赖 is_safe）"""
+        if request.method in ("GET", "HEAD", "OPTIONS") or is_safe:
+            return ProductSchemaReader
+        return ProductSchemaWriter
     
     # 自定义创建逻辑
-    async def perform_create(self, schema, request):
-        """创建产品"""
-        data = schema.dict()
-        data["created_by"] = request.ctx.user.id
+    async def perform_create(self, sch_model):
+        """创建产品；需要 request 时用 self.request"""
+        data = sch_model.model_dump(exclude_unset=True)
+        data["created_by"] = self.request.ctx.user.id
         return await Product.create(**data)
     
     # 自定义更新逻辑
-    async def perform_update(self, request, obj, schema):
+    async def perform_update(self, sch_model, orm_model):
         """更新产品"""
-        update_data = schema.dict(exclude_unset=True)
+        update_data = sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"])
         for field, value in update_data.items():
-            setattr(obj, field, value)
-        obj.updated_by = request.ctx.user.id
-        await obj.save()
-        return obj
+            if hasattr(orm_model, field):
+                setattr(orm_model, field, value)
+        orm_model.updated_by = self.request.ctx.user.id
+        await orm_model.save()
+        return orm_model
     
     # 集合级自定义操作
     @action(methods=["get"], detail=False, url_path="featured")

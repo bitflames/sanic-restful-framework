@@ -1,6 +1,6 @@
 # CSRF Middleware
 
-The CSRF (Cross-Site Request Forgery) middleware is used to protect the application from CSRF attacks.
+The CSRF (Cross-Site Request Forgery, Cross-Site Request Forgery) middleware is used to protect applications from CSRF attacks.
 
 ## Overview
 
@@ -8,16 +8,16 @@ A CSRF attack is a type of attack that exploits a user's authenticated session t
 
 ### Example of a CSRF Attack
 
-1. The user logs in to the bank website `bank.com` and receives an authentication cookie.
-2. The user visits a malicious website `evil.com`.
-3. `evil.com` contains a hidden form that automatically submits a transfer request to `bank.com`.
-4. Since the browser automatically carries the cookie, the request appears to be initiated by the user.
-5. The bank performs the transfer operation.
+1. The user logs in to the bank website `bank.com` and receives an authentication Cookie
+2. The user visits a malicious website `evil.com`
+3. `evil.com` contains a hidden form that automatically submits a transfer request to `bank.com`
+4. Because the browser automatically carries the Cookie, the request appears to be initiated by the user
+5. The bank executes the transfer operation
 
 ## Current Status
 
 !!! note "In Development"
-    The CSRF middleware is currently under development, and the file `srf/middleware/csrfmiddleware.py` has not been implemented yet.
+    The CSRF middleware is currently under development, and there is no CSRF middleware implementation in the current repository.
 
 ## Protection Principles
 
@@ -25,20 +25,20 @@ CSRF protection typically uses the following methods:
 
 ### 1. CSRF Token
 
-- The server generates a random token.
-- The token is stored on the server side (Session) or sent to the client after encryption.
-- The client includes the token with each request.
-- The server verifies the token's validity.
+- The server generates a random Token
+- The Token is stored on the server side (Session) or sent to the client after encryption
+- The client includes the Token with each request
+- The server verifies the validity of the Token
 
 ### 2. SameSite Cookie
 
-Set the `SameSite` attribute of the cookie:
+Set the `SameSite` attribute of the Cookie:
 
 ```python
 # Strict mode: completely block cross-site requests
 Set-Cookie: sessionid=xxx; SameSite=Strict
 
-# Lax mode: allow safe cross-site requests (GET)
+# Lax mode: allow secure cross-site requests (GET)
 Set-Cookie: sessionid=xxx; SameSite=Lax
 ```
 
@@ -48,7 +48,7 @@ Verify that the `Referer` header of the request comes from the same origin.
 
 ### 4. Custom Request Header
 
-Require the client to add a custom request header (e.g., `X-Requested-With`), as cross-site requests cannot set custom headers.
+Require the client to add a custom request header (such as `X-Requested-With`), as cross-site requests cannot set custom headers.
 
 ## Temporary Solutions
 
@@ -105,7 +105,7 @@ fetch('/api/products', {
 
 ### Method 3: Use JWT Token (Recommended)
 
-JWT tokens are usually stored in localStorage and are not automatically sent, thus naturally protecting against CSRF:
+JWT Tokens are usually stored in localStorage and are not sent automatically, thus naturally protecting against CSRF:
 
 ```javascript
 // Store Token
@@ -124,7 +124,7 @@ fetch('/api/products', {
 
 ## Expected CSRF Middleware Implementation
 
-Here is a reference for the expected CSRF middleware implementation:
+Here is a reference implementation of the expected CSRF middleware:
 
 ### Generate CSRF Token
 
@@ -138,7 +138,7 @@ app = Sanic("MyApp")
 @app.route('/api/csrf-token', methods=['GET'])
 async def get_csrf_token(request):
     """Get CSRF Token"""
-    # Generate random token
+    # Generate random Token
     csrf_token = secrets.token_hex(32)
     
     # Store in Session or Redis
@@ -153,6 +153,9 @@ async def get_csrf_token(request):
 ### Validate CSRF Token
 
 ```python
+from srf.middleware.authmiddleware import is_public_endpoint
+
+
 @app.middleware("request")
 async def csrf_middleware(request):
     """CSRF Middleware"""
@@ -217,13 +220,15 @@ pip install sanic-csrf
 ### Configuration
 
 ```python
+import os
+
 from sanic import Sanic
 from sanic_csrf import SanicCSRF
 
 app = Sanic("MyApp")
 
 # Initialize CSRF protection
-csrf = SanicCSRF(app, secret='your-secret-key')
+csrf = SanicCSRF(app, secret=os.environ["CSRF_SECRET"])
 ```
 
 ### Usage
@@ -246,7 +251,7 @@ async def show_form(request):
 
 @app.route('/submit', methods=['POST'])
 async def submit_form(request):
-    """Process form submission"""
+    """Handle form submission"""
     # CSRF validation is automatic
     data = request.form.get('data')
     return json({"message": "Success"})
@@ -254,12 +259,12 @@ async def submit_form(request):
 
 ## Best Practices
 
-1. **Use HTTPS**: CSRF Tokens must be transmitted over HTTPS
-2. **Token Uniqueness**: Use unique tokens per session
-3. **Token Expiry**: Set a reasonable expiration time
+1. **Use HTTPS**: CSRF Tokens must be transmitted via HTTPS
+2. **Token Uniqueness**: Each Session should use a unique Token
+3. **Token Expiration**: Set a reasonable expiration time
 4. **No Protection Needed for Safe Methods**: GET, HEAD, OPTIONS do not require CSRF protection
-5. **Use SameSite Cookies**: Combine with SameSite cookies
-6. **Dual Verification**: Use both CSRF tokens and Referer checks
+5. **Use SameSite Cookies**: Combine with SameSite Cookies
+6. **Double Validation**: Use both CSRF Token and Referer Check
 
 ## Specificity of API Scenarios
 
@@ -267,10 +272,10 @@ For pure API applications (not using Session Cookies):
 
 ### Use JWT Token
 
-JWT Token is stored in localStorage and is not automatically sent, so no CSRF protection is needed:
+JWT Tokens are stored in localStorage and are not sent automatically, so no CSRF protection is needed:
 
 ```javascript
-// Token is not in Cookie, CSRF attack is invalid
+// Token is not in Cookie, CSRF attack is ineffective
 fetch('/api/products', {
   method: 'POST',
   headers: {
@@ -283,7 +288,7 @@ fetch('/api/products', {
 
 ### Use Custom Header
 
-Require all write operations to carry a custom header:
+Require all write operations to include a custom header:
 
 ```python
 @app.middleware("request")
@@ -302,27 +307,27 @@ async def require_custom_header(request):
 - **CSRF**: Prevents cross-site request forgery, exploiting an authenticated session
 - **CORS**: Controls cross-origin resource sharing, a browser security policy
 
-They solve different problems and are usually configured together.
+They solve different problems and usually need to be configured together.
 
-### 2. Do I still need CSRF protection if using JWT?
+### 2. Do I still need CSRF protection if I use JWT?
 
-If the JWT token is stored in localStorage (not in a cookie), no CSRF protection is needed.
+If the JWT Token is stored in localStorage (not in a Cookie), no CSRF protection is needed.
 
-If the token is stored in a cookie, CSRF protection is needed.
+If the Token is stored in a Cookie, CSRF protection is needed.
 
 ### 3. What is the difference between SameSite=Strict and Lax?
 
 - **Strict**: Completely blocks cross-site requests, most secure but may affect user experience
-- **Lax**: Allows safe cross-site navigation (e.g., link clicks), balances security and user experience
+- **Lax**: Allows secure cross-site navigation (e.g., link clicks), balancing security and user experience
 
-### 4. Do Single Page Applications (SPAs) need CSRF protection?
+### 4. Do single-page applications (SPAs) need CSRF protection?
 
-If using JWT tokens stored in localStorage, no.
+If using JWT Token and storing it in localStorage, no.
 
-If using Session Cookies, yes.
+If using Session Cookie, yes.
 
 ## Next Steps
 
 - Learn about [Authentication Middleware](auth-middleware.md) to understand authentication
-- Read about [Rate Limiting Middleware](rate-limiting.md) to understand request limits
+- Read [Rate Limiting Middleware](rate-limiting.md) to understand request limiting
 - View [Authentication](../../core/authentication.md) to learn about JWT usage

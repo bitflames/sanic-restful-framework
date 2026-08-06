@@ -35,7 +35,7 @@ class BaseFilter(ABC):
     def _filter_params(self) -> Any:
         """Subclasses must implement;
         return type is filter-specific. For internal use only."""
-        pass
+        ...
 
     def get_search_terms(self, request: Request):
         """Extract search keywords from requests"""

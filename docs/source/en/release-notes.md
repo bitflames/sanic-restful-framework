@@ -2,6 +2,8 @@
 
 The version release history and changelog of the Sanic RESTful Framework.
 
+Current package version: `srf.__version__ == "0.1.0"`.
+
 ## Version Naming Convention
 
 SRF follows the [Semantic Versioning](https://semver.org/lang/zh-CN/) specification:
@@ -10,7 +12,7 @@ SRF follows the [Semantic Versioning](https://semver.org/lang/zh-CN/) specificat
 - **Minor Version**: Backward-compatible feature additions
 - **Patch Version**: Backward-compatible bug fixes
 
-Format: `Major Version.Minor Version.Patch Version`
+Format: `Major.Version.Patch`
 
 ## Version History
 
@@ -21,14 +23,14 @@ Format: `Major Version.Minor Version.Patch Version`
 #### Core Features
 
 - ✅ **ViewSet System**
-  - BaseViewSet implementation
+  - Implementation of BaseViewSet
   - CRUD Mixins (Create, Retrieve, Update, Destroy, List)
   - @action decorator for custom operations
   - Automatic route generation
 
 - ✅ **Routing System**
   - SanicRouter router manager
-  - Automatic discovery of methods with @action decorator
+  - Automatic discovery of methods decorated with @action
   - Support for collection-level and detail-level operations
   - URL prefix and naming support
 
@@ -41,18 +43,18 @@ Format: `Major Version.Minor Version.Patch Version`
 
 - ✅ **Data Processing**
   - Data validation based on Pydantic
-  - Separation of read and write schemas
+  - Separation of read and write Schemas
   - Automatic serialization and deserialization
 
 - ✅ **Filtering and Search**
   - SearchFilter - Full-text search
   - JsonLogicFilter - Complex queries
-  - QueryParamFilter - Exact filtering
+  - QueryParamFilter - Precise filtering
   - OrderingFactory - Sorting
 
 - ✅ **Pagination**
-  - Page number-based pagination
-  - Configurable number of items per page
+  - Pagination based on page number
+  - Configurable number per page
   - Unified pagination response format
 
 - ✅ **Middleware**
@@ -61,8 +63,8 @@ Format: `Major Version.Minor Version.Patch Version`
   - CSRF middleware (planned)
 
 - ✅ **Health Check**
-  - Extensible health check system
-  - Built-in checks for Redis, PostgreSQL, MongoDB, SQLite
+  - Expandable health check system (registered via `HEALTH_CHECK_LIST`)
+  - Built-in `RedisCheck`, `SQLiteCheck`
 
 - ✅ **Exception Handling**
   - Unified exception handling mechanism
@@ -76,7 +78,7 @@ Format: `Major Version.Minor Version.Patch Version`
 
 #### ORM Support
 
-- Tortoise ORM integration
+- Integration with Tortoise ORM
 - Native asynchronous database operations
 
 #### Documentation
@@ -87,63 +89,48 @@ Format: `Major Version.Minor Version.Patch Version`
 
 ---
 
+### v0.1.0 (2026-08-06)
+
+**Security Enhancements, Configuration Cleanup, and Alignment of Documentation/Test**
+
+#### ⚠️ Breaking Changes
+
+- Authentication key is now explicitly passed, no longer silently uses default values
+- Configuration entry unified to `settings` (`srfconfig` is deprecated)
+- Some configuration items have been renamed and aligned with Sanic's uppercase convention
+- ViewSet is split out from `GenericAPIView`; creation hook signature is tightened
+
+#### ✅ New / Improved Features
+
+- Improved social login process, reducing CSRF risk
+- Login supports email or username
+- Health checks are driven by `HEALTH_CHECK_LIST` and support timeouts
+- Rate limiting, verification code, and other configurations are more robust, with clearer default behavior
+- Completed dependencies and unit tests
+- Updated Chinese documentation according to current API; recorded a list of technical debts
+
+---
+
 ## Roadmap
 
-### v0.1.0 (planned)
+### v0.2.0 (Planned)
 
-**Target Release Date**: TBA
+**Target Release Date**: Not yet determined
 
-#### Planned Features
+#### Planned Improvements
 
-- [ ] Remove dependencies on third-party applications
-
-#### Improvements
-
-- [ ] Performance optimization
-- [ ] More detailed runtime logs
-- [ ] More internationalization documentation support
-
----
-
-## Known Issues
-
-### v0.0.2
-
-| Issue | Severity | Status | Estimated Fix Version |
-|------|--------|------|-------------|
-| Validate email validity during registration | Low | Planned |  |
-
----
-
-## Contributors
-
-Thank you to the following contributors for their contributions to SRF:
-
-- **Chacer** - Project creator and main maintainer
+- [ ] Unify login error responses to avoid account enumeration
+- [ ] Strict whitelist for filter fields
+- [ ] Support PATCH for real partial updates
+- [ ] Email sending no longer blocks the event loop
 
 ---
 
 ## Supported Python Versions
 
 | SRF Version | Python Version |
-|----------|-------------|
-| 1.0.x | 3.8, 3.9, 3.10, 3.11, 3.12 |
-| 0.9.x | 3.8, 3.9, 3.10, 3.11 |
-
----
-
-## Supported Dependency Versions
-
-### v0.0.2
-
-| Dependency | Version Requirements |
-|------|---------|
-| Sanic | >= 21.0.0 |
-| Tortoise ORM | >= 0.19.0 |
-| Pydantic | >= 2.0.0 |
-| sanic-jwt | >= 1.8.0 |
-| aioredis | >= 2.0.0 |
-| bcrypt | >= 4.0.0 |
+|-------------|----------------|
+| 0.0.x / 0.1.x | >= 3.11 |
 
 ---
 
@@ -158,9 +145,9 @@ Thank you to the following contributors for their contributions to SRF:
 
 We welcome any feedback and suggestions:
 
-- **Bug Report**: Submit an Issue on GitHub
-- **Feature Request**: Submit a Feature Request on GitHub
-- **Questions**: Post in GitHub Discussions
+- **Bug Reports**: Submit an Issue on GitHub
+- **Feature Requests**: Submit a Feature Request on GitHub
+- **Questions**: Post on GitHub Discussions
 - **Security Issues**: Send an email to security@example.com
 
 ---
@@ -190,4 +177,4 @@ Welcome to submit Pull Requests to improve SRF!
 
 ---
 
-*Last Updated: 2026-02-24*
+*Last updated: 2026-08-06*

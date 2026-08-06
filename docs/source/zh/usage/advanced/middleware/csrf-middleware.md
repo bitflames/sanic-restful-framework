@@ -17,7 +17,7 @@ CSRF 攻击是一种利用用户已认证会话执行未授权操作的攻击方
 ## 当前状态
 
 !!! note "开发中"
-    CSRF 中间件目前正在开发中，文件 `srf/middleware/csrfmiddleware.py` 尚未实现。
+    CSRF 中间件目前正在开发中，当前仓库中尚无 CSRF 中间件实现。
 
 ## 防护原理
 
@@ -153,6 +153,9 @@ async def get_csrf_token(request):
 ### 验证 CSRF Token
 
 ```python
+from srf.middleware.authmiddleware import is_public_endpoint
+
+
 @app.middleware("request")
 async def csrf_middleware(request):
     """CSRF 中间件"""
@@ -217,13 +220,15 @@ pip install sanic-csrf
 ### 配置
 
 ```python
+import os
+
 from sanic import Sanic
 from sanic_csrf import SanicCSRF
 
 app = Sanic("MyApp")
 
 # 初始化 CSRF 保护
-csrf = SanicCSRF(app, secret='your-secret-key')
+csrf = SanicCSRF(app, secret=os.environ["CSRF_SECRET"])
 ```
 
 ### 使用

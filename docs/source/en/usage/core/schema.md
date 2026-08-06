@@ -1,6 +1,6 @@
 # Data Validation
 
-SRF uses [Pydantic](https://docs.pydantic.dev/latest/) for data validation and serialization, providing strong type safety and data validation capabilities. For detailed usage of [Pydantic](https://docs.pydantic.dev/latest/), please refer to the official documentation!
+SRF uses [Pydantic](https://docs.pydantic.dev/latest/) for data validation and serialization, providing powerful type safety and data validation capabilities. For detailed usage of [Pydantic](https://docs.pydantic.dev/latest/), please refer to the official documentation!
 
 ## Basic Usage
 
@@ -92,9 +92,9 @@ class ProductSchema(BaseModel):
         return value
 ```
 
-## Separating Read and Write Schemas
+## Separate Read and Write Schemas
 
-### Writer Schema (Writing)
+### Writer Schema (Write)
 
 Used for create and update operations:
 
@@ -106,7 +106,7 @@ class ProductSchemaWriter(BaseModel):
     category_id: int
 ```
 
-### Reader Schema (Reading)
+### Reader Schema (Read)
 
 Used for serializing returned data:
 
@@ -140,12 +140,13 @@ class ProductSchemaReader(BaseModel):
 
 ```python
 class ProductViewSet(BaseViewSet):
-    def get_schema(self, request, is_safe=False):
+    def get_schema(self, request, *args, is_safe=False, **kwargs):
         """
-        is_safe=True: Read operation (GET)
-        is_safe=False: Write operation (POST/PUT/PATCH)
+        When creating/updating, is_safe=True is passed;
+        For list/retrieve, it's default is_safe=False, so check method.
         """
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
+        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
 ```
 
 ## Data Types
@@ -187,7 +188,7 @@ class AdvancedSchema(BaseModel):
     price: Decimal        # precise decimal number
 ```
 
-### Enumerated Types
+### Enum Type
 
 ```python
 from enum import Enum
@@ -204,7 +205,7 @@ class ProductSchema(BaseModel):
 
 ## Validation Error Response
 
-When data validation fails, return 422 error:
+When data validation fails, a 422 error is returned:
 
 ```json
 {
@@ -242,7 +243,7 @@ class ProductSchemaWriter(BaseModel):
     price: float = Field(..., gt=0)
     stock: int = Field(default=0, ge=0)
     category_id: int
-    tags: List[str] = Field(default=[])
+    tags: List[str] = Field(default_factory=list)
     status: ProductStatus = ProductStatus.DRAFT
     
     @field_validator('name')
@@ -279,20 +280,21 @@ class ProductViewSet(BaseViewSet):
         return Product.all()
     
     def get_schema(self, request, is_safe=False):
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
+        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
 ```
 
 ## Best Practices
 
 1. **Use Type Annotations**: Provide complete type information
-2. **Separate Read and Write Schemas**: Define different schemas for different operations
+2. **Separate Read and Write Schemas**: Define different Schemas for different operations
 3. **Add Validation Rules**: Use Field and validator to ensure data validity
-4. **Use Enums**: Use enum types for fixed options
+4. **Use Enumerations**: Use enumeration types for fixed options
 5. **Computed Fields**: Use `@computed_field` to add derived fields
 6. **Friendly Errors**: Return clear error messages in validators
 
 ## Next Steps
 
-- Learn about [Views](viewsets.md) to understand how to use Schemas in ViewSets
-- Read about [Authentication](authentication.md) to learn about user data validation
-- View [Filtering](filtering.md) to learn about query parameter validation
+- Learn [Views](viewsets.md) to understand how to use Schemas in ViewSets
+- Read [Authentication](authentication.md) to learn about user data validation
+- View [Filtering](filtering.md) to understand query parameter validation

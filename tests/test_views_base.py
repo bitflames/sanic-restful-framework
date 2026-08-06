@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+from srf.views import GenericAPIView
 from srf.views.base import (
     BaseViewSet,
     CreateModelMixin,
@@ -37,6 +38,23 @@ class TestCreateModelMixin:
         response = await mixin.create(request)
         assert isinstance(response, HTTPResponse)
         assert response.status == HTTPStatus.HTTP_400_BAD_REQUEST
+
+    @pytest.mark.asyncio
+    async def test_create_calls_perform_create_with_schema(self):
+        mixin = CreateModelMixin()
+        sch_model = MagicMock(model_dump=MagicMock(return_value={"name": "x"}))
+        schema_in = MagicMock()
+        schema_in.model_validate.return_value = sch_model
+        schema_out = MagicMock()
+        schema_out.model_validate.return_value = MagicMock(model_dump=MagicMock(return_value={"id": 1, "name": "x"}))
+        mixin._get_schema = MagicMock(side_effect=lambda req, is_safe=False: schema_out if is_safe else schema_in)
+        orm = MagicMock()
+        mixin.perform_create = AsyncMock(return_value=orm)
+        request = MagicMock()
+        request.json = {"name": "x"}
+        response = await mixin.create(request)
+        mixin.perform_create.assert_awaited_once_with(sch_model)
+        assert response.status == HTTPStatus.HTTP_201_CREATED
 
 
 class TestRetrieveModelMixin:
@@ -88,6 +106,37 @@ class TestDestroyModelMixin:
         request = MagicMock()
         response = await mixin.destroy(request, pk=1)
         assert response.status == HTTPStatus.HTTP_204_NO_CONTENT
+        orm_model.delete.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_destroy_calls_perform_destroy(self):
+        mixin = DestroyModelMixin()
+        orm_model = MagicMock()
+        mixin.get_object = AsyncMock(return_value=orm_model)
+        mixin.perform_destroy = AsyncMock()
+        request = MagicMock()
+        response = await mixin.destroy(request, pk=1)
+        mixin.perform_destroy.assert_awaited_once_with(orm_model)
+        assert response.status == HTTPStatus.HTTP_204_NO_CONTENT
+
+
+class TestGenericAPIView:
+    def test_exported_from_views(self):
+        assert issubclass(GenericAPIView, object)
+
+    def test_filter_class_class_attr_override(self):
+        class CustomFilter:
+            pass
+
+        class View(GenericAPIView):
+            filter_class = [CustomFilter]
+
+            @property
+            def queryset(self):
+                return MagicMock()
+
+        view = View()
+        assert view.filter_class == [CustomFilter]
 
 
 class TestBaseViewSet:

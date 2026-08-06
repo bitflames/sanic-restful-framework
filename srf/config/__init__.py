@@ -1,6 +1,7 @@
-"""Configuration package: SrfConfig singleton merges app.config with module settings."""
+"""Configuration package: LazySettings singleton merges app.config with module settings."""
 
 import importlib
+import warnings
 
 from sanic import Sanic
 
@@ -8,8 +9,10 @@ from srf.exceptions import ImproperlyConfigured
 
 SETTINGS_PATH = "srf.config.settings"
 
+__all__ = ["srfconfig", "settings"]
 
-class SrfConfig:
+
+class LazySettings:
     __instance = None
 
     def __new__(cls, *args, **kwargs):
@@ -64,4 +67,24 @@ class SrfConfig:
             raise AttributeError(f"{name} NotImplemented!")
 
 
-srfconfig = SrfConfig()
+class _SrfConfigProxy:
+    """Deprecated alias for settings; emits a one-time warning on first use."""
+
+    _warned = False
+
+    def __getattr__(self, name):
+        if not _SrfConfigProxy._warned:
+            warnings.warn(
+                "srfconfig is deprecated, use settings instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            _SrfConfigProxy._warned = True
+        return getattr(settings, name)
+
+    def __setattr__(self, name, value):
+        setattr(settings, name, value)
+
+
+settings = LazySettings()
+srfconfig = _SrfConfigProxy()

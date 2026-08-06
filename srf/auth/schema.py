@@ -1,7 +1,7 @@
 import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, model_validator
 
 from srf.config.settings import DATETIME_FORMAT
 
@@ -60,5 +60,12 @@ class UserSchemaReader(SchemaBaseTime):
 
 
 class UserLoginSchema(BaseModel):
-    email: EmailStr
+    email: Optional[EmailStr] = Field(None)
+    username: Optional[str] = Field(None)
     password: str
+
+    @model_validator(mode='after')
+    def check_identifier(self) -> 'UserLoginSchema':
+        if not self.email and not self.username:
+            raise ValueError('email or username is required')
+        return self

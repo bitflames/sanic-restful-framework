@@ -4,14 +4,14 @@ from typing import Dict
 from redis.asyncio import Redis
 from sanic import Request, Sanic
 from sanic.constants import SAFE_HTTP_METHODS
-from sanic.exceptions import BadRequest
+from sanic.exceptions import BadRequest, ServerError
 from sanic.response import HTTPResponse, JSONResponse
 from sanic_jwt import Initialize
 from sanic_jwt.authentication import Authentication
 from tortoise.queryset import QuerySet
 
 from srf.auth import models, schema
-from srf.config import srfconfig
+from srf.config import settings
 from srf.permission.permission import IsAuthenticated
 from srf.tools.email import EmailValidator, VerifyEmailRequest, send_verify_code
 from srf.tools.utils import generate_code
@@ -23,11 +23,24 @@ from .schema import UserSchemaReader, UserSchemaWriter
 
 
 def setup_auth(app: Sanic, *args, **kwargs) -> Initialize:
+    """
+    Setup authentication for the application.
+
+    Args:
+        app: The Sanic application instance.
+        url_prefix: The URL prefix for the authentication endpoints.
+        secret: The secret key for the authentication.
+        login_path: The path to the login endpoint.
+    """
+
+    secret = kwargs.pop("secret", None)
+    if secret is None:
+        raise ServerError("secret is required")
     url_prefix = kwargs.pop("url_prefix", "/api/auth")
-    secret = kwargs.pop("secret", srfconfig.JWT_SECRET)
-    path_to_authenticate = kwargs.pop(
-        "login_path", getattr(srfconfig, "LOGIN_PATH", "login")
-    )  # TODO: sanic_jwt does not read app.config from Configuration; next SRF version may replace sanic_jwt
+
+    path_to_authenticate = kwargs.pop("login_path", getattr(settings, "LOGIN_PATH", "login"))
+    # TODO: sanic_jwt does not read app.config from Configuration; SRF will replace sanic_jwt in the future
+
     return Initialize(
         app,
         authenticate=authenticate,
@@ -55,7 +68,7 @@ async def register(request: Request):
     cf_info = VerifyEmailRequest.model_validate(req_data, extra="ignore")
 
     # Fetch and validate verification code from Redis
-    email_code_register = f"{request.app.config.FORMATTER.EMAIL_CODE_REDIS}_{req_data.get('email')}"
+    email_code_register = f"{settings.EMAIL_CODE_REDIS}_{req_data.get('email')}"
     redis: Redis = request.app.ctx.redis
     stored_code = await redis.get(email_code_register)
     if stored_code is None:
@@ -78,7 +91,10 @@ async def register(request: Request):
 
     # Generate JWT payload with serializable role (name string, not FK object)
     role_name = user_db.role.name if user_db.role else None
-    aut = Authentication(request.app, srfconfig.JWT.config or request.app.ctx.JWT.config)
+    jwt = getattr(request.app.config, "JWT", None) or getattr(request.app.ctx, "JWT", None)
+    if jwt is None:
+        raise ServerError("JWT is not configured; call register_auth_urls() first")
+    aut = Authentication(request.app, jwt.config)
     access_token = await aut.generate_access_token(
         user={
             "user_id": user_db.id,
@@ -107,7 +123,7 @@ async def send_email_with_redis_code(request: Request, data: Dict = None):
     code = generate_code(5)
     asyncio.create_task(send_verify_code(req_data.get("email"), code))
 
-    email_code_register = f"{request.app.config.FORMATTER.EMAIL_CODE_REDIS}_{req_data.get('email')}"
+    email_code_register = f"{settings.EMAIL_CODE_REDIS}_{req_data.get('email')}"
     redis: Redis = request.app.ctx.redis
     await redis.set(email_code_register, code, ex=600)
     return True
@@ -137,7 +153,7 @@ class UserViewSet(BaseViewSet):
         user_json = self.get_schema(request).model_validate(request.ctx.user).model_dump(mode="json", by_alias=True)
         return JSONResponse(user_json)
 
-    async def perform_create(self, sch_model, *args, **kwargs):
+    async def perform_create(self, sch_model):
         """Create ORM user from Pydantic schema. TODO: verify email availability."""
         data = sch_model.model_dump(exclude_unset=True, exclude_none=True)
         return await models.User.create(data)

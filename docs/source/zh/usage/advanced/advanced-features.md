@@ -9,7 +9,7 @@ SRF 提供了许多实用的高级功能，帮助您构建更健壮和功能完�
 ### 运维相关
 
 - **[健康检查](health-check.md)**: 监控应用和依赖服务的健康状态
-- **[异常处理](exceptions.md)**: 统一的异常处理机制
+- **[异常处理](exceptions.md)**: ViewSet 内置转换与 Sanic 全局处理建议
 - **[HTTP 状态码](http-status.md)**: 标准化的状态码管理
 
 ### 中间件
@@ -22,7 +22,7 @@ SRF 提供了许多实用的高级功能，帮助您构建更健壮和功能完�
 
 ### 健康检查
 
-监控应用和依赖服务（Redis、PostgreSQL、MongoDB 等）的健康状态：
+监控应用和依赖服务的健康状态。内置部分检查， 通过 `HEALTH_CHECK_LIST` 注册：
 
 ```python
 from srf.health.route import bp as health_bp
@@ -34,7 +34,7 @@ app.blueprint(health_bp)
 
 ### 异常处理
 
-SRF 提供了统一的异常处理机制，自动将异常转换为标准的 HTTP 响应：
+ViewSet 会转换部分 ORM、Pydantic 和 HTTP 异常；其他位置仍由 Sanic 处理：
 
 ```python
 from srf.exceptions import TargetObjectAlreadyExist
@@ -75,7 +75,7 @@ async def auth_middleware(request):
 from srf.middleware.throttlemiddleware import IPRateLimit, MemoryStorage
 
 storage = MemoryStorage()
-app.config.RequestLimiter = [
+app.config.REQUEST_LIMITERS = [
     IPRateLimit(100, 60, storage),  # 100 requests per 60 seconds
 ]
 ```
@@ -108,7 +108,7 @@ app.config.RequestLimiter = [
 
 ```python
 from sanic import Sanic
-from srf.config import srfconfig
+from srf.config import settings
 from srf.middleware.authmiddleware import set_user_to_request_ctx
 from srf.middleware.throttlemiddleware import IPRateLimit, UserRateLimit, MemoryStorage, throttle_rate
 from srf.health.route import bp as health_bp
@@ -117,11 +117,11 @@ from sanic.response import json
 from sanic.exceptions import NotFound, Forbidden, Unauthorized
 
 app = Sanic("ProductionApp")
-srfconfig.set_app(app)
+settings.set_app(app)
 
 # 1. 配置限流
 storage = MemoryStorage()
-app.config.RequestLimiter = [
+app.config.REQUEST_LIMITERS = [
     IPRateLimit(100, 60, storage),      # IP: 100次/分钟
     UserRateLimit(1000, 60, storage),   # 用户: 1000次/分钟
 ]
@@ -329,15 +329,12 @@ register_tortoise(
 ### 2. 使用缓存
 
 ```python
-import aioredis
+from redis.asyncio import Redis, ConnectionPool
 
 @app.before_server_start
 async def setup_redis(app, loop):
-    app.ctx.redis = await aioredis.create_redis_pool(
-        'redis://localhost:6379',
-        minsize=5,
-        maxsize=10
-    )
+    pool = ConnectionPool.from_url('redis://localhost:6379', max_connections=10)
+    app.ctx.redis = Redis(connection_pool=pool)
 
 # 在 ViewSet 中使用缓存
 class ProductViewSet(BaseViewSet):

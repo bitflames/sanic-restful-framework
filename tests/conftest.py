@@ -1,14 +1,14 @@
 """
 Pytest configuration and shared fixtures.
-Set SECRET_KEY before any srf config is loaded.
 """
 
 import os
 
 import pytest
 
-# Must set before importing srf.config.settings (which is loaded by srf modules)
+# Optional for tests that still read env-based email/social settings
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest")
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-for-pytest")
 
 
 @pytest.fixture

@@ -11,10 +11,14 @@ from srf.filters.filter import (
     QueryParamFilter,
     SearchFilter,
 )
+from srf.paginator import PageNumberPagination
 
-SECRET_KEY = os.getenv("SECRET_KEY", None)
-if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY not set")
+PAGINATION_CLASS = PageNumberPagination
+
+# SECRET_KEY and JWT_SECRET must be set in your Sanic config
+# SECRET_KEY
+# JWT_SECRET
+JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
 
 # BASE_DIR = Path(__file__).resolve().parent.parent
 BASE_DIR = os.getcwd()
@@ -23,10 +27,8 @@ CACHE_ROOT = os.path.join(BASE_DIR, ".diskcache")
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"  # Time string template
 
-
-# JWT config
-JWT_SECRET = SECRET_KEY
-JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
+# health check list
+HEALTH_CHECK_LIST = []
 
 # SRF authentication-free URL suffixes
 NON_AUTH_ENDPOINTS = (
@@ -56,21 +58,7 @@ def custom_dumps(obj):
 JSON_ENCODER = custom_dumps
 
 
-# cache
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-    },
-    "media": {
-        "BACKEND": "diskcache.DjangoCache",
-        "LOCATION": CACHE_ROOT,
-        "TIMEOUT": None,
-        "SHARDS": 32,
-        "OPTIONS": {
-            "size_limit": 2**40,  # 1 Tb
-        },
-    },
-}
+# TODO add caches
 
 
 DEFAULT_FILTERS = [
@@ -93,10 +81,20 @@ SOCIAL_CONFIG = {
         "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
         "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
         "REDIRECT_URI": os.getenv("GITHUB_REDIRECT_URI"),
-        "AUTHORIZE": os.getenv("AUTHORIZE", "https://github.com/login/oauth/authorize"),
-        "ACCESS_TOKEN": os.getenv("ACCESS_TOKEN", "https://github.com/login/oauth/access_token"),
+        "AUTHORIZE_URL": os.getenv("AUTHORIZE_URL", "https://github.com/login/oauth/authorize"),
+        "ACCESS_TOKEN_URL": os.getenv("ACCESS_TOKEN_URL", "https://github.com/login/oauth/access_token"),
         "OAUTHCALLBACK": os.getenv("OAUTHCALLBACK"),
         "GITHUB_USER": "https://api.github.com/user",
         "GITHUB_USER_EMAIL": "https://api.github.com/user/emails",
     }
 }
+
+SOCIAL_LOGIN_COOKIE_KEY = "oauth_state"
+SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE = 600  # seconds
+
+
+# Redis key prefix for email verification codes
+EMAIL_CODE_REDIS = "EMAIL_CODE"
+
+# Default empty; apps can set REQUEST_LIMITERS on Sanic config
+REQUEST_LIMITERS = []

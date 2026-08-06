@@ -1,13 +1,14 @@
 """Unit tests for srf.middleware (auth and throttle)."""
 
 import pytest
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 from srf.middleware.authmiddleware import (
     extract_bearer_token,
     is_public_endpoint,
 )
-from srf.middleware.throttlemiddleware import IPRateLimit, MemoryStorage
+from srf.middleware.throttlemiddleware import IPRateLimit, MemoryStorage, throttle_rate
 
 
 class TestIsPublicEndpoint:
@@ -86,3 +87,26 @@ class TestIPRateLimit:
         assert await limiter.allow(request) is True
         assert await limiter.allow(request) is True
         assert await limiter.allow(request) is False
+
+
+class TestThrottleRate:
+    @pytest.mark.asyncio
+    async def test_empty_limiters_allows(self):
+        request = MagicMock()
+        request.app.config = SimpleNamespace(REQUEST_LIMITERS=[])
+        assert await throttle_rate(request) is True
+
+    @pytest.mark.asyncio
+    async def test_missing_config_defaults_to_empty(self):
+        request = MagicMock()
+        request.app.config = SimpleNamespace()
+        assert await throttle_rate(request) is True
+
+    @pytest.mark.asyncio
+    async def test_denies_when_limiter_rejects(self):
+        limiter = MagicMock()
+        limiter.allow = AsyncMock(return_value=False)
+        request = MagicMock()
+        request.app.config = SimpleNamespace(REQUEST_LIMITERS=[limiter])
+        assert await throttle_rate(request) is False
+        limiter.allow.assert_awaited_once_with(request)

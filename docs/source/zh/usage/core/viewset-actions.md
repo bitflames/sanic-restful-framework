@@ -36,11 +36,12 @@ class ProductViewSet(BaseViewSet):
 ### 装饰器参数
 
 ```python
-@action(
-    methods: list = ["get"],     # HTTP 方法列表
-    detail: bool = False,        # 是否为详情级操作
-    url_path: str = None,        # URL 路径（默认为方法名）
-    url_name: str = None         # 路由名称（默认为方法名）
+action(
+    methods: list[str] | None = None,  # None 时使用 ["get"]
+    detail: bool | None = None,         # True 为详情级；None/False 为集合级
+    url_path: str | None = None,        # 默认 "/<方法名>"
+    url_name: str | None = None,        # 默认方法名
+    **kwargs,
 )
 ```
 
@@ -49,7 +50,7 @@ class ProductViewSet(BaseViewSet):
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `methods` | list | `["get"]` | HTTP 方法列表，如 `["get"]`, `["post"]`, `["get", "post"]` |
-| `detail` | bool | `False` | `True` 为详情级操作（需要 pk），`False` 为集合级操作 |
+| `detail` | bool 或 None | `None` | `True` 为详情级操作（需要 pk），`None`/`False` 为集合级操作 |
 | `url_path` | str | 方法名 | 自定义 URL 路径 |
 | `url_name` | str | 方法名 | 路由名称，用于 URL 反向解析 |
 
@@ -228,7 +229,7 @@ async def change_status(self, request, pk):
 
 URL：`POST /api/products/<pk>/change-status`
 
-如果不指定 `url_path`，默认使用方法名（转换为 kebab-case）：
+如果不指定 `url_path`，默认直接使用 Python 方法名，不会转换下划线：
 
 ```python
 @action(methods=["post"], detail=True)
@@ -249,8 +250,8 @@ async def featured(self, request):
     """推荐列表"""
     pass
 
-# 反向解析
-url = request.app.url_for("products-featured_list")
+# 反向解析；默认 prefix="api" 时 Blueprint 名称为 api
+url = request.app.url_for("api.featured_list")
 ```
 
 ### 权限控制
@@ -266,7 +267,7 @@ async def approve(self, request, pk):
     """审核产品（仅管理员）"""
     # 检查管理员权限
     perm = IsRoleAdminUser()
-    if not perm.has_permission(request, self):
+    if not perm.has_permission(request):
         raise Forbidden("需要管理员权限")
     
     product = await self.get_object(request, pk)
@@ -284,6 +285,7 @@ from srf.views.decorators import action
 from srf.permission.permission import IsAuthenticated, IsRoleAdminUser
 from sanic.response import json
 from sanic.exceptions import Forbidden
+from sanic.constants import SAFE_HTTP_METHODS
 from datetime import datetime
 from models import Product, Comment
 from schemas import ProductSchemaReader, ProductSchemaWriter
@@ -298,7 +300,9 @@ class ProductViewSet(BaseViewSet):
         return Product.all()
     
     def get_schema(self, request, is_safe=False):
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        if request.method.upper() in SAFE_HTTP_METHODS or is_safe:
+            return ProductSchemaReader
+        return ProductSchemaWriter
     
     # 集合级操作
     @action(methods=["get"], detail=False, url_path="featured")

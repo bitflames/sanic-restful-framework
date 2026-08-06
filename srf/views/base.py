@@ -11,7 +11,7 @@ from tortoise import exceptions
 from tortoise.models import Model as TorModel
 from tortoise.queryset import QuerySet as QuerySetType
 
-from srf.config import srfconfig
+from srf.config import settings
 from srf.filters.filter import BaseFilter
 from srf.paginator import PageNumberPagination
 from srf.permission.permission import BasePermission
@@ -26,7 +26,7 @@ class CreateModelMixin:
         # validate input schema
         sch_model_in: BaseModel = self._get_schema(request).model_validate(request.json)
         # create orm model instance
-        orm_model: TorModel = await self.perform_create(sch_model_in, request)
+        orm_model: TorModel = await self.perform_create(sch_model_in)
         # validate output schema
         sch_model_out: BaseModel = self._get_schema(request, is_safe=True).model_validate(orm_model, from_attributes=True)
         # return response
@@ -35,7 +35,7 @@ class CreateModelMixin:
             status=HTTPStatus.HTTP_201_CREATED,
         )
 
-    async def perform_create(self, sch_model: BaseModel, *args, **kwargs) -> TorModel:
+    async def perform_create(self, sch_model: BaseModel) -> TorModel:
         """
         sch_model: instance of BaseModel
         """
@@ -46,7 +46,7 @@ class CreateModelMixin:
 
 
 class RetrieveModelMixin:
-    async def retrieve(self, request: Request, pk) -> JSONResponse:
+    async def retrieve(self, request: Request, pk, *args, **kwargs) -> JSONResponse:
         """Get an orm model instance."""
         orm_model: TorModel = await self.get_object(request, pk)
         schema_out: BaseModel = self._get_schema(request).model_validate(orm_model)
@@ -54,7 +54,7 @@ class RetrieveModelMixin:
 
 
 class UpdateModelMixin:
-    async def update(self, request: Request, pk: int) -> JSONResponse:
+    async def update(self, request: Request, pk: int, *args, **kwargs) -> JSONResponse:
         """Update an orm model instance."""
         if request.json is None:
             return HTTPResponse(status=HTTPStatus.HTTP_400_BAD_REQUEST)
@@ -79,11 +79,17 @@ class UpdateModelMixin:
 
 
 class DestroyModelMixin:
-    async def destroy(self, request: Request, pk: int) -> HTTPResponse:
+    async def destroy(self, request: Request, pk: int, *args, **kwargs) -> HTTPResponse:
         """Delete an orm model instance."""
-        orm_model = await self.get_object(request, pk)
-        await orm_model.delete()
+        orm_model: TorModel = await self.get_object(request, pk)
+        await self.perform_destroy(orm_model)
         return HTTPResponse(status=HTTPStatus.HTTP_204_NO_CONTENT)
+
+    async def perform_destroy(self, orm_model: TorModel) -> None:
+        """
+        orm_model: instance of TorModel
+        """
+        await orm_model.delete()
 
 
 class ListModelMixin:
@@ -95,27 +101,17 @@ class ListModelMixin:
             for filter_class in self.filter_class:
                 filter_class = cast(BaseFilter, filter_class)
                 queryset = filter_class(self).filter_queryset(request, queryset)
-        paginator = PageNumberPagination.from_queryset(queryset, request)
+        paginator = PageNumberPagination.from_queryset(queryset, request)  # TODO，config
         result = await paginator.paginate(sch_model=sch_model)
         return JSONResponse(result.model_dump(by_alias=True))
 
 
-class ModelMixin(
-    CreateModelMixin,
-    RetrieveModelMixin,
-    UpdateModelMixin,
-    DestroyModelMixin,
-    ListModelMixin,
-):
-    pass
-
-
-class BaseViewSet(HTTPMethodView, ModelMixin):
+class GenericAPIView(HTTPMethodView):
     permission_classes: Iterable[Type[BasePermission]]
     search_fields: list = Field(default_factory=list)
 
     def __init__(self, *args, **kwargs):
-        self.filter_class = srfconfig.DEFAULT_FILTERS
+        self.filter_class = getattr(type(self), "filter_class", settings.DEFAULT_FILTERS)
         super().__init__(*args, **kwargs)
 
     def get_schema(self, request: Request, *args, is_safe=False, **kwargs):
@@ -148,7 +144,7 @@ class BaseViewSet(HTTPMethodView, ModelMixin):
         Check object-level permissions
         Subclasses should override this method to implement specific permission checking logic
         """
-        pass
+        ...
 
     async def check_permissions(self, request: Request):
         """
@@ -190,7 +186,7 @@ class BaseViewSet(HTTPMethodView, ModelMixin):
             "get": "list",
             "post": "create",
             "put": "update",
-            "patch": "update",
+            "patch": "update",  # TODO partial_update
             "delete": "destroy",
         }
 
@@ -239,3 +235,15 @@ class BaseViewSet(HTTPMethodView, ModelMixin):
                 )
 
         return view
+
+
+class ModelMixin(
+    CreateModelMixin,
+    RetrieveModelMixin,
+    UpdateModelMixin,
+    DestroyModelMixin,
+    ListModelMixin,
+): ...
+
+
+class BaseViewSet(GenericAPIView, ModelMixin): ...

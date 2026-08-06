@@ -1,10 +1,10 @@
 # Project Setup
 
-This chapter introduces how to properly set up and configure an SRF project, including project structure, configuration management, database setup, etc.
+This chapter introduces how to correctly set up and configure an SRF project, including project structure, configuration management, database setup, etc.
 
 ## Recommended Project Structure
 
-Assuming an SRF project structure as follows:
+Assume an SRF project has the following structure:
 
 ```
 myproject/
@@ -30,7 +30,7 @@ myproject/
 ├── routes.py                   # Route configuration
 ├── permissions.py              # Custom permission classes
 ├── filters.py                  # Custom filters
-├── middleware.py               # Custom middleware
+├── middleware.py               # Custom middlewares
 ├── utils/                      # Utility functions
 │   ├── __init__.py
 │   ├── helpers.py
@@ -53,15 +53,15 @@ SECRET_KEY=your-secret-key-here
 DATABASE_URL=sqlite://db.sqlite3
 REDIS_URL=redis://localhost:6379/0
 
-# JWT Configuration
+# JWT configuration
 JWT_SECRET=your-jwt-secret
 JWT_ACCESS_TOKEN_EXPIRES=86400
 
-# Email Configuration
-SMTP_HOST=smtp.gmail.com
+# Email configuration (names read by srf.tools.email)
+FROM_EMAIL=your-email@gmail.com
+SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-password
+PASSWORD=your-password
 
 # GitHub OAuth
 GITHUB_CLIENT_ID=your-github-client-id
@@ -84,25 +84,27 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite://db.sqlite3")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    
-    # JWT Configuration
+        
+    # JWT configuration
     JWT_SECRET = os.getenv("JWT_SECRET", SECRET_KEY)
-    JWT_ACCESS_TOKEN_EXPIRES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES", 86400))
+    # JWT_ACCESS_TOKEN_EXPIRES is defined in srf.config.settings; not passed to sanic-jwt
     
-    # Email Configuration
-    SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-    SMTP_USER = os.getenv("SMTP_USER")
-    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+    # Email: send_email reads srf.config.settings.EmailConfig (FROM_EMAIL/SMTP_SERVER/SMTP_PORT/PASSWORD environment variables), not this Config class attributes
     
-    # Pagination Configuration
-    PAGE_SIZE = 20
-    MAX_PAGE_SIZE = 100
+    # Social login (uppercase keys, consistent with SOCIAL_CONFIG)
+    SOCIAL_CONFIG = {
+        "github": {
+            "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
+            "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
+            "REDIRECT_URI": os.getenv("GITHUB_REDIRECT_URI"),
+            ...
+        }
+    }
     
-    # CORS Configuration
+    # CORS configuration
     CORS_ORIGINS = ["http://localhost:3000", "http://localhost:8080"]
     
-    # Rate Limiting Configuration
+    # Rate limiting configuration
     RATE_LIMIT_ENABLED = True
     RATE_LIMIT_PER_MINUTE = 60
 
@@ -134,12 +136,12 @@ config = config_map[env]
 
 ### Application Configuration
 
-Apply the configuration in `app.py`:
+Apply configuration in `app.py`:
 
 ```python
 from sanic import Sanic
 from tortoise.contrib.sanic import register_tortoise
-from srf.config import srfconfig
+from srf.config import settings
 from config import config
 
 app = Sanic("MyApp")
@@ -148,7 +150,7 @@ app = Sanic("MyApp")
 app.config.update_config(config)
 
 # Configure SRF
-srfconfig.set_app(app)
+settings.set_app(app)
 
 # Configure database
 register_tortoise(
@@ -293,38 +295,41 @@ TORTOISE_ORM = {
 
 ## Authentication Setup
 
-### JWT Configuration
+### JWT and Route Registration (Recommended)
+
+Use `register_auth_urls`: it internally calls `setup_auth` and registers routes for login, registration, email verification, social login, etc. **Do not** call `setup_auth` before `register_auth_urls` (it will be initialized twice).
+
+```python
+from srf.auth.route import register_auth_urls
+
+# Initialize JWT and register authentication routes (internal call to setup_auth)
+register_auth_urls(app, prefix="/api/auth")
+```
+
+Only call `setup_auth` directly when you need to customize `sanic-jwt` parameters and are not using `register_auth_urls`:
 
 ```python
 from srf.auth.viewset import setup_auth
 
-# Configure JWT
-setup_auth(
-    app,
-    secret=config.JWT_SECRET,
-    expiration_delta=config.JWT_ACCESS_TOKEN_EXPIRES,
-    url_prefix="/api/auth",
-    class_views=[
-        ("/register", register),
-        ("/send-verification-email", verify_email),
-    ],
-    authenticate=authenticate,
-    retrieve_user=retrieve_user,
-    store_user=store_user,
-)
+jwt = setup_auth(app, url_prefix="/api/auth", secret=config.JWT_SECRET)
+app.config.update({"JWT": jwt})
 ```
 
 ### Social Login Configuration
 
-Set up social login in the configuration file:
+Configure social login in the configuration file:
 
 ```python
 class Config:
     SOCIAL_CONFIG = {
         "github": {
-            "client_id": os.getenv("GITHUB_CLIENT_ID"),
-            "client_secret": os.getenv("GITHUB_CLIENT_SECRET"),
-            "redirect_uri": "http://localhost:8000/api/auth/social/callback",
+            "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
+            "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
+            "REDIRECT_URI": os.getenv(
+                "GITHUB_REDIRECT_URI",
+                "http://localhost:8000/api/auth/social/callback",
+            ),
+            ...
         }
     }
 ```
@@ -341,6 +346,7 @@ class Config:
         "/api/auth/send-verification-email",
         "/api/products",  # Public product list
         "/health/",       # Health check
+        ...
     ]
 ```
 
@@ -371,7 +377,7 @@ from srf.middleware.throttlemiddleware import (
 storage = MemoryStorage()
 
 # Configure rate limiting rules
-app.config.RequestLimiter = [
+app.config.REQUEST_LIMITERS = [
     IPRateLimit(100, 60, storage),      # IP: 100 requests per minute
     UserRateLimit(1000, 60, storage),   # User: 1000 requests per minute
 ]
@@ -421,7 +427,7 @@ def register_routes(app):
     router.register("orders", OrderViewSet, name="orders")
     router.register("categories", CategoryViewSet, name="categories")
     
-    # Add routes to application
+    # Add routes to the application
     app.blueprint(router.get_blueprint())
 ```
 
@@ -458,18 +464,20 @@ def register_routes(app):
 
 ```python
 from srf.health.route import bp as health_bp
+from srf.health.checks import RedisCheck
 
 # Register health check routes
 app.blueprint(health_bp)
+app.config.HEALTH_CHECK_LIST = [RedisCheck] # Can implement subclasses of BaseHealthCheck
 
 # Configure health check service
 @app.before_server_start
 async def setup_health_checks(app, loop):
     """Set up health check dependencies"""
-    import aioredis
-    
+    from redis.asyncio import Redis
+
     # Redis client
-    app.ctx.redis = await aioredis.create_redis_pool(config.REDIS_URL)
+    app.ctx.redis = Redis.from_url(config.REDIS_URL)
     
     # PostgreSQL connection pool
     # app.ctx.pg = await asyncpg.create_pool(config.DATABASE_URL)
@@ -524,7 +532,7 @@ async def handle_exception(request, exception):
     """Handle uncaught exceptions"""
     logger.error(f"Unhandled exception: {exception}", exc_info=True)
     return json(
-        {"error": "Internal server error"},
+        {"error": "Server internal error"},
         status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR
     )
 ```
@@ -537,7 +545,7 @@ async def handle_exception(request, exception):
 from sanic import Sanic
 from sanic_cors import CORS
 from tortoise.contrib.sanic import register_tortoise
-from srf.config import srfconfig
+from srf.config import settings
 from srf.middleware.authmiddleware import set_user_to_request_ctx
 from srf.health.route import bp as health_bp
 from config import config
@@ -549,7 +557,7 @@ app = Sanic("MyApp")
 
 # Apply configuration
 app.config.update_config(config)
-srfconfig.set_app(app)
+settings.set_app(app)
 
 # Configure CORS
 CORS(app, origins=config.CORS_ORIGINS)
@@ -583,8 +591,8 @@ async def handle_exception(request, exception):
 
 if __name__ == "__main__":
     app.run(
-        host=config.get("HOST", "0.0.0.0"),
-        port=config.get("PORT", 8000),
+        host=getattr(config, "HOST", "0.0.0.0"),
+        port=getattr(config, "PORT", 8000),
         debug=config.DEBUG,
         auto_reload=config.DEBUG,
     )
@@ -669,17 +677,17 @@ docker-compose up -d
 
 ## Best Practices
 
-1. **Use environment variables**: Never hardcode sensitive information in code
+1. **Use environment variables**: Do not hardcode sensitive information in code
 2. **Separate configurations**: Create different configurations for different environments
 3. **Use migrations**: Manage database changes through migrations
-4. **Logging**: Log important operations and errors
-5. **Exception handling**: Handle exceptions globally and return friendly error messages
-6. **Health checks**: Provide health check endpoints for monitoring systems
-7. **Rate limiting**: Prevent API abuse
-8. **CORS configuration**: Correctly configure cross-origin access
+4. **Log important actions and errors**
+5. **Handle exceptions globally**: Return friendly error messages
+6. **Provide health checks**: Offer endpoints for monitoring systems
+7. **Implement rate limiting**: Prevent API abuse
+8. **Configure CORS properly**: Set up cross-origin access correctly
 
 ## Next Steps
 
-- Learn [Core Concepts](core/viewsets.md) to understand SRF's features
-- View [Configuration Options](../config.md) to see all configuration options
+- Learn about [Core Concepts](core/viewsets.md) to understand SRF's features in depth
+- View [Configuration Options](../config.md) to learn about all available configurations
 - Read [API Reference](../api-reference.md) for detailed API documentation

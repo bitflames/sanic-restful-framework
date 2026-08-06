@@ -12,39 +12,36 @@
 from srf.views import BaseViewSet
 from pydantic import BaseModel
 
-class BaseViewSet(HTTPMethodView, ModelMixin):
+class GenericAPIView(BaseViewSet):
     """ViewSet 基类"""
-    
-    # 配置属性
-    schema: BaseModel = None
-    permission_classes = ()          # 权限类列表
-    search_fields = []               # 搜索字段
-    filter_fields = {}               # 过滤字段映射
-    ordering_fields = {}             # 排序字段映射
-    filter_class = []                # 过滤器类列表
-    
+
+    # 子类常用配置
+    schema: BaseModel = None         # pydantic 模型
+    permission_classes = ()          # 未声明时 check_permissions 按空列表处理
+    search_fields = []               # 搜索字段，由 SearchFilter 读取
+    filter_fields = {}               # 过滤字段映射，由 FilterClass 读取
+    ordering_fields = {}             # 排序字段映射，由 OrderingFactory 读取
+
     # 核心属性
     @property
     def queryset(self):
-        """返回查询集（必须实现）"""
         raise NotImplementedError
-    
-    # 核心方法
-    def get_schema(self, request, is_safe=False):
-        """返回 Schema（可选） """
-        raise NotImplementedError
-    
+
+    def get_schema(self, request, *args, is_safe=False, **kwargs):
+        """默认返回 self.schema；可以根据请求方法自定义返回"""
+        return getattr(self, "schema", None)
+
     async def check_permissions(self, request):
         """检查视图级权限（可选）"""
-        pass
-    
-    async def check_object_permissions(self, request, obj):
+        ...
+
+    def check_object_permissions(self, request, obj):
         """检查对象级权限（可选）"""
-        pass
-    
+        ...
+
     async def get_object(self, request, id: int):
-        """获取对象并检查权限（可选）"""
-        pass
+        """按 id 获取对象并调用对象级权限钩子"""
+        ...
 ```
 
 ### Mixins
@@ -54,14 +51,14 @@ class BaseViewSet(HTTPMethodView, ModelMixin):
 ```python
 class CreateModelMixin:
     """创建 Mixin"""
-    
+
     async def create(self, request, *args, **kwargs):
-        """处理 POST 请求"""
-        pass
-    
-    async def perform_create(self, schema, *args, **kwargs):
+        """处理 POST 请求；调用 perform_create(sch_model)"""
+        ...
+
+    async def perform_create(self, sch_model):
         """执行创建（可重写）"""
-        pass
+        ...
 ```
 
 #### RetrieveModelMixin
@@ -69,10 +66,10 @@ class CreateModelMixin:
 ```python
 class RetrieveModelMixin:
     """详情 Mixin"""
-    
-    async def retrieve(self, request, pk):
+
+    async def retrieve(self, request, pk, *args, **kwargs):
         """处理 GET /resource/<pk> 请求"""
-        pass
+        ...
 ```
 
 #### UpdateModelMixin
@@ -80,14 +77,14 @@ class RetrieveModelMixin:
 ```python
 class UpdateModelMixin:
     """更新 Mixin"""
-    
-    async def update(self, request, pk):
+
+    async def update(self, request, pk, *args, **kwargs):
         """处理 PUT/PATCH 请求"""
-        pass
-    
-    async def perform_update(self, request, obj, schema):
+        ...
+
+    async def perform_update(self, sch_model, orm_model):
         """执行更新（可重写）"""
-        pass
+        ...
 ```
 
 #### DestroyModelMixin
@@ -95,14 +92,14 @@ class UpdateModelMixin:
 ```python
 class DestroyModelMixin:
     """删除 Mixin"""
-    
-    async def destroy(self, request, pk):
-        """处理 DELETE 请求"""
-        pass
-    
-    async def perform_destroy(self, request, obj):
+
+    async def destroy(self, request, pk, *args, **kwargs):
+        """处理 DELETE 请求；调用 perform_destroy(orm_model)"""
+        ...
+
+    async def perform_destroy(self, orm_model):
         """执行删除（可重写）"""
-        pass
+        ...
 ```
 
 #### ListModelMixin
@@ -110,10 +107,10 @@ class DestroyModelMixin:
 ```python
 class ListModelMixin:
     """列表 Mixin"""
-    
-    async def list(self, request):
+
+    async def list(self, request, *args, **kwargs):
         """处理 GET /resource 请求"""
-        pass
+        ...
 ```
 
 ### 装饰器
@@ -196,12 +193,12 @@ from srf.permission.permission import BasePermission
 
 class BasePermission:
     """权限基类"""
-    
-    def has_permission(self, request, view) -> bool:
+
+    def has_permission(self, request, view=None) -> bool:
         """视图级权限检查"""
         return True
-    
-    def has_object_permission(self, request, view, obj) -> bool:
+
+    def has_object_permission(self, request, view=None, obj=None) -> bool:
         """对象级权限检查"""
         return True
 ```
@@ -224,22 +221,22 @@ from srf.permission.permission import (
 from srf.paginator import PageNumberPagination
 
 class PageNumberPagination:
-    """分页处理器"""
-    
-    page_size = 10                      # 默认每页数量
-    max_page_size = 100                 # 最大每页数量
-    page_query_param = 'page'           # 页码参数名
-    page_size_query_param = 'page_size' # 每页数量参数名
-    
+    """分页处理器。"""
+
+    MAX_PAGE_SIZE: int = 100
+    PAGE_QUERY_PARAM: str = 'page'
+    PAGE_SIZE_QUERY_PARAM: str = 'page_size'
+    # 缺少/非法 page_size 时默认 10（from_queryset 回退）
+
     @classmethod
     def from_queryset(cls, queryset, request):
         """从查询集创建分页器"""
         pass
-    
+
     async def paginate(self, sch_model):
         """执行分页"""
         pass
-    
+
     async def to_dict(self, sch_model):
         """返回字典格式"""
         pass
@@ -254,8 +251,11 @@ from srf.filters.filter import BaseFilter
 
 class BaseFilter:
     """过滤器基类"""
-    
-    async def filter_queryset(self, request, queryset):
+
+    def __init__(self, view_class):
+        self.view_class = view_class
+
+    def filter_queryset(self, request, queryset):
         """过滤查询集"""
         raise NotImplementedError
 ```
@@ -276,15 +276,17 @@ from srf.filters.filter import (
 ### JWT 函数
 
 ```python
-async def authenticate(request):
+from srf.auth.auth import authenticate, retrieve_user, store_user
+
+async def authenticate(request, *args, **kwargs):
     """验证用户凭证，返回 JWT payload"""
     pass
 
-async def retrieve_user(request, payload, *args, **kwargs):
+async def retrieve_user(payload, *args, **kwargs):
     """从 JWT payload 获取用户对象"""
     pass
 
-async def store_user(request, user_id):
+async def store_user(request, user_id, *args, **kwargs):
     """将用户存储到请求上下文"""
     pass
 ```
@@ -295,15 +297,14 @@ async def store_user(request, user_id):
 from srf.auth.viewset import setup_auth
 
 setup_auth(
-    app,                                # Sanic 应用
-    secret: str,                        # JWT 密钥
-    expiration_delta: int,              # 过期时间（秒）
-    url_prefix: str = "/auth",          # URL 前缀
-    authenticate: callable,             # 认证函数
-    retrieve_user: callable,            # 获取用户函数
-    store_user: callable                # 存储用户函数
+    app,
+    secret=app.config.JWT_SECRET,  # 必填；缺失会抛 ServerError
+    url_prefix="/api/auth",        # 默认 /api/auth
+    login_path="login",            # 传给 sanic-jwt 的 path_to_authenticate
+    # 其它 sanic-jwt Initialize 关键字参数...
 )
 ```
+
 
 ## 中间件（Middleware）
 
@@ -331,10 +332,11 @@ from srf.middleware.throttlemiddleware import (
 
 storage = MemoryStorage()
 
-app.config.RequestLimiter = [
+app.config.REQUEST_LIMITERS = [
     IPRateLimit(100, 60, storage),
     UserRateLimit(1000, 60, storage),
 ]
+
 
 @app.middleware("request")
 async def throttle_middleware(request):
@@ -347,37 +349,41 @@ async def throttle_middleware(request):
 ### BaseHealthCheck
 
 ```python
-from srf.health.base import BaseHealthCheck, HealthCheckRegistry
+from srf.health.base import BaseHealthCheck
 
 class BaseHealthCheck:
     """健康检查基类"""
-    
-    name: str = None
-    
+
+    name: str = "base"
+    timeout: int = 5  # 秒；内置检查用 asyncio.timeout(self.timeout)
+
     def __init__(self, app):
         self.app = app
-    
-    async def check(self) -> bool:
-        """执行检查"""
-        raise NotImplementedError
-    
-    async def run(self):
-        """运行检查并返回结果"""
-        pass
+        client = getattr(app.ctx, self.name, None)
+        if client is None:
+            raise ValueError(f"{self.name} not found in app.ctx")
+        setattr(self, self.name, client)
 
-# 注册自定义检查
-HealthCheckRegistry.register(CustomHealthCheck)
+    async def check(self):
+        """执行检查；失败时抛异常"""
+        raise NotImplementedError
+
+    async def run(self):
+        """运行检查并返回 (name, status)"""
+        ...
 ```
+
 
 ### 内置健康检查
 
 ```python
 from srf.health.checks import (
-    RedisCheck,       # Redis 检查
-    PostgresCheck,    # PostgreSQL 检查
-    MongoCheck,       # MongoDB 检查
-    SQLiteCheck       # SQLite 检查
+    RedisCheck,       # Redis 检查（需 app.ctx.redis）
+    SQLiteCheck,      # SQLite 检查（需 app.ctx.sqlite）
 )
+
+# 路由读取 app.config.HEALTH_CHECK_LIST
+app.config.HEALTH_CHECK_LIST = [RedisCheck, SQLiteCheck]
 ```
 
 ## 异常（Exceptions）
@@ -396,7 +402,14 @@ from srf.exceptions import (
 ### HTTPStatus
 
 ```python
-from srf.views.http_status import HTTPStatus
+from srf.views.http_status import (
+    HTTPStatus,
+    is_informational,
+    is_success,
+    is_redirect,
+    is_client_error,
+    is_server_error,
+)
 
 # 状态码常量
 HTTPStatus.HTTP_200_OK
@@ -410,30 +423,38 @@ HTTPStatus.HTTP_422_UNPROCESSABLE_ENTITY
 HTTPStatus.HTTP_429_TOO_MANY_REQUESTS
 HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR
 
-# 辅助函数
-HTTPStatus.is_informational(code)  # 1xx
-HTTPStatus.is_success(code)        # 2xx
-HTTPStatus.is_redirect(code)       # 3xx
-HTTPStatus.is_client_error(code)   # 4xx
-HTTPStatus.is_server_error(code)   # 5xx
+# 辅助函数（模块级函数，不是 HTTPStatus 的方法）
+is_informational(code)  # 1xx
+is_success(code)        # 2xx
+is_redirect(code)       # 3xx
+is_client_error(code)   # 4xx
+is_server_error(code)   # 5xx
 ```
 
 ## 配置（Configuration）
 
-### SrfConfig
+### LazySettings（`settings`）
 
 ```python
-from srf.config import srfconfig
+from srf.config import settings
 
-# 设置应用配置
-srfconfig.set_app(app)
+# 绑定 Sanic app.config（可选；请求路径优先用 request.app.config）
+settings.set_app(app)
 
-# 访问应用的任意配置
-srfconfig.SECRET_KEY
-srfconfig.JWT_SECRET
-srfconfig.JWT_ACCESS_TOKEN_EXPIRES
-srfconfig.NON_AUTH_ENDPOINTS
-srfconfig.DEFAULT_FILTERS
+# 常用配置（大写项来自 srf.config.settings，可被 app.config 覆盖）
+settings.JWT_ACCESS_TOKEN_EXPIRES
+settings.NON_AUTH_ENDPOINTS
+settings.DEFAULT_FILTERS
+settings.EMAIL_CODE_REDIS      # 默认 "EMAIL_CODE"
+settings.REQUEST_LIMITERS      # 默认 []
+settings.HEALTH_CHECK_LIST     # 默认 []
+settings.SOCIAL_CONFIG
+
+# JWT_SECRET 需由应用设置到 app.config，无模块级默认值
+app.config.JWT_SECRET = "..."
+
+# srfconfig 为废弃别名（首次使用会发出 DeprecationWarning）
+# from srf.config import srfconfig
 ```
 
 ## 工具函数（Utils）
@@ -444,10 +465,9 @@ srfconfig.DEFAULT_FILTERS
 from srf.tools.email import send_email
 
 await send_email(
-    to: str,              # 收件人
-    subject: str,         # 主题
-    content: str,         # 内容
-    is_html: bool = False # 是否为 HTML
+    to_email: str,        # 收件人
+    subject: str = "",    # 主题
+    content: str = "",    # 内容
 )
 ```
 
@@ -465,9 +485,10 @@ class MyViewSet(BaseViewSet):
         return Product.all()
     
     def get_schema(self, request: Request, is_safe: bool = False) -> Type[BaseModel]:
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
+        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
     
-    async def list(self, request: Request) -> json:
+    async def list(self, request: Request) -> JSONResponse:
         pass
 ```
 
@@ -480,6 +501,7 @@ from tortoise import fields
 from tortoise.models import Model
 from tortoise.contrib.sanic import register_tortoise
 from pydantic import BaseModel, Field
+from sanic.constants import SAFE_HTTP_METHODS
 from typing import Optional
 
 from srf.views import BaseViewSet
@@ -487,7 +509,7 @@ from srf.views.decorators import action
 from srf.views.http_status import HTTPStatus
 from srf.route import SanicRouter
 from srf.permission.permission import IsAuthenticated
-from srf.config import srfconfig
+from srf.config import settings
 
 # 模型
 class Product(Model):
@@ -523,7 +545,9 @@ class ProductViewSet(BaseViewSet):
         return Product.all()
     
     def get_schema(self, request, is_safe=False):
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        if request.method.upper() in SAFE_HTTP_METHODS or is_safe:
+            return ProductSchemaReader
+        return ProductSchemaWriter
     
     @action(methods=["get"], detail=False)
     async def featured(self, request):
@@ -534,7 +558,8 @@ class ProductViewSet(BaseViewSet):
 
 # 应用
 app = Sanic("MyApp")
-srfconfig.set_app(app)
+app.config.JWT_SECRET = "change-me"
+settings.set_app(app)
 
 # 数据库
 register_tortoise(

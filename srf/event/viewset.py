@@ -4,10 +4,10 @@ from sanic.response import JSONResponse
 from srf.auth.models import User
 from srf.auth.schema import UserSchemaReader
 from srf.permission.permission import IsRoleAdminUser
-from srf.views.base import BaseViewSet, CreateModelMixin
+from srf.views.base import CreateModelMixin, GenericAPIView
 
 
-class EventViewSet(BaseViewSet, CreateModelMixin):
+class EventViewSet(GenericAPIView, CreateModelMixin):
     model = User
     schema = UserSchemaReader
     permission_classes = (IsRoleAdminUser,)

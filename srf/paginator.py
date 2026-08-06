@@ -30,17 +30,13 @@ class PaginationResult(BaseModel):
 class BasePagination(Protocol):
 
     @classmethod
-    def from_queryset(self, queryset: QuerySet[T], request: Request) -> "BasePagination":
-        pass
+    def from_queryset(self, queryset: QuerySet[T], request: Request) -> "BasePagination": ...
 
-    def paginate(self, sch_model: BaseModel = None) -> PaginationResult:
-        pass
+    async def paginate(self, sch_model: BaseModel = None) -> PaginationResult: ...
 
-    def to_dict(self, sch_model: BaseModel = None) -> Dict[str, Any]:
-        pass
+    async def to_dict(self, sch_model: BaseModel = None) -> Dict[str, Any]: ...
 
-    def num_pages(self, total_count: int = None) -> int:
-        pass
+    def num_pages(self, total_count: int = None) -> int: ...
 
 
 class PageNumberPagination(BasePagination):
@@ -78,10 +74,14 @@ class PageNumberPagination(BasePagination):
         """Parse page and page_size from request; ensure they are positive and within limits."""
         try:
             page = max(int(request.args.get(cls.PAGE_QUERY_PARAM, 1)), 1)
-            page_size = min(max(int(request.args.get(cls.PAGE_SIZE_QUERY_PARAM)), 1), cls.MAX_PAGE_SIZE)
         except (TypeError, ValueError):
             page = 1
+
+        try:
+            page_size = min(max(int(request.args.get(cls.PAGE_SIZE_QUERY_PARAM)), 1), cls.MAX_PAGE_SIZE)
+        except (TypeError, ValueError):
             page_size = 10
+
         return cls(queryset=queryset, page=page, page_size=page_size)
 
     async def paginate(self, sch_model: BaseModel = None) -> PaginationResult:

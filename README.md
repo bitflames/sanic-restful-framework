@@ -195,17 +195,21 @@ Access `GET /health/` to check the status of various services. Register check cl
 
 ## Configuration
 
-SRF reads configuration from `srf.config.settings` (e.g. `SECRET_KEY`, `NON_AUTH_ENDPOINTS`, `DEFAULT_FILTERS`). You can override via Sanic `app.config` after calling `srf.config.srfconfig.set_app(app)` (or by passing config when creating the app).
+SRF reads configuration from `srf.config.settings` via `settings` (uppercase keys such as `NON_AUTH_ENDPOINTS`, `DEFAULT_FILTERS`, `EMAIL_CODE_REDIS`). Override via Sanic `app.config` after `settings.set_app(app)` (or pass config when creating the app). `srfconfig` is a deprecated alias.
 
 ```python
+from srf.config import settings
 from srf.config.settings import DEFAULT_FILTERS
 
-app.config.JWT_SECRET = "your-secret-key"
+app.config.JWT_SECRET = "your-secret-key"  # required for JWT / register_auth_urls
 app.config.NON_AUTH_ENDPOINTS = ("register", "login", "send-verification-email", "health", "callback", "login_by_code")
 app.config.DEFAULT_FILTERS = DEFAULT_FILTERS
+app.config.EMAIL_CODE_REDIS = "EMAIL_CODE"
+app.config.REQUEST_LIMITERS = []
+settings.set_app(app)
 ```
 
-For auth email verification and social login, ensure `app.config.FORMATTER` (or equivalent) provides `EMAIL_CODE_REDIS` and `SOCIAL_LOGIN_REDIS_EX_CODE` key prefixes, and that `app.ctx.redis` is set.
+For auth email verification and social login, ensure Redis is on `app.ctx.redis`. Email codes use `EMAIL_CODE_REDIS` (default `"EMAIL_CODE"`). Social one-time codes use `SOCIAL_LOGIN_REDIS_CODE_PREFIX` (default `"social-login"`).
 
 ## Dependencies
 

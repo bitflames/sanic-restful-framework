@@ -1,58 +1,46 @@
-from .base import BaseHealthCheck
+import asyncio
 
-# import asyncpg, aioredis, motor.motor_asyncio
+from .base import BaseHealthCheck
 
 
 # Redis
 class RedisCheck(BaseHealthCheck):
+    """
+    Redis health check
+    """
+
     name = "redis"
 
-    def __init__(self, redis):
-        self.redis = redis
-
     async def check(self):
-        pong = await self.redis.ping()  # TODO based on sanic init
-        if not pong:
-            raise Exception("Redis ping failed")
-
-
-# PostgreSQL
-class PostgresCheck(BaseHealthCheck):
-    name = "postgres"
-
-    def __init__(self, pool):
-        self.pool = pool
-
-    async def check(self):
-        async with self.pool.acquire() as conn:
-            await conn.fetchval("SELECT 1")
-
-
-# MongoDB
-class MongoCheck(BaseHealthCheck):
-    name = "mongodb"
-
-    def __init__(self, mongo_client):
-        self.mongo = mongo_client
-
-    async def check(self):
-        await self.mongo.admin.command("ping")
+        try:
+            async with asyncio.timeout(self.timeout):
+                pong = await self.redis.ping()
+                if not pong:
+                    raise RuntimeError("Redis returned abnormal ping response")
+        except TimeoutError:
+            raise RuntimeError(f"Redis health check timed out after {self.timeout}s")
+        except Exception as e:
+            raise RuntimeError(f"Redis health check failed: {str(e)}") from e
 
 
 # sqlite
 class SQLiteCheck(BaseHealthCheck):
-    name = "sqlite"
+    """
+    SQLite health check
+    """
 
-    def __init__(self, conn):
-        self.conn = conn
+    name = "sqlite"
 
     async def check(self):
         def _ping():
-            cursor = self.conn.cursor()
-            cursor.execute("SELECT 1")
-            cursor.fetchone()
+            with self.sqlite.cursor() as cursor:
+                cursor.execute("SELECT 1;")
+                cursor.fetchone()
 
-        # sqlite is synchronous, so it is packaged as a thread task
-        import asyncio
-
-        await asyncio.to_thread(_ping)
+        try:
+            async with asyncio.timeout(self.timeout):
+                await asyncio.to_thread(_ping)
+        except TimeoutError:
+            raise RuntimeError(f"SQLite health check timed out after {self.timeout}s")
+        except Exception as e:
+            raise RuntimeError(f"SQLite health check failed: {str(e)}") from e

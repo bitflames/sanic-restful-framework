@@ -7,9 +7,9 @@ SRF provides a complete HTTP status code enumeration, making it convenient to us
 Benefits of using status code constants:
 
 - **Readability**: `HTTP_200_OK` is clearer than `200`
-- **Type Safety**: Avoid input errors in status codes
-- **IDE Support**: Provide auto-completion and documentation hints
-- **Unified Standards**: Use consistent status codes across the team
+- **Type Safety**: Avoid input errors for status codes
+- **IDE Support**: Provide auto-complete and documentation hints
+- **Unified Standards**: Use consistent status codes within the team
 
 ## Import
 
@@ -27,24 +27,24 @@ from srf.views.http_status import HTTPStatus
 | 101 | `HTTP_101_SWITCHING_PROTOCOLS` | Switching Protocols |
 
 ```python
-from srf.views.http_status import HTTPStatus
+from srf.views.http_status import is_informational
 
 # Check if it's an informational response
-if HTTPStatus.is_informational(status_code):
+if is_informational(status_code):
     print("Informational response")
 ```
 
 ### 2xx - Successful Responses
 
-| Status Code | Constant | Description | Use Case |
-|-------------|----------|-------------|----------|
-| 200 | `HTTP_200_OK` | OK | GET, PUT, PATCH successful |
-| 201 | `HTTP_201_CREATED` | Created | POST successfully created a resource |
+| Status Code | Constant | Description | Usage Scenario |
+|-------------|----------|-------------|----------------|
+| 200 | `HTTP_200_OK` | OK | Success of GET, PUT, PATCH |
+| 201 | `HTTP_201_CREATED` | Created | Successfully created resource with POST |
 | 202 | `HTTP_202_ACCEPTED` | Accepted | Asynchronous request processing |
 | 204 | `HTTP_204_NO_CONTENT` | No Content | DELETE successful |
 
 ```python
-from sanic.response import json
+from sanic.response import HTTPResponse, json
 
 # GET request successful
 return json(data, status=HTTPStatus.HTTP_200_OK)
@@ -52,8 +52,8 @@ return json(data, status=HTTPStatus.HTTP_200_OK)
 # POST creation successful
 return json(data, status=HTTPStatus.HTTP_201_CREATED)
 
-# DELETE successful
-return json({}, status=HTTPStatus.HTTP_204_NO_CONTENT)
+# DELETE successful (204 should not include JSON body)
+return HTTPResponse(status=HTTPStatus.HTTP_204_NO_CONTENT)
 ```
 
 ### 3xx - Redirection
@@ -76,10 +76,10 @@ return redirect('/temp-url', status=HTTPStatus.HTTP_302_FOUND)
 
 ### 4xx - Client Errors
 
-| Status Code | Constant | Description | Use Case |
-|-------------|----------|-------------|----------|
+| Status Code | Constant | Description | Usage Scenario |
+|-------------|----------|-------------|----------------|
 | 400 | `HTTP_400_BAD_REQUEST` | Bad Request | Parameter error, format error |
-| 401 | `HTTP_401_UNAUTHORIZED` | Unauthorized | Not logged in, invalid Token |
+| 401 | `HTTP_401_UNAUTHORIZED` | Unauthorized | Not logged in, Token invalid |
 | 403 | `HTTP_403_FORBIDDEN` | Forbidden | Insufficient permissions |
 | 404 | `HTTP_404_NOT_FOUND` | Not Found | Resource not found |
 | 405 | `HTTP_405_METHOD_NOT_ALLOWED` | Method Not Allowed | HTTP method not supported |
@@ -88,7 +88,7 @@ return redirect('/temp-url', status=HTTPStatus.HTTP_302_FOUND)
 | 429 | `HTTP_429_TOO_MANY_REQUESTS` | Too Many Requests | Exceeded rate limit |
 
 ```python
-from sanic.response import json
+from sanic.response import HTTPResponse, json
 
 # Parameter error
 if not data:
@@ -119,8 +119,8 @@ return json({"error": "Too many requests"}, status=HTTPStatus.HTTP_429_TOO_MANY_
 
 ### 5xx - Server Errors
 
-| Status Code | Constant | Description | Use Case |
-|-------------|----------|-------------|----------|
+| Status Code | Constant | Description | Usage Scenario |
+|-------------|----------|-------------|----------------|
 | 500 | `HTTP_500_INTERNAL_SERVER_ERROR` | Internal Server Error | Uncaught exception |
 | 501 | `HTTP_501_NOT_IMPLEMENTED` | Not Implemented | Function not implemented |
 | 502 | `HTTP_502_BAD_GATEWAY` | Bad Gateway | Upstream service error |
@@ -147,28 +147,34 @@ if not healthy:
 
 ## Helper Functions
 
-### Checking Status Code Types
+### Check Status Code Type
 
 ```python
-from srf.views.http_status import HTTPStatus
+from srf.views.http_status import (
+    is_informational,
+    is_success,
+    is_redirect,
+    is_client_error,
+    is_server_error,
+)
 
 # Is it an informational response (1xx)
-HTTPStatus.is_informational(100)  # True
+is_informational(100)  # True
 
 # Is it a successful response (2xx)
-HTTPStatus.is_success(200)  # True
-HTTPStatus.is_success(201)  # True
+is_success(200)  # True
+is_success(201)  # True
 
-# Is it a redirection (3xx)
-HTTPStatus.is_redirect(301)  # True
+# Is it a redirect (3xx)
+is_redirect(301)  # True
 
 # Is it a client error (4xx)
-HTTPStatus.is_client_error(400)  # True
-HTTPStatus.is_client_error(404)  # True
+is_client_error(400)  # True
+is_client_error(404)  # True
 
 # Is it a server error (5xx)
-HTTPStatus.is_server_error(500)  # True
-HTTPStatus.is_server_error(503)  # True
+is_server_error(500)  # True
+is_server_error(503)  # True
 ```
 
 ## Using in ViewSet
@@ -178,7 +184,7 @@ HTTPStatus.is_server_error(503)  # True
 ```python
 from srf.views import BaseViewSet
 from srf.views.http_status import HTTPStatus
-from sanic.response import json
+from sanic.response import HTTPResponse, json
 
 class ProductViewSet(BaseViewSet):
     async def create(self, request):
@@ -201,7 +207,7 @@ class ProductViewSet(BaseViewSet):
             )
         
         # Create
-        obj = await Product.create(**schema.dict())
+        obj = await Product.create(**schema.model_dump())
         
         # Serialize
         reader_schema = self.get_schema(request, is_safe=True)
@@ -217,7 +223,7 @@ class ProductViewSet(BaseViewSet):
             obj = await self.get_object(request, pk)
         except:
             return json(
-                {"error": "Product does not exist"},
+                {"error": "Product not found"},
                 status=HTTPStatus.HTTP_404_NOT_FOUND
             )
         
@@ -225,7 +231,7 @@ class ProductViewSet(BaseViewSet):
         await obj.delete()
         
         # Return 204 No Content
-        return json({}, status=HTTPStatus.HTTP_204_NO_CONTENT)
+        return HTTPResponse(status=HTTPStatus.HTTP_204_NO_CONTENT)
 ```
 
 ### Custom Actions
@@ -242,7 +248,7 @@ class ProductViewSet(BaseViewSet):
             product = await self.get_object(request, pk)
         except:
             return json(
-                {"error": "Product does not exist"},
+                {"error": "Product not found"},
                 status=HTTPStatus.HTTP_404_NOT_FOUND
             )
         
@@ -268,7 +274,7 @@ class ProductViewSet(BaseViewSet):
 ### RESTful API Standard Response
 
 | Operation | Method | Success Status Code | Failure Status Code |
-|---------|--------|--------------------|--------------------|
+|-----------|--------|---------------------|---------------------|
 | List | GET | 200 OK | 404 Not Found |
 | Detail | GET | 200 OK | 404 Not Found |
 | Create | POST | 201 Created | 400 Bad Request, 409 Conflict, 422 Unprocessable Entity |
@@ -324,12 +330,12 @@ async def retrieve(self, request, pk):
     return response
 ```
 
-## Complete Status Code List
+## Full Status Code List
 
 ```python
 from srf.views.http_status import HTTPStatus
 
-# 1xx Informational responses
+# 1xx Informational Responses
 HTTPStatus.HTTP_100_CONTINUE
 HTTPStatus.HTTP_101_SWITCHING_PROTOCOLS
 
@@ -352,7 +358,7 @@ HTTPStatus.HTTP_305_USE_PROXY
 HTTPStatus.HTTP_307_TEMPORARY_REDIRECT
 HTTPStatus.HTTP_308_PERMANENT_REDIRECT
 
-# 4xx Client errors
+# 4xx Client Errors
 HTTPStatus.HTTP_400_BAD_REQUEST
 HTTPStatus.HTTP_401_UNAUTHORIZED
 HTTPStatus.HTTP_402_PAYMENT_REQUIRED
@@ -379,7 +385,7 @@ HTTPStatus.HTTP_428_PRECONDITION_REQUIRED
 HTTPStatus.HTTP_429_TOO_MANY_REQUESTS
 HTTPStatus.HTTP_431_REQUEST_HEADER_FIELDS_TOO_LARGE
 
-# 5xx Server errors
+# 5xx Server Errors
 HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR
 HTTPStatus.HTTP_501_NOT_IMPLEMENTED
 HTTPStatus.HTTP_502_BAD_GATEWAY
@@ -393,18 +399,18 @@ HTTPStatus.HTTP_511_NETWORK_AUTHENTICATION_REQUIRED
 ## Best Practices
 
 1. **Use Semantic Constants**: Use `HTTP_200_OK` instead of `200`
-2. **Correctly Choose Status Codes**: Use appropriate status codes for different situations
-3. **Consistency**: The team uses a unified standard for status codes
-4. **Documentation**: Document the status codes in the API documentation
+2. **Choose Appropriate Status Codes**: Use suitable status codes for different situations
+3. **Consistency**: The team uses consistent status code standards
+4. **Documentation**: Document the status codes for each endpoint in the API documentation
 5. **Client-Friendly**: Provide clear error messages and status codes
 6. **Follow RESTful Conventions**: Follow standard REST API status code conventions
 
 ## Common Mistakes
 
-### ❌ Incorrect Practice
+### ❌ Incorrect Practices
 
 ```python
-# Return 200 for all errors
+# All errors return 200
 return json({"error": "not found"}, status=200)
 
 # Use magic numbers
@@ -415,9 +421,11 @@ return json(data, status=201)
 return json({"message": "deleted"}, status=200)
 ```
 
-### ✅ Correct Practice
+### ✅ Correct Practices
 
 ```python
+from sanic.response import HTTPResponse
+
 # Use semantic constants
 return json(data, status=HTTPStatus.HTTP_201_CREATED)
 
@@ -426,11 +434,11 @@ if not found:
     return json({"error": "not found"}, status=HTTPStatus.HTTP_404_NOT_FOUND)
 
 # Return 204 for successful deletion
-return json({}, status=HTTPStatus.HTTP_204_NO_CONTENT)
+return HTTPResponse(status=HTTPStatus.HTTP_204_NO_CONTENT)
 ```
 
 ## Next Steps
 
-- Learn about [Exception Handling](exceptions.md) to understand the relationship between exceptions and status codes
+- Learn [Exception Handling](exceptions.md) to understand the relationship between exceptions and status codes
 - Read [Views](../core/viewsets.md) to learn how to use status codes in ViewSet
 - View [API Reference](../../api-reference.md) to see the complete API documentation

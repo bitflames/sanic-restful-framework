@@ -6,19 +6,19 @@ Sanic RESTful Framework (SRF) provides a complete set of tools and features to h
 
 ### 🎯 Class-based ViewSets
 
-ViewSet is the core concept of SRF, providing an elegant way to organize and manage API endpoints.
+ViewSet is the core concept of SRF, offering an elegant way to organize and manage API endpoints.
 
 **Features:**
 
 - Automatically generates standard RESTful routes
 - Built-in CRUD basic view functions (Create, Read, Update, Delete, List)
-- Supports Mixin pattern for flexible function combination
+- Supports Mixin pattern for flexible function combinations
 - Easily add custom route view functions using `@action` decorator
-- Fast development with an experience close to Django REST Framework
+- Rapid development, close to Django REST Framework development experience
 
 **Advantages:**
 
-- Reduce repetitive code and improve development efficiency
+- Reduce duplicate code, improve development efficiency
 - Unified code style and structure
 - Easy to test and maintain
 
@@ -36,36 +36,36 @@ SanicRouter automatically generates routes for ViewSets:
 
 **Custom Routes:**
 
-- Defined using `@action` decorator
+- Defined via `@action` decorator
 - Automatically discovered and registered
 - Supports collection-level and detail-level operations
 
-### 🔐 Comprehensive Authentication System
+### 🔐 Authentication Components
 
-SRF provides multiple authentication methods to meet different scenario requirements.
+SRF provides various authentication methods to meet different scenario needs.
 
 **Supported Authentication Methods:**
 
 - **JWT Authentication**: Stateless authentication based on JSON Web Token
-- **Social Login**: Supports GitHub OAuth (can be extended to other platforms)
-- **Email Verification**: Built-in email verification code functionality
+- **Social Login**: Supports GitHub OAuth (extensible to other platforms)
+- **Email Verification**: Built-in email verification code function
 
 **Authentication Features:**
 
-- **Automatic token verification**: Authentication middleware automatically validates JWT tokens
+- Automatic token validation
 - User role and permission management
 - Password encryption storage (bcrypt)
 - Public endpoint configuration
 
 ### 🛡️ Flexible Permission System
 
-A class-based permission system that supports view-level and object-level permission control.
+Based on class-based permission system, supports view-level and object-level permission control.
 
 **Built-in Permission Classes:**
 
-- `IsAuthenticated`: The user must be authenticated
-- `IsRoleAdminUser`: The user must be an admin role
-- `IsSafeMethodOnly`: Only allows safe HTTP methods (GET, HEAD, OPTIONS)
+- `IsAuthenticated`: User must be authenticated
+- `IsRoleAdminUser`: User must be an admin role
+- `IsSafeMethodOnly`: Only allow safe HTTP methods (GET, HEAD, OPTIONS)
 - Custom permission control based on `BasePermission`
 
 ### 📊 Powerful Data Processing
@@ -74,12 +74,12 @@ A class-based permission system that supports view-level and object-level permis
 
 - Data validation based on **Pydantic**
 - Automatic data serialization and deserialization
-- Supports separation of read and write schemas
-- Type-safe and IDE-friendly
+- Supports read/write Schema separation
+- Type-safe, IDE-friendly
 
-#### Filter System
+#### Filtering System
 
-SRF provides various filters that can be used in combination:
+SRF provides multiple filters that can be used in combination:
 
 1. **SearchFilter**: Full-text search filter
 2. **JsonLogicFilter**: Supports complex JSON Logic expressions
@@ -89,38 +89,36 @@ SRF provides various filters that can be used in combination:
 #### Pagination
 
 - Page number-based pagination
-- Configurable number of items per page
+- Configurable number per page
 - Returns a unified pagination response format
 
 ### 🚦 Rate Limiting Middleware
 
-Protect your API from abuse, supporting multiple rate-limiting strategies:
+Protect your API from abuse, supports various rate limiting strategies:
 
-- **IPRateLimit**: Rate limiting based on IP address
-- **UserRateLimit**: Rate limiting based on user ID
-- **PathRateLimit**: Rate limiting based on request path
-- **HeaderRateLimit**: Rate limiting based on request headers
+- **IPRateLimit**: Rate limit based on IP address
+- **UserRateLimit**: Rate limit based on user ID
+- **PathRateLimit**: Rate limit based on request path
+- **HeaderRateLimit**: Rate limit based on request header
 
-**Storage Methods:**
+**Storage Options:**
 
 - In-memory storage (MemoryStorage)
-- Support for external storage such as Redis, which is extensible
+- Support for external storage like Redis
 
 ### 🏥 Health Check
 
-Built-in health check feature to monitor the status of the application and dependent services.
+Built-in health check functionality to monitor application and dependent service status. Register the check classes to be run by configuring `HEALTH_CHECK_LIST`.
 
-**Supported Service Checks:**
+**Built-in Service Checks:**
 
-- Redis
-- PostgreSQL
-- MongoDB
-- SQLite
+- `RedisCheck` (Redis)
+- `SQLiteCheck` (SQLite)
 
 **Features:**
 
-- Automatically detects service availability
-- Returns standardized health status responses
+- Automatically detect service availability
+- Return standardized health status response
 - Easy to integrate into monitoring systems
 
 ### 🔧 Useful Tools
@@ -133,25 +131,25 @@ Built-in health check feature to monitor the status of the application and depen
 
 #### Exception Handling
 
-- Unified exception handling mechanism
+- Some exceptions are converted within ViewSet
 - Custom exception classes
-- Automatically converts to standard HTTP responses
+- Global uniform response requires application to register Sanic exception handler
 
 #### Email Sending
 
-- Asynchronous email sending based on aiosmtplib
-- Supports HTML and plain text emails
+- Synchronous SMTP sending based on standard library `smtplib` (`srf/tools/email.py`)
+- `send_email(to_email, subject, content)` sends plain text emails
 - Flexible configuration, easy to use
 
 ## Design Philosophy
 
 ### Convention Over Configuration
 
-SRF follows the principle of "convention over configuration," providing reasonable default configurations so you can start developing quickly. It also maintains high configurability, allowing you to customize any behavior when needed.
+SRF follows the "Convention Over Configuration" principle, providing reasonable default configurations to let you start development quickly. At the same time, it maintains a high degree of configurability, allowing you to customize any behavior when needed.
 
-### Modular and Expandable
+### Modular and Extensible
 
-SRF uses a modular design, where each feature is an independent module that can be selected as needed. It also provides clear extension points, making it easy for you to add custom features.
+SRF uses a modular design, with each feature being an independent module that can be selected as needed. It also provides clear extension points, making it easy for you to add custom features.
 
 ### Type Safety
 
@@ -159,22 +157,21 @@ Through Pydantic and type annotations, SRF provides good type safety, reducing r
 
 ### Asynchronous First
 
-Leveraging Python's asyncio features and Sanic's asynchronous architecture, SRF provides high-performance API services.
+Fully utilizes Python's asyncio features and Sanic's asynchronous architecture, providing high-performance API services.
 
 ## Performance Advantages
 
-- **Asynchronous I/O**: Native support for async/await, fast event loop based on uvloop, performance far exceeds synchronous frameworks
+- **Asynchronous I/O**: Based on Sanic, native support for async/await
 - **Efficient Routing**: Automatically generates and registers routes, reducing runtime overhead
-- **Flexible Caching**: Supports configuring caching strategies to improve response speed
-- **Lightweight**: Core features are streamlined, modules are loaded on demand
+- **Flexible Caching**: Supports configured caching strategies to improve response speed
+- **Lightweight**: Core features are concise, modules are loaded on demand
 
 ## Development Experience
 
 ### Comprehensive Ecosystem
+- Based on Sanic framework, can perfectly integrate with various frameworks in the ecosystem
 
-- Based on Sanic as the base framework, it can perfectly integrate with various frameworks in the ecosystem
-
-### IDE Friendly
+### IDE-Friendly
 
 - Complete type annotations
 - Clear code structure
@@ -197,30 +194,30 @@ Leveraging Python's asyncio features and Sanic's asynchronous architecture, SRF 
 SRF is suitable for the following scenarios:
 
 - ✅ Building RESTful API services
-- ✅ Applications requiring high concurrency processing
+- ✅ Applications requiring high concurrency handling
 - ✅ Microservices architecture
-- ✅ Frontend-backend separated projects
+- ✅ Front-end and back-end separated projects
 - ✅ Mobile application backend
 - ✅ Internet of Things (IoT) platform
 - ✅ Data API services
 
 ## Comparison with Other Frameworks
 
-| Feature              | SRF                                   | FastAPI          | Django REST  |
-| -------------------- | ------------------------------------- | ---------------- | ------------ |
-| Asynchronous Support | ✅ Full                               | ✅ Full          | ⚠️ Partial   |
-| Performance          | 🚀 Very High                          | 🚀 High          | ⚡ Medium    |
-| Development Speed    | Very Fast                             | Fast             | Very Fast    |
-| Learning Curve       | 📈 Gentle                             | 📈 Gentle        | 📈 Steep     |
-| ViewSet              | ✅ Supported                          | ❌ Not Supported | ✅ Supported |
-| Data Validation      | Pydantic                              | Pydantic         | Serializer   |
-| ORM                  | Tortoise (other ORMs can be extended) | SQLAlchemy/Other | Django ORM   |
-| Community            | 🌱 Growing                            | 🌳 Active        | 🌲 Mature    |
+| Feature | SRF | FastAPI | Django REST |
+|--------|-----|---------|-------------|
+| Asynchronous Support | ✅ Complete | ✅ Complete | ⚠️ Partial |
+| Performance | 🚀 High | 🚀 Moderate | ⚡ Medium |
+| Development Speed | Very Fast | Fast | Very Fast |
+| Learning Curve | 📈 Gentle | 📈 Gentle | 📈 Steep |
+| ViewSet | ✅ Supported | ❌ Not Supported | ✅ Supported |
+| Data Validation | Pydantic | Pydantic | Serializer |
+| ORM | Tortoise (other ORMs available) | SQLAlchemy/Other | Django ORM |
+| Community | 🌱 Growing | 🌳 Active | 🌲 Mature |
 
 ## Next Steps
 
-Now that you have understood the main features of SRF, you can:
+Now that you've learned about the main features of SRF, you can:
 
 - View [Getting Started](usage/getting-started.md) to create your first project
-- Read [Core Concepts](usage/core/viewsets.md) to learn more about the usage of ViewSet
+- Read [Core Concepts](usage/core/viewsets.md) to understand the usage of ViewSet
 - Browse [API Reference](api-reference.md) to see detailed API documentation

@@ -4,14 +4,14 @@ SRF provides a page-based pagination feature for handling list queries with larg
 
 ## Overview of Pagination
 
-Pagination divides large amounts of data into multiple pages, returning only one page of data at a time, which improves API performance and user experience.
+Pagination divides large data into multiple pages, returning only one page of data at a time, which improves API performance and user experience.
 
 ### Key Features
 
-- **Page-based**: Use page numbers and the number of items per page for pagination
-- **Automatic Pagination**: Applied automatically in the `list` operation of ViewSet
-- **Configurable**: Supports customizing the number of items per page and maximum limit
-- **Standardized Response**: Returns a standardized pagination response format
+- **Page-based**: Uses page numbers and the number of items per page for pagination
+- **Automatic Pagination**: Automatically applied in the `list` operation of ViewSet
+- **Configurable**: Supports customizing parameters such as the number of items per page and maximum limit
+- **Unified Response**: Returns a standardized pagination response format
 
 ## PageNumberPagination
 
@@ -30,7 +30,8 @@ class ProductViewSet(BaseViewSet):
         return Product.all()
     
     def get_schema(self, request, is_safe=False):
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
+        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
     
     # The list method automatically applies pagination
 ```
@@ -83,32 +84,22 @@ GET /api/products?page_size=10
 
 ```python
 class PageNumberPagination:
-    page_size = 10              # Default number of items per page
-    max_page_size = 100         # Maximum number of items per page
-    page_query_param = 'page'   # Page number parameter name
-    page_size_query_param = 'page_size'  # Number of items per page parameter name
+    MAX_PAGE_SIZE: int = 100           # Upper limit for page_size
+    PAGE_QUERY_PARAM: str = 'page'     # Query parameter name for page number
+    PAGE_SIZE_QUERY_PARAM: str = 'page_size'  # Query parameter name for items per page
 ```
 
-### Custom Configuration
+**No** `page_size` / `max_page_size` class attributes. If `page_size` is missing or invalid, `from_queryset` falls back to `page=1`, `page_size=10`. The requested `page_size` is limited within `MAX_PAGE_SIZE`.
 
-#### Method 1: Configure in ViewSet
-
-```python
-class ProductViewSet(BaseViewSet):
-    page_size = 20           # Custom number of items per page
-    max_page_size = 50       # Custom maximum number of items per page
-```
-
-#### Method 2: Create a Custom Pagination Class
+#### Creating a Custom Pagination Class
 
 ```python
 from srf.paginator import PageNumberPagination
 
 class CustomPagination(PageNumberPagination):
-    page_size = 20
-    max_page_size = 50
-    page_query_param = 'p'
-    page_size_query_param = 'size'
+    MAX_PAGE_SIZE = 50
+    PAGE_QUERY_PARAM = 'p'
+    PAGE_SIZE_QUERY_PARAM = 'size'
 
 class ProductViewSet(BaseViewSet):
     pagination_class = CustomPagination
@@ -128,7 +119,7 @@ class ProductViewSet(BaseViewSet):
     @action(methods=["get"], detail=False, url_path="featured")
     async def list_featured(self, request):
         """Get featured products (with pagination)"""
-        # Get the query set
+        # Get query set
         queryset = Product.filter(is_featured=True)
         
         # Create paginator
@@ -215,8 +206,8 @@ class ProductViewSet(BaseViewSet):
     # GET /api/products?search=phone&category=1&min_price=1000&sort=-price&page=1&page_size=20
     # 
     # Execution order:
-    # 1. Apply search filtering
-    # 2. Apply field filtering
+    # 1. Apply search filter
+    # 2. Apply field filters
     # 3. Apply sorting
     # 4. Apply pagination
 ```
@@ -231,11 +222,11 @@ from sanic.response import json
 
 class ProductViewSet(BaseViewSet):
     async def list(self, request):
-        """Custom list method, adding extra information"""
-        # Get the query set and apply filters
+        """Custom list method, add extra information"""
+        # Get query set and apply filters
         queryset = self.queryset
         for filter_class in self.filter_class:
-            queryset = await filter_class().filter_queryset(request, queryset)
+            queryset = filter_class(self).filter_queryset(request, queryset)
         
         # Pagination
         paginator = PageNumberPagination.from_queryset(queryset, request)
@@ -291,7 +282,7 @@ class ProductViewSet(BaseViewSet):
         schema = self.get_schema(request, is_safe=True)
         results = [schema.model_validate(p).model_dump() for p in products]
         
-        # Return result
+        # Return results
         next_cursor = products[-1].id if products and has_next else None
         
         return json({
@@ -327,17 +318,15 @@ class ProductViewSet(BaseViewSet):
         "name": "name",
         "created": "created_at",
     }
-    
-    # Custom pagination configuration
-    page_size = 20
-    max_page_size = 100
-    
+
+
     @property
     def queryset(self):
         return Product.all().prefetch_related("category")
     
     def get_schema(self, request, is_safe=False):
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
+        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
     
     # The list method automatically applies pagination
     
@@ -363,7 +352,7 @@ class ProductViewSet(BaseViewSet):
         return json(result)
 ```
 
-### Client Usage Example
+### Client Usage Examples
 
 #### Basic Pagination
 
@@ -434,7 +423,7 @@ async function loadMore() {
   isLoading = false;
 }
 
-// Listen to scroll
+// Listen for scroll
 window.addEventListener('scroll', () => {
   if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
     loadMore();
@@ -461,7 +450,7 @@ total = await Product.all().count()
 
 ### 2. Use only() to Select Fields
 
-Query only the required fields:
+Query only the fields you need:
 
 ```python
 @property
@@ -470,7 +459,7 @@ def queryset(self):
     return Product.all().only('id', 'name', 'price', 'image')
 ```
 
-### 3. Use prefetch_related to Optimize Related Queries
+### 3. Optimize Related Queries with prefetch_related
 
 ```python
 @property
@@ -481,7 +470,7 @@ def queryset(self):
 
 ### 4. Add Indexes
 
-Add database indexes for frequently used filtering and sorting fields:
+Add database indexes to fields frequently used for filtering and sorting:
 
 ```python
 class Product(Model):
@@ -492,13 +481,13 @@ class Product(Model):
 
 ## Best Practices
 
-1. **Set a reasonable number of items per page**: Typically 10-50 items are appropriate, avoid too large.
-2. **Limit maximum page size**: Set `max_page_size` to prevent abuse.
-3. **Combine with filtering**: Pagination should be used together with filtering, search, and sorting.
-4. **Optimize queries**: Use `only()`, `prefetch_related()` and other optimizations.
-5. **Cache total count**: For data that doesn't change often, cache the total count.
-6. **Add indexes**: Add database indexes for sorting and filtering fields.
-7. **Return metadata**: Return additional information such as total pages and current page for client usage.
+1. **Set a reasonable number of items per page**: Typically 10-50 items is appropriate, avoid too many
+2. **Limit the maximum number of items per page**: Subclass and set `MAX_PAGE_SIZE`
+3. **Combine with filtering**: Pagination should be used together with filtering, search, and sorting
+4. **Optimize queries**: Use `only()`, `prefetch_related()` and other optimizations
+5. **Cache the total count**: For data that doesn't change often, cache the total count
+6. **Add indexes**: Add database indexes to fields used for sorting and filtering
+7. **Return metadata**: Return additional information like total pages and current page for client usage
 
 ## Common Issues
 
@@ -512,8 +501,8 @@ class ProductViewSet(BaseViewSet):
 ### How to Get All Data (Without Pagination)?
 
 ```bash
-# Set a very large page_size
-GET /api/products?page_size=10000
+# page_size is limited by PageNumberPagination.MAX_PAGE_SIZE (default 100)
+GET /api/products?page_size=100
 ```
 
 Or add a custom action in the ViewSet:
@@ -528,7 +517,7 @@ async def get_all(self, request):
     return json({"results": results})
 ```
 
-### How to Implement Offset/Limit Pagination?
+### How to Implement Offset-Based Pagination (offset/limit)?
 
 ```python
 @action(methods=["get"], detail=False, url_path="offset-list")
@@ -557,4 +546,4 @@ async def offset_list(self, request):
 
 - Learn [Filtering](filtering.md) to understand how to combine it with pagination
 - Read [Views](viewsets.md) to learn about the full features of ViewSet
-- View [Performance Optimization](../advanced/advanced-features.md) for more optimization techniques
+- See [Performance Optimization](../advanced/advanced-features.md) for more optimization tips

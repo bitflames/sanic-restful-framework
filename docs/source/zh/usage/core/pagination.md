@@ -10,7 +10,7 @@ SRF 提供了基于页码的分页功能，用于处理大量数据的列表查�
 
 - **基于页码**：使用页码和每页数量进行分页
 - **自动分页**：在 ViewSet 的 list 操作中自动应用
-- **可配置**：支持自定义每页数量和最大数量限制
+- **可配置**：支持自定义每页数量和最大数量限制等参数
 - **统一响应**：返回标准化的分页响应格式
 
 ## PageNumberPagination
@@ -30,7 +30,8 @@ class ProductViewSet(BaseViewSet):
         return Product.all()
     
     def get_schema(self, request, is_safe=False):
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
+        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
     
     # list 方法会自动应用分页
 ```
@@ -83,32 +84,23 @@ GET /api/products?page_size=10
 
 ```python
 class PageNumberPagination:
-    page_size = 10              # 默认每页数量
-    max_page_size = 100         # 最大每页数量
-    page_query_param = 'page'   # 页码参数名
-    page_size_query_param = 'page_size'  # 每页数量参数名
+    MAX_PAGE_SIZE: int = 100           # 请求 page_size 的上限
+    PAGE_QUERY_PARAM: str = 'page'     # 页码查询参数名
+    PAGE_SIZE_QUERY_PARAM: str = 'page_size'  # 每页数量查询参数名
 ```
 
-### 自定义配置
+**没有** `page_size` / `max_page_size` 类属性。缺少或非法的 `page_size` 时，`from_queryset` 回退为 `page=1`、`page_size=10`。请求的 `page_size` 会被限制在 `MAX_PAGE_SIZE` 以内。
 
-#### 方法 1：在 ViewSet 中配置
 
-```python
-class ProductViewSet(BaseViewSet):
-    page_size = 20           # 自定义每页数量
-    max_page_size = 50       # 自定义最大每页数量
-```
-
-#### 方法 2：创建自定义分页类
+#### 创建自定义分页类
 
 ```python
 from srf.paginator import PageNumberPagination
 
 class CustomPagination(PageNumberPagination):
-    page_size = 20
-    max_page_size = 50
-    page_query_param = 'p'
-    page_size_query_param = 'size'
+    MAX_PAGE_SIZE = 50
+    PAGE_QUERY_PARAM = 'p'
+    PAGE_SIZE_QUERY_PARAM = 'size'
 
 class ProductViewSet(BaseViewSet):
     pagination_class = CustomPagination
@@ -235,7 +227,7 @@ class ProductViewSet(BaseViewSet):
         # 获取查询集并应用过滤
         queryset = self.queryset
         for filter_class in self.filter_class:
-            queryset = await filter_class().filter_queryset(request, queryset)
+            queryset = filter_class(self).filter_queryset(request, queryset)
         
         # 分页
         paginator = PageNumberPagination.from_queryset(queryset, request)
@@ -327,17 +319,15 @@ class ProductViewSet(BaseViewSet):
         "name": "name",
         "created": "created_at",
     }
-    
-    # 自定义分页配置
-    page_size = 20
-    max_page_size = 100
-    
+
+
     @property
     def queryset(self):
         return Product.all().prefetch_related("category")
     
     def get_schema(self, request, is_safe=False):
-        return ProductSchemaReader if is_safe else ProductSchemaWriter
+        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
+        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
     
     # list 方法自动应用分页
     
@@ -493,7 +483,7 @@ class Product(Model):
 ## 最佳实践
 
 1. **合理设置每页数量**：通常10-50条为宜，避免过大
-2. **限制最大页数**：设置 `max_page_size` 防止滥用
+2. **限制最大每页数量**：子类化并设置 `MAX_PAGE_SIZE`
 3. **结合过滤使用**：分页应该与过滤、搜索、排序结合使用
 4. **优化查询**：使用 `only()`, `prefetch_related()` 等优化查询
 5. **缓存总数**：对于不常变化的数据，可以缓存总数
@@ -512,8 +502,8 @@ class ProductViewSet(BaseViewSet):
 ### 如何获取所有数据（不分页）？
 
 ```bash
-# 设置一个很大的 page_size
-GET /api/products?page_size=10000
+# page_size 受 PageNumberPagination.MAX_PAGE_SIZE 限制（默认 100）
+GET /api/products?page_size=100
 ```
 
 或在 ViewSet 中添加自定义操作：
