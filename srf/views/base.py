@@ -143,7 +143,7 @@ class GenericAPIView(HTTPMethodView):
         """
         Check object-level permissions
         Subclasses should override this method to implement specific permission checking logic
-        
+
         Raise Forbidden if permission is not permitted
         """
         ...

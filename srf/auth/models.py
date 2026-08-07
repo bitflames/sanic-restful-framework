@@ -1,7 +1,7 @@
 from typing import Dict
 
 import bcrypt
-from tortoise import exceptions, fields
+from tortoise import fields
 from tortoise.models import Model as TorModel
 from tortoise.transactions import in_transaction
 

@@ -1,0 +1,23 @@
+repos:
+  - repo: local
+    hooks:
+      - id: isort
+        name: isort (import sorting)
+        entry: isort srf
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: black
+        name: black (code formatting)
+        entry: black srf
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: ruff-check
+        name: ruff check
+        entry: ruff check --fix srf
+        language: system
+        types: [python]
+        pass_filenames: false

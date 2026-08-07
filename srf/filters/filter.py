@@ -15,7 +15,6 @@ from tortoise.queryset import QuerySet
 def visualize_q(q: Q, indent=0):
     prefix = " " * indent
     if isinstance(q.children, list):
-        op = q.connector  # AND / OR
         for child in q.children:
             if isinstance(child, Q):
                 visualize_q(child, indent + 4)

@@ -7,13 +7,14 @@ from .schema import UserLoginSchema
 
 LOGIN_FAILED_MESSAGE = "Unable to log in with provided credentials."
 
+
 async def authenticate(request: Request, *args, **kwargs):
     """Validate credentials and return JWT payload (user_id, username, role). Used by sanic_jwt."""
     if request.json is None:
         raise BadRequest("Request body is required")
     try:
         sch_user = UserLoginSchema.model_validate(request.json, by_alias=True)  # TODO, form login
-    except Exception as e:
+    except Exception:
         raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
     if sch_user.email:
