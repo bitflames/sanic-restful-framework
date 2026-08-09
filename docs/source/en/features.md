@@ -137,9 +137,10 @@ Built-in health check functionality to monitor application and dependent service
 
 #### Email Sending
 
-- Synchronous SMTP sending based on standard library `smtplib` (`srf/tools/email.py`)
-- `send_email(to_email, subject, content)` sends plain text emails
-- Flexible configuration, easy to use
+- Synchronous SMTP via standard-library `smtplib` (`srf/tools/email.py`)
+- `send_email(to_email, subject, content)` sends plain-text emails (sync)
+- `send_verify_code(to_email, code)` is an async wrapper using `asyncio.to_thread` so the event loop is not blocked
+- Registration codes support Redis TTL, resend cooldown, and cleanup on send failure
 
 ## Design Philosophy
 

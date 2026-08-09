@@ -1,6 +1,3 @@
-import asyncio
-from typing import Dict
-
 from redis.asyncio import Redis
 from sanic import Request, Sanic
 from sanic.constants import SAFE_HTTP_METHODS
@@ -13,7 +10,7 @@ from tortoise.queryset import QuerySet
 from srf.auth import models, schema
 from srf.config import settings
 from srf.permission.permission import IsAuthenticated
-from srf.tools.email import EmailValidator, VerifyEmailRequest, send_verify_code
+from srf.tools.email import EmailCodeVerifySchema, EmailValidator, send_verify_code
 from srf.tools.utils import generate_code
 from srf.views import BaseViewSet, action
 from srf.views.http_status import HTTPStatus
@@ -59,74 +56,77 @@ async def logout(request: Request):
 
 async def register(request: Request):
     """Register a new user after verifying email code; return user data and access token."""
-    req_data = request.json
-    if req_data is None:
-        return HTTPResponse(
-            "Request body is required",
-            status=HTTPStatus.HTTP_400_BAD_REQUEST,
-        )
-    cf_info = VerifyEmailRequest.model_validate(req_data, extra="ignore")
+    if not request.json:
+        raise BadRequest("Request body is required")
+    sch_email_verification = EmailCodeVerifySchema.model_validate(request.json, extra="ignore")
 
     # Fetch and validate verification code from Redis
-    email_code_register = f"{settings.EMAIL_CODE_REDIS}_{req_data.get('email')}"
     redis: Redis = request.app.ctx.redis
-    stored_code = await redis.get(email_code_register)
-    if stored_code is None:
-        return HTTPResponse(
-            "The verification code is incorrect or expired, please retry!",
-            status=HTTPStatus.HTTP_400_BAD_REQUEST,
-        )
-    stored_code = int(stored_code.decode() if isinstance(stored_code, bytes) else stored_code)
-    if stored_code != cf_info.confirmations:
-        return HTTPResponse(
-            "The verification code is incorrect or timeout, please retry!",
-            status=HTTPStatus.HTTP_400_BAD_REQUEST,
-        )
-    await redis.delete(email_code_register)
+    email_cache_key = f"{settings.EMAIL_CODE_REDIS}_{sch_email_verification.email}"
+    stored_code = await redis.get(email_cache_key)
+
+    # Verify code and delete it， whther code is None or incorrect
+    if stored_code is None or (stored_code.decode() if isinstance(stored_code, bytes) else str(stored_code)) != sch_email_verification.confirmations:
+        await redis.delete(email_cache_key)
+        return HTTPResponse("The verification code is incorrect or timeout, please retry!", status=HTTPStatus.HTTP_400_BAD_REQUEST)
+    await redis.delete(email_cache_key)
 
     # Validate schema and create user (User.create hashes password and resolves role)
-    sch = UserSchemaWriter.model_validate(req_data, by_alias=True, extra="ignore")
-    user_db = await models.User.create(sch.model_dump(exclude_unset=True, exclude_none=True))
-    user_db_data = UserSchemaReader.model_validate(user_db).model_dump(by_alias=True)
+    sch_user_in = UserSchemaWriter.model_validate(request.json, by_alias=True, extra="ignore")
+    user_db = await models.User.create(sch_user_in.model_dump(exclude_unset=True, exclude_none=True))
+    user_db_data = UserSchemaReader.model_validate(user_db, from_attributes=True).model_dump(by_alias=True)
 
     # Generate JWT payload with serializable role (name string, not FK object)
-    role_name = user_db.role.name if user_db.role else None
-    jwt = getattr(request.app.config, "JWT", None) or getattr(request.app.ctx, "JWT", None)
+
+    jwt = request.app.ctx.jwt
     if jwt is None:
         raise ServerError("JWT is not configured; call register_auth_urls() first")
     aut = Authentication(request.app, jwt.config)
+
+    # Generate access token
     access_token = await aut.generate_access_token(
         user={
             "user_id": user_db.id,
             "username": user_db.name,
-            "role": role_name,
+            "role": user_db.role.name if user_db.role else None,
         }
     )
     user_db_data["access_token"] = access_token
-
     return JSONResponse(user_db_data, status=HTTPStatus.HTTP_200_OK)
 
 
 async def verify_email(request: Request):
     """Send verification code email and store it in cache. TODO: verify mailbox validity."""
-    if await send_email_with_redis_code(request):
-        return HTTPResponse("Email has been sent, please check")
-    return HTTPResponse("Email send failed", status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR)
+    return await send_email_with_redis_code(request)
 
 
-async def send_email_with_redis_code(request: Request, data: Dict = None):
+async def send_email_with_redis_code(request: Request):
     """Send verification code to email and store in cache. TODO: validate with Schema."""
-    req_data: Dict = request.json if not data else data
-    if req_data is None:
+    if not request.json:
         raise BadRequest("Request body is required")
-    EmailValidator.model_validate({"email": req_data.get("email")})
+    email = EmailValidator.model_validate(request.json, extra="ignore").email
     code = generate_code(5)
-    asyncio.create_task(send_verify_code(req_data.get("email"), code))
+    email_cache_key = f"{settings.EMAIL_CODE_REDIS}_{email}"
 
-    email_code_register = f"{settings.EMAIL_CODE_REDIS}_{req_data.get('email')}"
+    # Check cache
     redis: Redis = request.app.ctx.redis
-    await redis.set(email_code_register, code, ex=600)
-    return True
+    if await redis.get(email_cache_key) is not None:
+        return HTTPResponse("Email has been sent, please check your email", status=HTTPStatus.HTTP_429_TOO_MANY_REQUESTS)
+    await redis.set(email_cache_key, code, ex=settings.USER_REGISTER_EMAIL_VERIFY_CODE_TTL, nx=True)
+
+    # Send verification code to email in background
+    async def _send_and_cleanup(email, code):
+        ok = await send_verify_code(email, code)
+        if not ok:
+            await redis.delete(email_cache_key)
+            return False
+        return True
+
+    # asyncio.create_task(_send_and_cleanup(email, code))  # no need to use asyncio, await is enough
+
+    if await _send_and_cleanup(email, code):
+        return HTTPResponse("Email has been sent, please check your email")
+    return HTTPResponse("Email send failed, please try again", status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UserViewSet(BaseViewSet):

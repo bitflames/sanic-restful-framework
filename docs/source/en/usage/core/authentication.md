@@ -41,7 +41,7 @@ jwt = setup_auth(
     login_path="login",
     # Other keyword arguments are passed to sanic_jwt.Initialize
 )
-app.config.update({"JWT": jwt})
+app.ctx.jwt = jwt  # register_auth_urls() mounts it the same way
 ```
 
 `setup_auth()` has fixed usage of SRF's own `authenticate` and `retrieve_user`, do not pass these names as keyword arguments again, otherwise it will cause duplicate parameter errors. If `secret` is missing, it throws `ServerError("secret is required")`.
@@ -124,19 +124,21 @@ Registration and verification email rely on:
 - `settings.EMAIL_CODE_REDIS` (or `app.config.EMAIL_CODE_REDIS`), default is `"EMAIL_CODE"`; Redis key format is `EMAIL_CODE_{email}`
 - Environment variables `FROM_EMAIL`, `SMTP_SERVER`, `SMTP_PORT`, `PASSWORD`
 
-The underlying function signature for sending emails is:
+Email-related APIs:
 
 ```python
-from srf.tools.email import send_email
+from srf.tools.email import send_email, send_verify_code
 
-ok = await send_email(
+# Send mail: synchronous SMTP (do not call it for long directly on the event loop)
+ok = send_email(
     to_email="user@example.com",
     subject="Verification Code",
     content="Your verification code is: 12345",
 )
-```
 
-Currently, `send_email()` internally uses synchronous `smtplib`, although the function is declared as asynchronous, the sending process will block the event loop; in production environments, it should be executed in a thread executor or asynchronous task queue.
+# Registration verification codes only: fixed subject/body; runs send_email via asyncio.to_thread
+ok = await send_verify_code("user@example.com", "12345")
+```
 
 ## Security Considerations
 

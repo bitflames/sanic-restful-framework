@@ -91,7 +91,7 @@ SOCIAL_CONFIG = {
 
 SOCIAL_LOGIN_COOKIE_KEY = "oauth_state"
 SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE = 600  # seconds
-
+USER_REGISTER_EMAIL_VERIFY_CODE_TTL = 60  # seconds
 
 # Redis key prefix for email verification codes
 EMAIL_CODE_REDIS = "EMAIL_CODE"

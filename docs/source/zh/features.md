@@ -138,9 +138,10 @@ SRF 提供了多种过滤器，可以组合使用：
 
 #### 邮件发送
 
-- 基于标准库 `smtplib` 的同步 SMTP 发送（`srf/tools/email.py`）
-- `send_email(to_email, subject, content)` 发送纯文本邮件
-- 配置灵活，易于使用
+- 基于标准库 `smtplib` 的同步 SMTP（`srf/tools/email.py`）
+- `send_email(to_email, subject, content)` 发送纯文本邮件（同步）
+- `send_verify_code(to_email, code)` 异步封装，内部 `asyncio.to_thread`，不阻塞事件循环
+- 注册验证码支持 Redis TTL、重发冷却与发送失败清理
 
 
 

@@ -45,7 +45,7 @@ jwt = setup_auth(
     login_path="login",
     # 其余关键字参数传给 sanic_jwt.Initialize
 )
-app.config.update({"JWT": jwt})
+app.ctx.jwt = jwt  # register_auth_urls() 也会这样挂载
 ```
 
 `setup_auth()` 已固定使用 SRF 自带的 `authenticate` 和 `retrieve_user`，不要再
@@ -138,20 +138,21 @@ class ProductViewSet(BaseViewSet):
   Redis key 形如 `EMAIL_CODE_{email}`
 - `FROM_EMAIL`、`SMTP_SERVER`、`SMTP_PORT`、`PASSWORD` 环境变量
 
-发送邮件的底层函数签名为：
+发送邮件相关 API：
 
 ```python
-from srf.tools.email import send_email
+from srf.tools.email import send_email, send_verify_code
 
-ok = await send_email(
+# 发送邮件：同步 SMTP（不要在事件循环里长时间直接调用）
+ok = send_email(
     to_email="user@example.com",
     subject="验证码",
     content="您的验证码是：12345",
 )
-```
 
-当前 `send_email()` 内部使用同步 `smtplib`，虽然函数声明为异步，但发送过程
-会阻塞事件循环；生产环境应放入线程执行器或异步任务队列。
+# 注册验证码专用：固定主题/正文，内部 asyncio.to_thread 调用 send_email
+ok = await send_verify_code("user@example.com", "12345")
+```
 
 ## 安全注意事项
 

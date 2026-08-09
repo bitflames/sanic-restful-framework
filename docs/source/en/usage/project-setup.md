@@ -312,7 +312,7 @@ Only call `setup_auth` directly when you need to customize `sanic-jwt` parameter
 from srf.auth.viewset import setup_auth
 
 jwt = setup_auth(app, url_prefix="/api/auth", secret=config.JWT_SECRET)
-app.config.update({"JWT": jwt})
+app.ctx.jwt = jwt
 ```
 
 ### Social Login Configuration

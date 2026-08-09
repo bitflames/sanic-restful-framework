@@ -123,7 +123,7 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
 - [ ] 登录错误响应统一，避免账户枚举
 - [ ] 过滤字段严格白名单
 - [ ] PATCH 支持真正的局部更新
-- [ ] 邮件发送不再阻塞事件循环
+- [x] 邮件发送不再阻塞事件循环（`send_verify_code` + `asyncio.to_thread`）
 
 ---
 

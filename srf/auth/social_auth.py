@@ -271,7 +271,7 @@ async def login_by_code(request: Request):
     if user_db is None:
         raise NotFound("User not found")
 
-    authentication = Authentication(request.app, request.app.config.JWT.config)
+    authentication = Authentication(request.app, request.app.ctx.jwt.config)
     user_data = UserSchemaReader.model_validate(user_db).model_dump(
         by_alias=True,
         mode="json",

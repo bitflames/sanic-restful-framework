@@ -122,7 +122,7 @@ Format: `Major.Version.Patch`
 - [ ] Unify login error responses to avoid account enumeration
 - [ ] Strict whitelist for filter fields
 - [ ] Support PATCH for real partial updates
-- [ ] Email sending no longer blocks the event loop
+- [x] Email sending no longer blocks the event loop (`send_verify_code` + `asyncio.to_thread`)
 
 ---
 

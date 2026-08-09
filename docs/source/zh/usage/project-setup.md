@@ -312,7 +312,7 @@ register_auth_urls(app, prefix="/api/auth")
 from srf.auth.viewset import setup_auth
 
 jwt = setup_auth(app, url_prefix="/api/auth", secret=config.JWT_SECRET)
-app.config.update({"JWT": jwt})
+app.ctx.jwt = jwt
 ```
 
 ### 社交登录配置
