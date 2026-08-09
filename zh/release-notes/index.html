@@ -2196,7 +2196,7 @@
 <li>[ ] 登录错误响应统一，避免账户枚举</li>
 <li>[ ] 过滤字段严格白名单</li>
 <li>[ ] PATCH 支持真正的局部更新</li>
-<li>[ ] 邮件发送不再阻塞事件循环</li>
+<li>[x] 邮件发送不再阻塞事件循环（<code>send_verify_code</code> + <code>asyncio.to_thread</code>）</li>
 </ul>
 <hr />
 <h3 id="python">支持的 Python 版本<a class="headerlink" href="#python" title="Permanent link">&para;</a></h3>

@@ -2390,9 +2390,10 @@
 </ul>
 <h5 id="email-sending">Email Sending<a class="headerlink" href="#email-sending" title="Permanent link">&para;</a></h5>
 <ul>
-<li>Synchronous SMTP sending based on standard library <code>smtplib</code> (<code>srf/tools/email.py</code>)</li>
-<li><code>send_email(to_email, subject, content)</code> sends plain text emails</li>
-<li>Flexible configuration, easy to use</li>
+<li>Synchronous SMTP via standard-library <code>smtplib</code> (<code>srf/tools/email.py</code>)</li>
+<li><code>send_email(to_email, subject, content)</code> sends plain-text emails (sync)</li>
+<li><code>send_verify_code(to_email, code)</code> is an async wrapper using <code>asyncio.to_thread</code> so the event loop is not blocked</li>
+<li>Registration codes support Redis TTL, resend cooldown, and cleanup on send failure</li>
 </ul>
 <h3 id="design-philosophy">Design Philosophy<a class="headerlink" href="#design-philosophy" title="Permanent link">&para;</a></h3>
 <h4 id="convention-over-configuration">Convention Over Configuration<a class="headerlink" href="#convention-over-configuration" title="Permanent link">&para;</a></h4>
