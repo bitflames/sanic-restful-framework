@@ -1,5 +1,5 @@
 from math import ceil
-from typing import Any, Dict, Protocol, TypeVar, runtime_checkable
+from typing import Any, Dict, TypeVar
 
 from pydantic import BaseModel, field_validator
 from sanic.request import Request
@@ -26,17 +26,27 @@ class PaginationResult(BaseModel):
     results: list[Any]
 
 
-@runtime_checkable
-class BasePagination(Protocol):
+class BasePagination:
+    """
+    Base class for pagination styles (DRF-style).
+
+    Custom pagination must subclass this and implement the methods that raise
+    NotImplementedError. Inheritance is the supported extension path.
+    """
 
     @classmethod
-    def from_queryset(self, queryset: QuerySet[T], request: Request) -> "BasePagination": ...
+    def from_queryset(cls, queryset: QuerySet[T], request: Request) -> "BasePagination":
+        raise NotImplementedError("from_queryset() must be implemented.")
 
-    async def paginate(self, sch_model: BaseModel = None) -> PaginationResult: ...
+    async def paginate(self, sch_model: BaseModel = None) -> PaginationResult:
+        raise NotImplementedError("paginate() must be implemented.")
 
-    async def to_dict(self, sch_model: BaseModel = None) -> Dict[str, Any]: ...
+    async def to_dict(self, sch_model: BaseModel = None) -> Dict[str, Any]:
+        result = await self.paginate(sch_model=sch_model)
+        return result.model_dump(by_alias=True)
 
-    def num_pages(self, total_count: int = None) -> int: ...
+    def num_pages(self, total_count: int) -> int:
+        raise NotImplementedError("num_pages() must be implemented.")
 
 
 class PageNumberPagination(BasePagination):
@@ -104,7 +114,7 @@ class PageNumberPagination(BasePagination):
         result = await self.paginate(sch_model=sch_model)
         return result.model_dump(by_alias=True)
 
-    def num_pages(self, total_count: int = None):
+    def num_pages(self, total_count: int):
         """Return the total number of pages."""
 
         total_count = total_count or 0

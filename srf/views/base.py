@@ -111,7 +111,9 @@ class GenericAPIView(HTTPMethodView):
     search_fields: list = Field(default_factory=list)
 
     def __init__(self, *args, **kwargs):
-        self.filter_class = getattr(type(self), "filter_class", settings.DEFAULT_FILTERS)
+        cls = type(self)
+        self.filter_class = getattr(cls, "filter_class", settings.DEFAULT_FILTERS)
+self.permission_classes = getattr(cls, "permission_classes", settings.DEFAULT_PERMISSION_CLASSES)
         super().__init__(*args, **kwargs)
 
     def get_schema(self, request: Request, *args, is_safe=False, **kwargs):
@@ -139,24 +141,27 @@ class GenericAPIView(HTTPMethodView):
 
         return None
 
-    async def check_object_permissions(self, request: Request, obj):
+    async def check_object_permissions(self, request: Request, obj: TorModel):
         """
-        Check object-level permissions
-        Subclasses should override this method to implement specific permission checking logic
-
-        Raise Forbidden if permission is not permitted
+        Check object-level permissions.
+        Permission classes are used as callables on the class (no instantiation).
+        Supports both sync and async has_object_permission().
         """
-        ...
+        for permission_class in self.permission_classes:
+            result = permission_class.has_object_permission(request, self, obj)
+            if asyncio.iscoroutine(result):
+                result = await result
+            if not result:
+                raise Forbidden(message="Forbidden")
 
     async def check_permissions(self, request: Request):
         """
-        Check common-level permissions
-        Subclasses should override this method to implement specific permission checking logic.
+        Check view-level permissions.
+        Permission classes are used as callables on the class (no instantiation).
         Supports both sync and async has_permission().
         """
-        for permission_class in getattr(self, "permission_classes", []):
-            perm = permission_class()
-            result = perm.has_permission(request)
+        for permission_class in self.permission_classes:
+            result = permission_class.has_permission(request, self)
             if asyncio.iscoroutine(result):
                 result = await result
             if not result:
@@ -169,7 +174,7 @@ class GenericAPIView(HTTPMethodView):
         if instance is None:
             raise NotFound(message=f"Object with id={id} not found")
 
-        # await self.check_object_permissions(request, instance)
+        await self.check_object_permissions(request, instance)
 
         return instance
 

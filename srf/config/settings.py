@@ -12,6 +12,7 @@ from srf.filters.filter import (
     SearchFilter,
 )
 from srf.paginator import PageNumberPagination
+from srf.permission.permission import AllowAny
 
 PAGINATION_CLASS = PageNumberPagination
 
@@ -67,6 +68,9 @@ DEFAULT_FILTERS = [
     QueryParamFilter,
     OrderingFactory,
 ]
+
+# Used when a ViewSet does not declare permission_classes
+DEFAULT_PERMISSION_CLASSES = (AllowAny,)
 
 
 class EmailConfig:
