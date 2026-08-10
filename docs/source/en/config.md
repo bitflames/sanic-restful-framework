@@ -68,6 +68,16 @@ DEFAULT_FILTERS = [
 
 Each `GenericAPIView` / `BaseViewSet` instance initializes with `settings.DEFAULT_FILTERS` if no `filter_class` is declared on the class.
 
+### Permissions
+
+```python
+from srf.permission.permission import AllowAny
+
+DEFAULT_PERMISSION_CLASSES = (AllowAny,)
+```
+
+If a ViewSet does not declare `permission_classes`, `settings.DEFAULT_PERMISSION_CLASSES` is used; a class-level declaration takes precedence.
+
 ### Pagination
 
 `PAGINATION_CLASS = PageNumberPagination` is defined, but the built-in `list()` currently does not read it, instead directly using `PageNumberPagination`. There is currently no global `PAGE_SIZE` or `MAX_PAGE_SIZE` configuration; the default values are in the pagination class.

@@ -1,11 +1,14 @@
 # Permissions
 
-The permission classes in SRF are used to control access to ViewSets. The current version automatically executes view-level permissions; object-level permissions provide an extension interface, but require the application to implement it.
+The permission classes in SRF are used to control access to ViewSets.
+View-level checks run in `check_permissions()` before the handler; 
+object-level checks run in `check_object_permissions()` from `get_object()` (retrieve / update / destroy and custom actions that call `get_object()`).
 
 ## Built-in Permission Classes
 
 ```python
 from srf.permission.permission import (
+    AllowAny,
     BasePermission,
     IsAuthenticated,
     IsRoleAdminUser,
@@ -13,6 +16,7 @@ from srf.permission.permission import (
 )
 ```
 
+- `AllowAny`: Always allow (default in `settings.DEFAULT_PERMISSION_CLASSES`).
 - `IsAuthenticated`: `request.ctx.user` exists and the user's `is_active` is true.
 - `IsRoleAdminUser`: The name of the role associated with the current user is equal to `"admin"`.
 - `IsSafeMethodOnly`: Only allows GET, HEAD, OPTIONS.
@@ -28,7 +32,9 @@ class OrderViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated,)
 ```
 
-`BaseViewSet.check_permissions()` will instantiate each class in order and call `has_permission(request)`; both synchronous and asynchronous return values are supported. If any result is false, it throws 403 Forbidden. When the authentication middleware rejects a request due to missing or invalid Token, it returns 401.
+`BaseViewSet.check_permissions()` calls `has_permission(request, view)` on each class **without instantiating**; both synchronous and asynchronous return values are supported. If any result is false, it throws 403 Forbidden. When the authentication middleware rejects a request due to missing or invalid Token, it returns 401.
+
+Permission methods are `@staticmethod`s. Inheriting `BasePermission` is recommended but not required; any class with the same static methods works (duck typing).
 
 ## Custom View-Level Permissions
 
@@ -37,19 +43,21 @@ from srf.permission.permission import BasePermission
 
 
 class IsEditor(BasePermission):
-    def has_permission(self, request, view=None):
+    @staticmethod
+    def has_permission(request, view=None):
         user = getattr(request.ctx, "user", None)
         role = getattr(user, "role", None)
         return role is not None and role.name == "editor"
 ```
 
-The `view` is an optional parameter. Although the base class signature of `BasePermission` includes `view`, the current `BaseViewSet` only passes `request`.
+`view` is optional; `BaseViewSet` passes the current view instance.
 
 Asynchronous checks are also available:
 
 ```python
 class HasActiveSubscription(BasePermission):
-    async def has_permission(self, request, view=None):
+    @staticmethod
+    async def has_permission(request, view=None):
         user = getattr(request.ctx, "user", None)
         return user is not None and await Subscription.filter(
             user_id=user.id, active=True
@@ -65,27 +73,34 @@ import asyncio
 
 from sanic.exceptions import Forbidden
 from srf.permission.permission import IsAuthenticated, IsRoleAdminUser
+from srf.views import BaseViewSet
 
 
 class ProductViewSet(BaseViewSet):
-    permission_classes = (IsAuthenticated,)
-    
-    def get_permissions(self):
-        """Return different permission classes based on the operation"""
-        if self.action in ['update', 'destroy']:
-            # Update and delete require admin privileges
-            return [IsAuthenticated(), IsRoleAdminUser()]
-        elif self.action == 'create':
-            # Create only requires login
-            return [IsAuthenticated()]
-        else:
-            # List and detail do not require permissions
-            return []
+    async def check_permissions(self, request):
+        if request.method.upper() in ("GET", "HEAD", "OPTIONS"):
+            return
+
+        classes = (
+            (IsAuthenticated,)
+            if request.method.upper() == "POST"
+            else (IsAuthenticated, IsRoleAdminUser)
+        )
+        for permission_class in classes:
+            result = permission_class.has_permission(request, self)
+            if asyncio.iscoroutine(result):
+                result = await result
+            if not result:
+                raise Forbidden(message="Forbidden")
 ```
 
 ## Object-Level Permissions
 
-`BasePermission.has_object_permission(request, view, obj)` defines the object-level interface. Adding it to `permission_classes` **will not** automatically protect objects.
+`BasePermission.has_object_permission(request, view, obj)` defines the object-level interface.
+`get_object()` calls `check_object_permissions()`, which invokes
+`has_object_permission(request, view, obj)` on each class (no instantiation).
+
+Object-level checks are not applied per item to list results. For list interfaces, limit data in `queryset`.
 
 ### Basic Usage
 
@@ -93,30 +108,17 @@ class ProductViewSet(BaseViewSet):
 class IsOwner(BasePermission):
     """Object-level permission: Check if it is the owner"""
 
-    def has_object_permission(self, request, view, obj):
+    @staticmethod
+    def has_object_permission(request, view=None, obj=None):
         # Users can only view, modify, or delete their own objects
         return obj.owner_id == request.ctx.user.id
 
-class OrderViewSet(BaseViewSet):
-    permission_classes = (IsAuthenticated, IsOwnerOrAdmin)
 
-    async def check_object_permissions(self, request, obj):
-        for permission_class in self.permission_classes:
-            checker = getattr(
-                permission_class(), "has_object_permission", None
-            )
-            if checker is None:
-                continue
-            result = checker(request, self, obj)
-            if asyncio.iscoroutine(result):
-                result = await result
-            if not result:
-                raise Forbidden(message="Forbidden")
+class OrderViewSet(BaseViewSet):
+    permission_classes = (IsAuthenticated, IsOwner)
 ```
 
-The built-in `get_object()` calls this hook after obtaining the object. Therefore, standard detail, update, delete operations and custom actions that call `get_object()` are protected.
-
-Object-level checks are not applied per item to list results. For list interfaces, limit data in `queryset`:
+Limit list visibility via `queryset`:
 
 ```python
 class OrderViewSet(BaseViewSet):
@@ -143,7 +145,7 @@ from srf.views.decorators import action
 
 @action(methods=["post"], detail=True, url_path="approve")
 async def approve(self, request, pk):
-    if not IsRoleAdminUser().has_permission(request):
+    if not IsRoleAdminUser.has_permission(request, self):
         raise Forbidden(message="Administrator privileges required")
     product = await self.get_object(request, pk)
     product.is_approved = True

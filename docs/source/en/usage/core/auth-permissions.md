@@ -19,7 +19,8 @@ class ProductViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated,)
 ```
 
-Before the request reaches the ViewSet, `BaseViewSet.check_permissions()` will instantiate `permission_classes` in sequence and call `has_permission(request)`. If it fails, it raises a 403 error. If the authentication middleware detects a missing or invalid Bearer Token first, it returns a 401.
+Before the request reaches the ViewSet, `BaseViewSet.check_permissions()` calls `has_permission(request, view)` on each class **without instantiating**. If it fails, it raises a Forbidden error. 
+If the authentication middleware detects a missing or invalid Bearer Token first, it returns a 401.
 
 ## Setting Permissions by HTTP Method
 
@@ -43,7 +44,7 @@ class ProductViewSet(BaseViewSet):
             else (IsAuthenticated, IsRoleAdminUser)
         )
         for permission_class in classes:
-            result = permission_class().has_permission(request)
+            result = permission_class.has_permission(request, self)
             if asyncio.iscoroutine(result):
                 result = await result
             if not result:
@@ -52,42 +53,23 @@ class ProductViewSet(BaseViewSet):
 
 ## Object-Level Permissions
 
-Currently, `BaseViewSet.check_object_permissions()` is an empty hook and does not automatically call the permission class's `has_object_permission()`. When object-level checks are needed, they must be wired in the ViewSet:
+`BaseViewSet.check_object_permissions()` calls `has_object_permission(request, view, obj)` on each class. `get_object()` triggers this check, so `retrieve` / `update` / `destroy` and custom actions that call `get_object()` are covered. Use `@staticmethod` for custom object permissions:
 
 ```python
-import asyncio
-
-from sanic.exceptions import Forbidden
 from srf.permission.permission import BasePermission, IsAuthenticated
 
 
 class IsOwner(BasePermission):
-    # The framework only passes request when calling view-level permissions, so view must be optional.
-    def has_permission(self, request, view=None):
-        return True
-
-    def has_object_permission(self, request, view, obj):
+    @staticmethod
+    def has_object_permission(request, view=None, obj=None):
         return obj.user_id == request.ctx.user.id
 
 
 class OrderViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated, IsOwner)
-
-    async def check_object_permissions(self, request, obj):
-        for permission_class in self.permission_classes:
-            checker = getattr(
-                permission_class(), "has_object_permission", None
-            )
-            if checker is None:
-                continue
-            result = checker(request, self, obj)
-            if asyncio.iscoroutine(result):
-                result = await result
-            if not result:
-                raise Forbidden(message="Forbidden")
 ```
 
-This hook is called by `get_object()`, so `retrieve`, `update`, `destroy`, and custom actions that explicitly call `get_object()` will perform the check. The list interface still needs to filter the `queryset` to limit visible data.
+List endpoints still need to filter `queryset` to limit visible data.
 
 ## Custom Actions
 
@@ -99,9 +81,9 @@ from srf.permission.permission import IsRoleAdminUser
 from srf.views.decorators import action
 
 
-@action(methods=["post"], detail=True)
+@action(detail=True, methods=["post"], url_path="publish")
 async def publish(self, request, pk):
-    if not IsRoleAdminUser().has_permission(request):
+    if not IsRoleAdminUser.has_permission(request, self):
         raise Forbidden(message="Requires admin privileges")
     product = await self.get_object(request, pk)
     # ...
@@ -110,6 +92,6 @@ async def publish(self, request, pk):
 ## Notes
 
 - `NON_AUTH_ENDPOINTS` matches only the last part of the URL; see [Authentication Middleware](../advanced/middleware/auth-middleware.md) for details.
-- Custom `has_permission` should use the signature `has_permission(self, request, view=None)`.
-- Object-level permissions must be explicitly wired; do not assume they take effect just by placing object permission classes in `permission_classes`.
+- Custom permissions should use `@staticmethod` with signatures  `has_permission(request, view=None)` /  `has_object_permission(request, view=None, obj=None)`.
+- List visibility must still be enforced by scoping `get_queryset()` (or `queryset`).
 - For public interfaces, both authentication exemptions and ViewSet permissions need to be correctly configured.

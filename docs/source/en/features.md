@@ -63,6 +63,7 @@ Based on class-based permission system, supports view-level and object-level per
 
 **Built-in Permission Classes:**
 
+- `AllowAny`: Always allow (default when `permission_classes` is undeclared)
 - `IsAuthenticated`: User must be authenticated
 - `IsRoleAdminUser`: User must be an admin role
 - `IsSafeMethodOnly`: Only allow safe HTTP methods (GET, HEAD, OPTIONS)

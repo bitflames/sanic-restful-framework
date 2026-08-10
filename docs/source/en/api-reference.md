@@ -21,26 +21,30 @@ class GenericAPIView(BaseViewSet):
     search_fields = []               # search fields, read by SearchFilter
     filter_fields = {}               # field mapping for filtering, read by FilterClass
     ordering_fields = {}             # field mapping for ordering, read by OrderingFactory
-
-    # Core properties
-    @property
-    def queryset(self):
-        raise NotImplementedError
+    queryset = None                  # 设置 QuerySet / property，或重写 get_queryset()
 
     def get_schema(self, request, *args, is_safe=False, **kwargs):
         """Returns self.schema by default; can be customized based on request method"""
         return getattr(self, "schema", None)
 
-    async def check_permissions(self, request):
-        """Check view-level permissions (optional)"""
+    def get_queryset(self):
+        """Return a per-request QuerySet from self.queryset (clones with .all() when needed)."""
         ...
 
-    def check_object_permissions(self, request, obj):
-        """Check object-level permissions (optional), raise Forbidden if permission is not permitted"""
+    def filter_queryset(self, queryset):
+        """Apply filter_class backends to queryset (used by list())."""
+        ...
+
+    async def check_permissions(self, request):
+        """Call has_permission on each permissions (optional); raise Forbidden if denied"""
+        ...
+
+    async def check_object_permissions(self, request, obj):
+        """Call has_object_permission on each entry; raise Forbidden if denied"""
         ...
 
     async def get_object(self, request, id: int):
-        """Get an object by id and call object-level permission hooks"""
+        """Lookup via get_queryset(), then check_object_permissions()"""
         ...
 ```
 
@@ -121,22 +125,23 @@ class ListModelMixin:
 from srf.views.decorators import action
 
 @action(
-    methods: list = ["get"],     # list of HTTP methods
-    detail: bool = False,        # whether it's a detail-level action
-    url_path: str = None,        # URL path
-    url_name: str = None         # route name
+    *,
+    detail: bool = False,                 # detail-level action (needs pk)
+    methods: Sequence[str] = ("GET",),    # HTTP methods
+    url_path: str | None = None,          # default: "/<method name>"
+    url_name: str | None = None,          # route name (default: method name)
 )
 ```
 
 **Example**:
 
 ```python
-@action(methods=["get"], detail=False)
+@action(methods=["get"], detail=False, url_path="featured")
 async def featured(self, request):
     """Collection-level action"""
     pass
 
-@action(methods=["post"], detail=True)
+@action(methods=["post"], detail=True, url_path="publish")
 async def publish(self, request, pk):
     """Detail-level action"""
     pass
@@ -194,11 +199,13 @@ from srf.permission.permission import BasePermission
 class BasePermission:
     """Base class for permissions"""
 
-    def has_permission(self, request, view=None) -> bool:
+    @staticmethod
+    def has_permission(request, view=None) -> bool:
         """View-level permission check"""
         return True
 
-    def has_object_permission(self, request, view=None, obj=None) -> bool:
+    @staticmethod
+    def has_object_permission(request, view=None, obj=None) -> bool:
         """Object-level permission check"""
         return True
 ```
@@ -207,6 +214,7 @@ class BasePermission:
 
 ```python
 from srf.permission.permission import (
+    AllowAny,             # Always allow (default in DEFAULT_PERMISSION_CLASSES)
     IsAuthenticated,      # Requires login
     IsRoleAdminUser,      # Requires admin role
     IsSafeMethodOnly      # Allows only safe methods
@@ -215,12 +223,35 @@ from srf.permission.permission import (
 
 ## Pagination
 
+### BasePagination
+
+```python
+from srf.paginator import BasePagination
+
+class BasePagination:
+    """DRF-style base. Subclass and implement methods that raise NotImplementedError."""
+
+    @classmethod
+    def from_queryset(cls, queryset, request):
+        raise NotImplementedError
+
+    async def paginate(self, sch_model=None):
+        raise NotImplementedError
+
+    async def to_dict(self, sch_model=None):
+        """Default: await paginate() then model_dump."""
+        ...
+
+    def num_pages(self, total_count=None):
+        raise NotImplementedError
+```
+
 ### PageNumberPagination
 
 ```python
 from srf.paginator import PageNumberPagination
 
-class PageNumberPagination:
+class PageNumberPagination(BasePagination):
     """Paginator."""
 
     MAX_PAGE_SIZE: int = 100
@@ -443,6 +474,7 @@ settings.set_app(app)
 settings.JWT_ACCESS_TOKEN_EXPIRES
 settings.NON_AUTH_ENDPOINTS
 settings.DEFAULT_FILTERS
+settings.DEFAULT_PERMISSION_CLASSES
 settings.EMAIL_CODE_REDIS      # Default "EMAIL_CODE"
 settings.REQUEST_LIMITERS      # Default []
 settings.HEALTH_CHECK_LIST     # Default []
@@ -547,7 +579,7 @@ class ProductViewSet(BaseViewSet):
             return ProductSchemaReader
         return ProductSchemaWriter
     
-    @action(methods=["get"], detail=False)
+    @action(detail=False, methods=["get"], url_path="featured")
     async def featured(self, request):
         products = await Product.filter(stock__gt=0).limit(10)
         schema = self.get_schema(request, is_safe=True)

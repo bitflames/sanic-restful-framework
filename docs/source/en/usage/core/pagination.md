@@ -15,7 +15,7 @@ Pagination divides large data into multiple pages, returning only one page of da
 
 ## PageNumberPagination
 
-`PageNumberPagination` is the pagination handler class in SRF.
+`PageNumberPagination` is the pagination handler class in SRF. Custom styles should subclass `BasePagination` (or `PageNumberPagination`) and implement the methods that raise `NotImplementedError` on the base class (`from_queryset`, `paginate`, `num_pages`). `to_dict` has a default implementation on `BasePagination`.
 
 ### Basic Usage
 

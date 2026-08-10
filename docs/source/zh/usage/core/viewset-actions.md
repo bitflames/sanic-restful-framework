@@ -37,10 +37,11 @@ class ProductViewSet(BaseViewSet):
 
 ```python
 action(
-    methods: list[str] | None = None,  # None 时使用 ["get"]
-    detail: bool | None = None,         # True 为详情级；None/False 为集合级
-    url_path: str | None = None,        # 默认 "/<方法名>"
-    url_name: str | None = None,        # 默认方法名
+    *,
+    detail: bool = False,                 # True 为详情级；False 为集合级
+    methods: Sequence[str] = ("GET",),    # 默认 HTTP 方法
+    url_path: str | None = None,          # 默认："/<方法名>"
+    url_name: str | None = None,          # 默认：方法名
     **kwargs,
 )
 ```
@@ -49,10 +50,10 @@ action(
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `methods` | list | `["get"]` | HTTP 方法列表，如 `["get"]`, `["post"]`, `["get", "post"]` |
-| `detail` | bool 或 None | `None` | `True` 为详情级操作（需要 pk），`None`/`False` 为集合级操作 |
-| `url_path` | str | 方法名 | 自定义 URL 路径 |
-| `url_name` | str | 方法名 | 路由名称，用于 URL 反向解析 |
+| `methods` | Sequence[str] | `("GET",)` | HTTP 方法列表，如 `["get"]`, `["post"]`, `["get", "post"]`（注册时大小写不敏感） |
+| `detail` | bool | `False` | `True` 为详情级操作（需要 pk），`False` 为集合级操作 |
+| `url_path` | str \| None | `/<方法名>` | 自定义 URL 路径段 |
+| `url_name` | str \| None | 方法名 | 路由名称，用于 URL 反向解析 |
 
 ### 集合级操作 vs 详情级操作
 
@@ -229,10 +230,10 @@ async def change_status(self, request, pk):
 
 URL：`POST /api/products/<pk>/change-status`
 
-如果不指定 `url_path`，默认直接使用 Python 方法名，不会转换下划线：
+省略 `url_path` 时默认为 `/<方法名>`（下划线不会转换）：
 
 ```python
-@action(methods=["post"], detail=True)
+@action(detail=True, methods=["post"])
 async def change_status(self, request, pk):
     """更改状态"""
     pass
@@ -245,7 +246,7 @@ URL：`POST /api/products/<pk>/change_status`
 使用 `url_name` 参数自定义路由名称，用于 URL 反向解析：
 
 ```python
-@action(methods=["get"], detail=False, url_name="featured_list")
+@action(detail=False, methods=["get"], url_path="featured", url_name="featured_list")
 async def featured(self, request):
     """推荐列表"""
     pass
@@ -266,8 +267,7 @@ from sanic.exceptions import Forbidden
 async def approve(self, request, pk):
     """审核产品（仅管理员）"""
     # 检查管理员权限
-    perm = IsRoleAdminUser()
-    if not perm.has_permission(request):
+    if not IsRoleAdminUser.has_permission(request, self):
         raise Forbidden("需要管理员权限")
     
     product = await self.get_object(request, pk)

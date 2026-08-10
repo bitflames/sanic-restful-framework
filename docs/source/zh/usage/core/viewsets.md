@@ -47,27 +47,27 @@ class ProductViewSet(BaseViewSet):
 
 ### 必需属性和方法
 
-#### 1. `queryset` 属性
+#### 1. `queryset` / `get_queryset`
 
-定义数据查询集，必须返回 Tortoise ORM 查询对象。
+提供 Tortoise ORM 查询集。按请求做数据范围限制时优先重写 `get_queryset()`；也可以设置名为 `queryset` 的类属性或 `@property`，默认的 `get_queryset()` 会读取它（若是 `QuerySet` 会用 `.all()` 克隆）。
+
+`list()` 使用 `filter_queryset(self.get_queryset())`。`get_object()` 与 `perform_create()` 同样走 `get_queryset()`。
 
 ```python
-@property
-def queryset(self):
-    """返回所有产品"""
-    return Product.all()
+# 类属性
+queryset = Product.all()
 
-# 带过滤的查询集
+# 或 property（仍由 get_queryset 读取）
 @property
 def queryset(self):
     """只返回已发布的产品"""
     return Product.filter(is_published=True)
 
-# 带预加载的查询集
-@property
-def queryset(self):
-    """预加载关联对象"""
-    return Product.all().prefetch_related("category", "tags")
+# 或重写 get_queryset，按请求限定范围
+def get_queryset(self):
+    return Product.filter(owner_id=self.request.ctx.user.id).prefetch_related(
+        "category", "tags"
+    )
 ```
 
 #### 2. `get_schema` 方法
@@ -422,7 +422,7 @@ class ProductViewSet(BaseViewSet):
 - 示例：获取推荐列表、批量操作
 
 ```python
-@action(methods=["get"], detail=False)
+@action(detail=False, methods=["get"], url_path="featured")
 async def featured(self, request):
     """集合级操作"""
     # 不需要 pk
@@ -436,7 +436,7 @@ async def featured(self, request):
 - 示例：发布、激活、归档
 
 ```python
-@action(methods=["post"], detail=True)
+@action(detail=True, methods=["post"], url_path="publish")
 async def publish(self, request, pk):
     """详情级操作"""
     # 需要 pk 参数

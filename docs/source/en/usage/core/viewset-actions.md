@@ -37,10 +37,11 @@ class ProductViewSet(BaseViewSet):
 
 ```python
 action(
-    methods: list[str] | None = None,  # Default is ["get"]
-    detail: bool | None = None,         # True for detail-level; None/False for collection-level
-    url_path: str | None = None,        # Default "/<method name>"
-    url_name: str | None = None,        # Default method name
+    *,
+    detail: bool = False,                 # True for detail-level; False for collection-level
+    methods: Sequence[str] = ("GET",),    # Default HTTP methods
+    url_path: str | None = None,          # Default: "/<method name>"
+    url_name: str | None = None,          # Default: method name
     **kwargs,
 )
 ```
@@ -49,10 +50,10 @@ action(
 
 | Parameter | Type | Default | Description |
 |---------|------|---------|-------------|
-| `methods` | list | `["get"]` | List of HTTP methods, e.g., `["get"]`, `["post"]`, `["get", "post"]` |
-| `detail` | bool or None | `None` | `True` for detail-level operation (requires pk), `None`/`False` for collection-level operation |
-| `url_path` | str | Method name | Custom URL path |
-| `url_name` | str | Method name | Route name, used for URL reverse resolution |
+| `methods` | Sequence[str] | `("GET",)` | HTTP methods, e.g. `["get"]`, `["post"]`, `["get", "post"]` (case-insensitive when registered) |
+| `detail` | bool | `False` | `True` for detail-level operation (requires pk), `False` for collection-level |
+| `url_path` | str \| None | `/<method name>` | Custom URL path segment |
+| `url_name` | str \| None | Method name | Route name, used for URL reverse resolution |
 
 ### Collection-Level Operation vs Detail-Level Operation
 
@@ -229,10 +230,10 @@ async def change_status(self, request, pk):
 
 URL: `POST /api/products/<pk>/change-status`
 
-If `url_path` is not specified, the default is the Python method name, without converting underscores:
+If `url_path` is omitted, the default is `/<method name>` (underscores are kept):
 
 ```python
-@action(methods=["post"], detail=True)
+@action(detail=True, methods=["post"])
 async def change_status(self, request, pk):
     """Change status"""
     pass
@@ -245,7 +246,7 @@ URL: `POST /api/products/<pk>/change_status`
 Use the `url_name` parameter to customize the route name for URL reverse resolution:
 
 ```python
-@action(methods=["get"], detail=False, url_name="featured_list")
+@action(detail=False, methods=["get"], url_path="featured", url_name="featured_list")
 async def featured(self, request):
     """Featured list"""
     pass
@@ -266,8 +267,7 @@ from sanic.exceptions import Forbidden
 async def approve(self, request, pk):
     """Approve product (only admins)"""
     # Check admin permission
-    perm = IsRoleAdminUser()
-    if not perm.has_permission(request):
+    if not IsRoleAdminUser.has_permission(request, self):
         raise Forbidden("Admin permission required")
     
     product = await self.get_object(request, pk)

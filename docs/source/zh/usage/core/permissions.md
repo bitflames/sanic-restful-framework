@@ -1,12 +1,13 @@
 # 权限
 
-SRF 的权限类用于控制 ViewSet 访问。当前版本会自动执行视图级权限；对象级
-权限提供了扩展接口，但需要应用自行接线。
+SRF 的权限类用于控制 ViewSet 访问。视图级检查在 handler 前由`check_permissions()` 执行；
+对象级检查由 `get_object()` 调用 `check_object_permissions()`（覆盖 retrieve / update / destroy，以及调用 `get_object()` 的自定义 action）。
 
 ## 内置权限类
 
 ```python
 from srf.permission.permission import (
+    AllowAny,
     BasePermission,
     IsAuthenticated,
     IsRoleAdminUser,
@@ -14,6 +15,7 @@ from srf.permission.permission import (
 )
 ```
 
+- `AllowAny`：始终允许（`settings.DEFAULT_PERMISSION_CLASSES` 默认值）。
 - `IsAuthenticated`：`request.ctx.user` 存在，且用户的 `is_active` 为真。
 - `IsRoleAdminUser`：当前用户关联角色的 `name` 等于 `"admin"`。
 - `IsSafeMethodOnly`：只允许 GET、HEAD、OPTIONS。
@@ -29,9 +31,11 @@ class OrderViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated,)
 ```
 
-`BaseViewSet.check_permissions()` 会按顺序实例化每个类并调用
-`has_permission(request)`；同步和异步返回值都受支持。任一结果为假时抛出
+`BaseViewSet.check_permissions()` 会按顺序在**类上**调用
+`has_permission(request, view)` 同步和异步返回值都受支持。任一结果为假时抛出
 403 Forbidden。认证中间件因 Token 缺失或无效而拒绝请求时则是 401。
+
+权限方法是 `@staticmethod`：推荐继承 `BasePermission`，但不强制；只要提供同名静态方法即可（鸭式）。
 
 ## 自定义视图级权限
 
@@ -40,20 +44,21 @@ from srf.permission.permission import BasePermission
 
 
 class IsEditor(BasePermission):
-    def has_permission(self, request, view=None):
+    @staticmethod
+    def has_permission(request, view=None):
         user = getattr(request.ctx, "user", None)
         role = getattr(user, "role", None)
         return role is not None and role.name == "editor"
 ```
 
- `view` 为可选参数。虽然 `BasePermission` 的基类签名包含 `view`，
-当前 `BaseViewSet` 实际只传入 `request`。
+`view` 为可选参数；`BaseViewSet` 会传入当前 View 实例。
 
 异步检查同样可用：
 
 ```python
 class HasActiveSubscription(BasePermission):
-    async def has_permission(self, request, view=None):
+    @staticmethod
+    async def has_permission(request, view=None):
         user = getattr(request.ctx, "user", None)
         return user is not None and await Subscription.filter(
             user_id=user.id, active=True
@@ -70,28 +75,33 @@ import asyncio
 
 from sanic.exceptions import Forbidden
 from srf.permission.permission import IsAuthenticated, IsRoleAdminUser
+from srf.views import BaseViewSet
 
 
 class ProductViewSet(BaseViewSet):
-    permission_classes = (IsAuthenticated,)
-    
-    def get_permissions(self):
-        """根据操作返回不同的权限类"""
-        if self.action in ['update', 'destroy']:
-            # 更新和删除需要管理员权限
-            return [IsAuthenticated(), IsRoleAdminUser()]
-        elif self.action == 'create':
-            # 创建只需要登录
-            return [IsAuthenticated()]
-        else:
-            # 列表和详情不需要权限
-            return []
+    async def check_permissions(self, request):
+        if request.method.upper() in ("GET", "HEAD", "OPTIONS"):
+            return
+
+        classes = (
+            (IsAuthenticated,)
+            if request.method.upper() == "POST"
+            else (IsAuthenticated, IsRoleAdminUser)
+        )
+        for permission_class in classes:
+            result = permission_class.has_permission(request, self)
+            if asyncio.iscoroutine(result):
+                result = await result
+            if not result:
+                raise Forbidden(message="Forbidden")
 ```
 
 ## 对象级权限
 
-`BasePermission.has_object_permission(request, view, obj)` 定义了对象级接口，
-放入 `permission_classes` **不会**自动保护对象。
+`BasePermission.has_object_permission(request, view, obj)` 定义对象级接口。
+`get_object()` 会调用 `check_object_permissions()`，后者在类上调用
+
+对象级检查不会逐条应用于列表结果。列表接口应在 `queryset` 中限制数据。
 
 ### 基本用法
 
@@ -99,31 +109,17 @@ class ProductViewSet(BaseViewSet):
 class IsOwner(BasePermission):
     """对象级权限：检查是否是所有者"""
 
-    def has_object_permission(self, request, view, obj):
+    @staticmethod
+    def has_object_permission(request, view=None, obj=None):
         # 用户只能查看、修改、删除自己的对象
         return obj.owner_id == request.ctx.user.id
 
-class OrderViewSet(BaseViewSet):
-    permission_classes = (IsAuthenticated, IsOwnerOrAdmin)
 
-    async def check_object_permissions(self, request, obj):
-        for permission_class in self.permission_classes:
-            checker = getattr(
-                permission_class(), "has_object_permission", None
-            )
-            if checker is None:
-                continue
-            result = checker(request, self, obj)
-            if asyncio.iscoroutine(result):
-                result = await result
-            if not result:
-                raise Forbidden(message="Forbidden")
+class OrderViewSet(BaseViewSet):
+    permission_classes = (IsAuthenticated, IsOwner)
 ```
 
-内置 `get_object()` 在取到对象后会调用这个钩子。因此标准详情、更新、删除
-操作以及调用 `get_object()` 的自定义 action 都会受保护。
-
-对象级检查不会逐条应用于列表结果。列表接口应在 `queryset` 中限制数据：
+列表侧通过 `queryset` 限制可见数据：
 
 ```python
 class OrderViewSet(BaseViewSet):
@@ -151,7 +147,7 @@ from srf.views.decorators import action
 
 @action(methods=["post"], detail=True, url_path="approve")
 async def approve(self, request, pk):
-    if not IsRoleAdminUser().has_permission(request):
+    if not IsRoleAdminUser.has_permission(request, self):
         raise Forbidden(message="需要管理员权限")
     product = await self.get_object(request, pk)
     product.is_approved = True

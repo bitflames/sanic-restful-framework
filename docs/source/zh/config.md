@@ -74,6 +74,16 @@ DEFAULT_FILTERS = [
 每个 `GenericAPIView` / `BaseViewSet` 实例初始化时，若类上未声明
 `filter_class`，则使用 `settings.DEFAULT_FILTERS`。
 
+### 权限
+
+```python
+from srf.permission.permission import AllowAny
+
+DEFAULT_PERMISSION_CLASSES = (AllowAny,)
+```
+
+若 ViewSet 未声明 `permission_classes`，则使用 `settings.DEFAULT_PERMISSION_CLASSES`；类上声明的值优先。
+
 ### 分页
 
 `PAGINATION_CLASS = PageNumberPagination` 虽已定义，但内置 `list()` 当前没有

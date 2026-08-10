@@ -15,7 +15,7 @@ SRF 提供了基于页码的分页功能，用于处理大量数据的列表查�
 
 ## PageNumberPagination
 
-`PageNumberPagination` 是 SRF 的分页处理类。
+`PageNumberPagination` 是 SRF 的分页处理类。自定义分页应继承 `BasePagination`（或 `PageNumberPagination`），并实现基类中会 `raise NotImplementedError` 的方法（`from_queryset`、`paginate`、`num_pages`）。`to_dict` 在 `BasePagination` 上已有默认实现。
 
 ### 基本用法
 

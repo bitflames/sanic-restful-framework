@@ -47,27 +47,27 @@ class ProductViewSet(BaseViewSet):
 
 ### Required Properties and Methods
 
-#### 1. `queryset` Property
+#### 1. `queryset` / `get_queryset`
 
-Define the data query set, which must return a Tortoise ORM query object.
+Provide a Tortoise ORM query set. Prefer overriding `get_queryset()` for per-request scoping; you may also set a class attribute or `@property` named `queryset`, which the default `get_queryset()` reads (and clones with `.all()` when it is a `QuerySet`).
+
+`list()` uses `filter_queryset(self.get_queryset())`. `get_object()` and `perform_create()` also go through `get_queryset()`.
 
 ```python
-@property
-def queryset(self):
-    """Return all products"""
-    return Product.all()
+# Class attribute
+queryset = Product.all()
 
-# Query set with filtering
+# Or a property (still consumed by get_queryset)
 @property
 def queryset(self):
     """Return only published products"""
     return Product.filter(is_published=True)
 
-# Query set with preloading
-@property
-def queryset(self):
-    """Preload related objects"""
-    return Product.all().prefetch_related("category", "tags")
+# Or override get_queryset for request-aware scoping
+def get_queryset(self):
+    return Product.filter(owner_id=self.request.ctx.user.id).prefetch_related(
+        "category", "tags"
+    )
 ```
 
 #### 2. `get_schema` Method
@@ -422,7 +422,7 @@ class ProductViewSet(BaseViewSet):
 - Example: Get a featured list, batch operations
 
 ```python
-@action(methods=["get"], detail=False)
+@action(detail=False, methods=["get"], url_path="featured")
 async def featured(self, request):
     """Collection-level action"""
     # No need for pk
@@ -436,7 +436,7 @@ async def featured(self, request):
 - Example: Publish, activate, archive
 
 ```python
-@action(methods=["post"], detail=True)
+@action(detail=True, methods=["post"], url_path="publish")
 async def publish(self, request, pk):
     """Detail-level action"""
     # Requires pk parameter

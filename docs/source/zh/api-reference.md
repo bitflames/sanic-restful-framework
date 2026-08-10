@@ -21,26 +21,30 @@ class GenericAPIView(BaseViewSet):
     search_fields = []               # 搜索字段，由 SearchFilter 读取
     filter_fields = {}               # 过滤字段映射，由 FilterClass 读取
     ordering_fields = {}             # 排序字段映射，由 OrderingFactory 读取
-
-    # 核心属性
-    @property
-    def queryset(self):
-        raise NotImplementedError
+    queryset = None                  # 设置 QuerySet / property，或重写 get_queryset()
 
     def get_schema(self, request, *args, is_safe=False, **kwargs):
         """默认返回 self.schema；可以根据请求方法自定义返回"""
         return getattr(self, "schema", None)
 
-    async def check_permissions(self, request):
-        """检查视图级权限（可选）"""
+    def get_queryset(self):
+        """从 self.queryset 返回本次请求的 QuerySet（必要时用 .all() 克隆）"""
         ...
 
-    def check_object_permissions(self, request, obj):
-        """检查对象级权限（可选），鉴权失败 raise error """
+    def filter_queryset(self, queryset):
+        """对 queryset 应用 filter_class（list() 使用）"""
+        ...
+
+    async def check_permissions(self, request):
+        """在 permission_classes 上调用 has_permission；拒绝时 raise Forbidden"""
+        ...
+
+    async def check_object_permissions(self, request, obj):
+        """在各类上调用 has_object_permission；拒绝时 raise Forbidden"""
         ...
 
     async def get_object(self, request, id: int):
-        """按 id 获取对象并调用对象级权限钩子"""
+        """通过 get_queryset() 查找对象，再调用 check_object_permissions()"""
         ...
 ```
 
@@ -121,22 +125,23 @@ class ListModelMixin:
 from srf.views.decorators import action
 
 @action(
-    methods: list = ["get"],     # HTTP 方法列表
-    detail: bool = False,        # 是否为详情级操作
-    url_path: str = None,        # URL 路径
-    url_name: str = None         # 路由名称
+    *,
+    detail: bool = False,                 # 详情级操作（需要 pk）
+    methods: Sequence[str] = ("GET",),    # HTTP 方法
+    url_path: str | None = None,          # 默认："/<方法名>"
+    url_name: str | None = None,          # 路由名称（默认：方法名）
 )
 ```
 
 **示例**：
 
 ```python
-@action(methods=["get"], detail=False)
+@action(methods=["get"], detail=False, url_path="featured")
 async def featured(self, request):
     """集合级操作"""
     pass
 
-@action(methods=["post"], detail=True)
+@action(methods=["post"], detail=True, url_path="publish")
 async def publish(self, request, pk):
     """详情级操作"""
     pass
@@ -194,11 +199,13 @@ from srf.permission.permission import BasePermission
 class BasePermission:
     """权限基类"""
 
-    def has_permission(self, request, view=None) -> bool:
+    @staticmethod
+    def has_permission(request, view=None) -> bool:
         """视图级权限检查"""
         return True
 
-    def has_object_permission(self, request, view=None, obj=None) -> bool:
+    @staticmethod
+    def has_object_permission(request, view=None, obj=None) -> bool:
         """对象级权限检查"""
         return True
 ```
@@ -207,6 +214,7 @@ class BasePermission:
 
 ```python
 from srf.permission.permission import (
+    AllowAny,             # 始终允许（DEFAULT_PERMISSION_CLASSES 默认值）
     IsAuthenticated,      # 需要登录
     IsRoleAdminUser,      # 需要管理员角色
     IsSafeMethodOnly      # 仅允许安全方法
@@ -215,12 +223,35 @@ from srf.permission.permission import (
 
 ## 分页（Pagination）
 
+### BasePagination
+
+```python
+from srf.paginator import BasePagination
+
+class BasePagination:
+    """DRF 风格基类。自定义分页须继承并实现会 raise NotImplementedError 的方法。"""
+
+    @classmethod
+    def from_queryset(cls, queryset, request):
+        raise NotImplementedError
+
+    async def paginate(self, sch_model=None):
+        raise NotImplementedError
+
+    async def to_dict(self, sch_model=None):
+        """默认：await paginate() 后 model_dump"""
+        ...
+
+    def num_pages(self, total_count=None):
+        raise NotImplementedError
+```
+
 ### PageNumberPagination
 
 ```python
 from srf.paginator import PageNumberPagination
 
-class PageNumberPagination:
+class PageNumberPagination(BasePagination):
     """分页处理器。"""
 
     MAX_PAGE_SIZE: int = 100
@@ -445,6 +476,7 @@ settings.set_app(app)
 settings.JWT_ACCESS_TOKEN_EXPIRES
 settings.NON_AUTH_ENDPOINTS
 settings.DEFAULT_FILTERS
+settings.DEFAULT_PERMISSION_CLASSES
 settings.EMAIL_CODE_REDIS      # 默认 "EMAIL_CODE"
 settings.REQUEST_LIMITERS      # 默认 []
 settings.HEALTH_CHECK_LIST     # 默认 []
@@ -549,7 +581,7 @@ class ProductViewSet(BaseViewSet):
             return ProductSchemaReader
         return ProductSchemaWriter
     
-    @action(methods=["get"], detail=False)
+    @action(detail=False, methods=["get"], url_path="featured")
     async def featured(self, request):
         products = await Product.filter(stock__gt=0).limit(10)
         schema = self.get_schema(request, is_safe=True)

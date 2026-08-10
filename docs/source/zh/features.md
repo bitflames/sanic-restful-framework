@@ -63,6 +63,7 @@ SRF 提供了多种认证方式，满足不同场景的需求。
 
 **内置权限类：**
 
+- `AllowAny`：始终允许（未声明 `permission_classes` 时的默认）
 - `IsAuthenticated`：用户必须已登录
 - `IsRoleAdminUser`：用户必须是管理员角色
 - `IsSafeMethodOnly`：仅允许安全的 HTTP 方法（GET, HEAD, OPTIONS）
