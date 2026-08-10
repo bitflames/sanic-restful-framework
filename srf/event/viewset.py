@@ -15,9 +15,4 @@ class EventViewSet(GenericAPIView, CreateModelMixin):
         "is_active",
         "id",
     ]  # The is_active field is inconsistent with the database field, resulting in invalidation
-    filter_fields = {'id': "id", "name": "name", "is_active": "is_active"}
-
-
-def temp_event(request: Request):
-    data = request.json
-    return JSONResponse(data)
+    filter_fields: ClassVar[dict[str, str]] = {"id": "id", "name": "name", "is_active": "is_active"}
