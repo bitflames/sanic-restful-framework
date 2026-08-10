@@ -2,7 +2,7 @@ import functools
 import json
 import operator
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Union, cast
+from typing import Any, Callable, ClassVar, Dict, List, Union, cast
 from urllib.parse import unquote
 
 from sanic import Request
@@ -86,7 +86,7 @@ class SearchFilter(BaseFilter):
 
 
 class JsonLogicFilter(BaseFilter):
-    OPERATOR_MAP = {
+    OPERATOR_MAP: ClassVar[dict[str, Callable]] = {
         "==": lambda k, v: Q(**{k: v}),
         "!=": lambda k, v: ~Q(**{k: v}),
         "!": lambda k, v: ~Q(**{k: v}),
@@ -118,7 +118,7 @@ class JsonLogicFilter(BaseFilter):
         if isinstance(raw_logic, str):
             try:
                 raw_logic = json.loads(raw_logic)
-            except Exception:
+            except (json.JSONDecodeError, TypeError):
                 return queryset
 
         q_expr = self._parse_logic_recursively(raw_logic)
@@ -173,7 +173,7 @@ class QueryParamFilter(BaseFilter):
         filters = {}
         _filter_keys = self._filter_params.keys()
         if self._filter_params:
-            for key in request.args.keys():
+            for key in request.args:
                 if key in ("ordering",):
                     continue
                 if self._filter_params and not any(key.startswith(field) for field in _filter_keys):

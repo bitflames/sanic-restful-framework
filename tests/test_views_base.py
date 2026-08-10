@@ -138,6 +138,25 @@ class TestGenericAPIView:
         view = View()
         assert view.filter_class == [CustomFilter]
 
+    def test_permission_classes_defaults_from_settings(self):
+        from srf.config import settings
+
+        view = MinimalViewSet()
+        assert view.permission_classes == settings.DEFAULT_PERMISSION_CLASSES
+
+    def test_permission_classes_class_attr_override(self):
+        from srf.permission.permission import IsAuthenticated
+
+        class View(GenericAPIView):
+            permission_classes = (IsAuthenticated,)
+
+            @property
+            def queryset(self):
+                return MagicMock()
+
+        view = View()
+        assert view.permission_classes == (IsAuthenticated,)
+
 
 class TestBaseViewSet:
     """Tests for BaseViewSet."""
@@ -167,9 +186,9 @@ class TestBaseViewSet:
     @pytest.mark.asyncio
     async def test_check_permissions_raises_when_permission_denied(self):
         view = MinimalViewSet()
-        view.permission_classes = [MagicMock()]
-        perm = view.permission_classes[0].return_value
-        perm.has_permission = MagicMock(return_value=False)
+        perm_cls = MagicMock()
+        perm_cls.has_permission = MagicMock(return_value=False)
+        view.permission_classes = [perm_cls]
         request = MagicMock()
         from sanic.exceptions import Forbidden
 
@@ -179,11 +198,76 @@ class TestBaseViewSet:
     @pytest.mark.asyncio
     async def test_check_permissions_async_permission(self):
         view = MinimalViewSet()
-        view.permission_classes = [MagicMock()]
-        perm = view.permission_classes[0].return_value
-        perm.has_permission = AsyncMock(return_value=True)
+        perm_cls = MagicMock()
+        perm_cls.has_permission = AsyncMock(return_value=True)
+        view.permission_classes = [perm_cls]
         request = MagicMock()
         await view.check_permissions(request)
+
+    @pytest.mark.asyncio
+    async def test_check_object_permissions_raises_when_denied(self):
+        view = MinimalViewSet()
+        perm_cls = MagicMock()
+        perm_cls.has_object_permission = MagicMock(return_value=False)
+        view.permission_classes = [perm_cls]
+        request = MagicMock()
+        from sanic.exceptions import Forbidden
+
+        with pytest.raises(Forbidden):
+            await view.check_object_permissions(request, MagicMock())
+
+    @pytest.mark.asyncio
+    async def test_check_object_permissions_async(self):
+        view = MinimalViewSet()
+        perm_cls = MagicMock()
+        perm_cls.has_object_permission = AsyncMock(return_value=True)
+        view.permission_classes = [perm_cls]
+        request = MagicMock()
+        await view.check_object_permissions(request, MagicMock())
+
+    def test_get_queryset_returns_queryset_attribute(self):
+        qs = object()
+
+        class View(GenericAPIView):
+            queryset = qs
+
+        assert View().get_queryset() is qs
+
+    def test_get_queryset_asserts_when_missing(self):
+        class View(GenericAPIView):
+            pass
+
+        with pytest.raises(AssertionError, match="queryset"):
+            View().get_queryset()
+
+    @pytest.mark.asyncio
+    async def test_get_object_uses_get_queryset(self):
+        view = MinimalViewSet()
+        instance = MagicMock()
+        qs = MagicMock()
+        qs.get_or_none = AsyncMock(return_value=instance)
+        view.get_queryset = MagicMock(return_value=qs)
+        view.check_object_permissions = AsyncMock()
+        request = MagicMock()
+
+        result = await view.get_object(request, 1)
+
+        view.get_queryset.assert_called_once_with()
+        qs.get_or_none.assert_awaited_once_with(id=1)
+        view.check_object_permissions.assert_awaited_once_with(request, instance)
+        assert result is instance
+
+    @pytest.mark.asyncio
+    async def test_get_object_raises_not_found(self):
+        view = MinimalViewSet()
+        qs = MagicMock()
+        qs.get_or_none = AsyncMock(return_value=None)
+        view.get_queryset = MagicMock(return_value=qs)
+        request = MagicMock()
+        from sanic.exceptions import NotFound
+
+        with pytest.raises(NotFound):
+            await view.get_object(request, 99)
 
     @pytest.mark.asyncio
     async def test_as_view_method_not_allowed(self):

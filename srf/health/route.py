@@ -8,7 +8,7 @@ bp = Blueprint("health", url_prefix="/health")
 
 @bp.get("/")
 async def health_check(request):
-    checked = list()
+    checked = []
     HEALTH_CHECK_LIST = request.app.config.HEALTH_CHECK_LIST or []
 
     # Build check instances; each check reads its client from app.ctx.<name>

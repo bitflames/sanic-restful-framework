@@ -110,7 +110,7 @@ class GenericAPIView(HTTPMethodView):
     def __init__(self, *args, **kwargs):
         cls = type(self)
         self.filter_class = getattr(cls, "filter_class", settings.DEFAULT_FILTERS)
-self.permission_classes = getattr(cls, "permission_classes", settings.DEFAULT_PERMISSION_CLASSES)
+        self.permission_classes = getattr(cls, "permission_classes", settings.DEFAULT_PERMISSION_CLASSES)
         super().__init__(*args, **kwargs)
 
     def get_schema(self, request: Request, *args, is_safe=False, **kwargs):

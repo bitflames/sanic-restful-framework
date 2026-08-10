@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from redis.asyncio import Redis
 from sanic import Request, Sanic
 from sanic.constants import SAFE_HTTP_METHODS
@@ -131,15 +133,19 @@ async def send_email_with_redis_code(request: Request):
 
 class UserViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated,)
-    search_fields = [
+    search_fields: ClassVar[list[str]] = [
         "name",
         "is_active",
         "id",
     ]
-    filter_fields = {"id": "id", "name": "name", "is_active": "is_active"}
+    filter_fields: ClassVar[dict[str, str]] = {
+        "id": "id",
+        "name": "name",
+        "is_active": "is_active",
+    }
 
     @property
-    def queryset(self, *args, **kwargs) -> QuerySet:
+    def queryset(self) -> QuerySet:
         return models.User.all()
 
     def get_schema(self, request: Request, *args, is_safe=False, **kwargs):

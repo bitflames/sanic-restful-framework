@@ -37,5 +37,5 @@ class BaseHealthCheck:
         try:
             await self.check()
             return (self.name, "up")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return (self.name, f"down ({str(e)})")

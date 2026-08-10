@@ -1,3 +1,4 @@
+from pydantic import ValidationError
 from sanic.exceptions import BadRequest, Unauthorized
 from sanic.request import Request
 from tortoise.expressions import Q
@@ -14,7 +15,7 @@ async def authenticate(request: Request, *args, **kwargs):
         raise BadRequest("Request body is required")
     try:
         sch_user = UserLoginSchema.model_validate(request.json, by_alias=True)  # TODO, form login
-    except Exception:
+    except (ValidationError, TypeError, ValueError):
         raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
     if sch_user.email:

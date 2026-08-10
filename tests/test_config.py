@@ -13,6 +13,7 @@ class TestLazySettings:
         assert settings.REQUEST_LIMITERS == []
         assert settings.EMAIL_CODE_REDIS == "EMAIL_CODE"
         assert len(settings.DEFAULT_FILTERS) == 4
+        assert settings.DEFAULT_PERMISSION_CLASSES[0].__name__ == "AllowAny"
 
     def test_missing_attr_raises(self):
         with pytest.raises(AttributeError, match="NotImplemented"):

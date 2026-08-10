@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from srf.paginator import PageNumberPagination, PaginationParams, PaginationResult
+from srf.paginator import BasePagination, PageNumberPagination, PaginationParams, PaginationResult
 
 
 class TestPaginationParams:
@@ -123,3 +123,21 @@ class TestPageNumberPagination:
     def test_num_pages_positive(self):
         paginator = PageNumberPagination(queryset=MagicMock(), page=1, page_size=10)
         assert paginator.num_pages(total_count=25) == 3
+
+
+class TestBasePagination:
+    def test_from_queryset_not_implemented(self):
+        with pytest.raises(NotImplementedError):
+            BasePagination.from_queryset(MagicMock(), MagicMock())
+
+    @pytest.mark.asyncio
+    async def test_paginate_not_implemented(self):
+        with pytest.raises(NotImplementedError):
+            await BasePagination().paginate()
+
+    def test_num_pages_not_implemented(self):
+        with pytest.raises(NotImplementedError):
+            BasePagination().num_pages(10)
+
+    def test_page_number_is_subclass(self):
+        assert issubclass(PageNumberPagination, BasePagination)

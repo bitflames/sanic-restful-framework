@@ -4,7 +4,7 @@ import hmac
 import time
 from typing import Union
 
-Secret = Union[str, bytes]
+Secret = str | bytes
 
 
 def _b64encode(value: str) -> str:

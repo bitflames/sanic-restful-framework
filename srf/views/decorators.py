@@ -1,12 +1,13 @@
+from collections.abc import Sequence
 from functools import wraps
-from typing import List
 
 
 def action(
-    methods: List[str] = None,
-    detail: bool = None,
-    url_path: str = None,
-    url_name: str = None,
+    *,
+    detail: bool = False,
+    methods: Sequence[str] = ("GET",),
+    url_path: str | None = None,
+    url_name: str | None = None,
     **kwargs,
 ):
     """
@@ -14,11 +15,9 @@ def action(
 
     :param methods: List of HTTP methods allowed for this action
     :param detail: If True, action requires a pk parameter. If False, action is on collection.
-    :param url_path: Custom URL path for this action
-    :param url_name: Custom URL name for this action
+    :param url_path: Custom URL path for this action，default to be the name of the method
+    :param url_name: Custom URL name for this action，default to be the name of the method
     """
-    if methods is None:
-        methods = ["get"]
     if not isinstance(detail, (bool, type(None))):
         raise TypeError("detail must be bool or None")
 

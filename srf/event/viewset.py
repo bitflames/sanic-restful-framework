@@ -1,5 +1,4 @@
-from sanic import Request
-from sanic.response import JSONResponse
+from typing import ClassVar
 
 from srf.auth.models import User
 from srf.auth.schema import UserSchemaReader
@@ -11,7 +10,7 @@ class EventViewSet(GenericAPIView, CreateModelMixin):
     model = User
     schema = UserSchemaReader
     permission_classes = (IsRoleAdminUser,)
-    search_fields = [
+    search_fields: ClassVar[list[str]] = [
         "name",
         "is_active",
         "id",

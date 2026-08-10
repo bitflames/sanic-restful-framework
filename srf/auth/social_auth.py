@@ -76,7 +76,7 @@ async def _github_request_json(
         response.raise_for_status()
         data = await response.json(content_type=None)
         if not isinstance(data, (dict, list)):
-            raise ValueError("GitHub returned an unexpected JSON response")
+            raise TypeError("GitHub returned an unexpected JSON response")
         return data
 
 
@@ -241,7 +241,7 @@ async def github_callback(request: Request):
         )
         # Redirect with a temporary code so the JWT is never exposed in a URL.
         one_time_code = await _store_exchange_code(request, user_db.id)
-    except Exception:
+    except Exception:  # noqa: BLE001 - Catch all to log and sanitize 500 response
         error_logger.exception("Could not complete GitHub user login")
         return JSONResponse({"error": "Could not complete social login"}, status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR)
 

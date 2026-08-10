@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from pydantic import ValidationError
-from sanic.exceptions import BadRequest, NotFound, ServerError
+from sanic.exceptions import BadRequest, ServerError, Unauthorized
 
 from srf.auth.auth import authenticate, retrieve_user
 from srf.auth.models import User
@@ -44,7 +44,7 @@ class TestAuthenticate:
         with patch("srf.auth.auth.User") as UserMock:
             UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=None)
 
-            with pytest.raises(NotFound):
+            with pytest.raises(Unauthorized, match="Unable to log in"):
                 await authenticate(request)
 
     @pytest.mark.asyncio
@@ -70,7 +70,7 @@ class TestAuthenticate:
     async def test_authenticate_missing_identifier_raises(self):
         request = MagicMock()
         request.json = {"password": "secret"}
-        with pytest.raises(NotFound, match="Unable to log in"):
+        with pytest.raises(Unauthorized, match="Unable to log in"):
             await authenticate(request)
 
     @pytest.mark.asyncio

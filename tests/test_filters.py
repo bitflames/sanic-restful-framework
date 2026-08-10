@@ -118,7 +118,8 @@ class TestQueryParamFilter:
         view = ViewWithFilterFields()
         f = QueryParamFilter(view)
         request = MagicMock()
-        request.args.keys.return_value = []
+        request.args = MagicMock()
+        request.args.__iter__ = MagicMock(return_value=iter([]))
         qs = MagicMock()
         filtered_qs = MagicMock()
         qs.filter.return_value = filtered_qs
@@ -130,7 +131,8 @@ class TestQueryParamFilter:
         view = ViewWithFilterFields()
         f = QueryParamFilter(view)
         request = MagicMock()
-        request.args.keys.return_value = ["name"]
+        request.args = MagicMock()
+        request.args.__iter__ = MagicMock(return_value=iter(["name"]))
         request.args.getlist.return_value = ["alice"]
         qs = MagicMock()
         filtered_qs = MagicMock()

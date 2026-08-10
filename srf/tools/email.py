@@ -54,15 +54,15 @@ def send_email(to_email, subject="", content="") -> bool:
         server.login(from_email, password)
         server.sendmail(from_email, [to_email], msg.as_string())
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001
         logger.exception("Email send failed to=%s", to_email)
         return False
     finally:
         if server is not None:
             try:
                 server.quit()
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                logger.warning("Failed to cleanly quit SMTP server connection", exc_info=True)
 
 
 # async def send_email(to_email: str, subject: str = "", content: str = "") -> bool:
