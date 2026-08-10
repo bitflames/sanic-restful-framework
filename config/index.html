@@ -1524,6 +1524,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#pagination" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1760,6 +1771,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#pagination" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1958,18 +1980,24 @@
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>Each <code>GenericAPIView</code> / <code>BaseViewSet</code> instance initializes with <code>settings.DEFAULT_FILTERS</code> if no <code>filter_class</code> is declared on the class.</p>
+<h4 id="permissions">Permissions<a class="headerlink" href="#permissions" title="Permanent link">&para;</a></h4>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.permission.permission</span><span class="w"> </span><span class="kn">import</span> <span class="n">AllowAny</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">DEFAULT_PERMISSION_CLASSES</span> <span class="o">=</span> <span class="p">(</span><span class="n">AllowAny</span><span class="p">,)</span>
+</span></code></pre></div>
+<p>If a ViewSet does not declare <code>permission_classes</code>, <code>settings.DEFAULT_PERMISSION_CLASSES</code> is used; a class-level declaration takes precedence.</p>
 <h4 id="pagination">Pagination<a class="headerlink" href="#pagination" title="Permanent link">&para;</a></h4>
 <p><code>PAGINATION_CLASS = PageNumberPagination</code> is defined, but the built-in <code>list()</code> currently does not read it, instead directly using <code>PageNumberPagination</code>. There is currently no global <code>PAGE_SIZE</code> or <code>MAX_PAGE_SIZE</code> configuration; the default values are in the pagination class.</p>
 <h4 id="rate-limiting">Rate Limiting<a class="headerlink" href="#rate-limiting" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">REQUEST_LIMITERS</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># No rate limiting by default; list of limiter instances set by app</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">REQUEST_LIMITERS</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># No rate limiting by default; list of limiter instances set by app</span>
 </span></code></pre></div>
 <p><code>throttle_rate()</code> reads <code>app.config.REQUEST_LIMITERS</code> (treated as <code>[]</code> if missing).</p>
 <h4 id="health-check">Health Check<a class="headerlink" href="#health-check" title="Permanent link">&para;</a></h4>
 <p><code>HEALTH_CHECK_LIST</code> defaults to an empty list. The health check route actually reads <code>app.config.HEALTH_CHECK_LIST</code>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.health.checks</span><span class="w"> </span><span class="kn">import</span> <span class="n">RedisCheck</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">HEALTH_CHECK_LIST</span> <span class="o">=</span> <span class="p">[</span><span class="n">RedisCheck</span><span class="p">]</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">redis</span> <span class="o">=</span> <span class="n">redis_client</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.health.checks</span><span class="w"> </span><span class="kn">import</span> <span class="n">RedisCheck</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">HEALTH_CHECK_LIST</span> <span class="o">=</span> <span class="p">[</span><span class="n">RedisCheck</span><span class="p">]</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">redis</span> <span class="o">=</span> <span class="n">redis_client</span>
 </span></code></pre></div>
 <h4 id="json-encoding">JSON Encoding<a class="headerlink" href="#json-encoding" title="Permanent link">&para;</a></h4>
 <p><code>DATETIME_FORMAT</code> defaults to <code>"%Y-%m-%d %H:%M:%S"</code>.
@@ -2006,31 +2034,31 @@ Whether to use this encoder depends on how the app integrates with Sanic configu
 <p>These values are read when the module is imported; subsequent modifications to <code>app.config</code> will not change the email configuration.
 Port judgment uses <code>int(smtp_port) == 465</code> to choose SSL.</p>
 <h4 id="github-oauth">GitHub OAuth<a class="headerlink" href="#github-oauth" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">SOCIAL_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="s2">&quot;github&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>        <span class="s2">&quot;CLIENT_ID&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>        <span class="s2">&quot;CLIENT_SECRET&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>        <span class="s2">&quot;REDIRECT_URI&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="o">...</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="p">}</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="p">}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">SOCIAL_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="s2">&quot;github&quot;</span><span class="p">:</span> <span class="p">{</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>        <span class="s2">&quot;CLIENT_ID&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        <span class="s2">&quot;CLIENT_SECRET&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="s2">&quot;REDIRECT_URI&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        <span class="o">...</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="p">}</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>The default values come from corresponding uppercase environment variables. You can override them entirely via <code>app.config.SOCIAL_CONFIG</code> before binding the app.</p>
 <h3 id="full-example">Full Example<a class="headerlink" href="#full-example" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sanic</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">srfconfig</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">app</span> <span class="o">=</span> <span class="n">Sanic</span><span class="p">(</span><span class="s2">&quot;MyApp&quot;</span><span class="p">)</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="p">{</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>        <span class="s2">&quot;JWT_SECRET&quot;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;SECRET_KEY&quot;</span><span class="p">],</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>        <span class="s2">&quot;NON_AUTH_ENDPOINTS&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;login&quot;</span><span class="p">,</span> <span class="s2">&quot;register&quot;</span><span class="p">,</span> <span class="s2">&quot;health&quot;</span><span class="p">),</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>        <span class="s2">&quot;HEALTH_CHECK_LIST&quot;</span><span class="p">:</span> <span class="p">[],</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="p">}</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="p">)</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">settings</span><span class="o">.</span><span class="n">set_app</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sanic</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">srfconfig</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">app</span> <span class="o">=</span> <span class="n">Sanic</span><span class="p">(</span><span class="s2">&quot;MyApp&quot;</span><span class="p">)</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="p">{</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>        <span class="s2">&quot;JWT_SECRET&quot;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;SECRET_KEY&quot;</span><span class="p">],</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>        <span class="s2">&quot;NON_AUTH_ENDPOINTS&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;login&quot;</span><span class="p">,</span> <span class="s2">&quot;register&quot;</span><span class="p">,</span> <span class="s2">&quot;health&quot;</span><span class="p">),</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>        <span class="s2">&quot;HEALTH_CHECK_LIST&quot;</span><span class="p">:</span> <span class="p">[],</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    <span class="p">}</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="p">)</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="n">settings</span><span class="o">.</span><span class="n">set_app</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h3>
 <ol>

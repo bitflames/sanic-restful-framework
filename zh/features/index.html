@@ -2324,6 +2324,7 @@
 <p>基于类的权限系统，支持视图级和对象级权限控制。</p>
 <p><strong>内置权限类：</strong></p>
 <ul>
+<li><code>AllowAny</code>：始终允许（未声明 <code>permission_classes</code> 时的默认）</li>
 <li><code>IsAuthenticated</code>：用户必须已登录</li>
 <li><code>IsRoleAdminUser</code>：用户必须是管理员角色</li>
 <li><code>IsSafeMethodOnly</code>：仅允许安全的 HTTP 方法（GET, HEAD, OPTIONS）</li>

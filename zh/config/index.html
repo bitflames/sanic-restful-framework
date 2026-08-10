@@ -1529,7 +1529,7 @@
   <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
-        分页
+        权限
       
     </span>
   </a>
@@ -1540,7 +1540,7 @@
   <a href="#_7" class="md-nav__link">
     <span class="md-ellipsis">
       
-        限流
+        分页
       
     </span>
   </a>
@@ -1549,6 +1549,17 @@
         
           <li class="md-nav__item">
   <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        限流
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
     <span class="md-ellipsis">
       
         健康检查
@@ -1570,7 +1581,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_9" class="md-nav__link">
+  <a href="#_10" class="md-nav__link">
     <span class="md-ellipsis">
       
         邮件
@@ -1597,7 +1608,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_10" class="md-nav__link">
+  <a href="#_11" class="md-nav__link">
     <span class="md-ellipsis">
       
         完整示例
@@ -1608,7 +1619,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_11" class="md-nav__link">
+  <a href="#_12" class="md-nav__link">
     <span class="md-ellipsis">
       
         最佳实践
@@ -1619,7 +1630,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_12" class="md-nav__link">
+  <a href="#_13" class="md-nav__link">
     <span class="md-ellipsis">
       
         下一步
@@ -1765,7 +1776,7 @@
   <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
-        分页
+        权限
       
     </span>
   </a>
@@ -1776,7 +1787,7 @@
   <a href="#_7" class="md-nav__link">
     <span class="md-ellipsis">
       
-        限流
+        分页
       
     </span>
   </a>
@@ -1785,6 +1796,17 @@
         
           <li class="md-nav__item">
   <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        限流
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
     <span class="md-ellipsis">
       
         健康检查
@@ -1806,7 +1828,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_9" class="md-nav__link">
+  <a href="#_10" class="md-nav__link">
     <span class="md-ellipsis">
       
         邮件
@@ -1833,7 +1855,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_10" class="md-nav__link">
+  <a href="#_11" class="md-nav__link">
     <span class="md-ellipsis">
       
         完整示例
@@ -1844,7 +1866,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_11" class="md-nav__link">
+  <a href="#_12" class="md-nav__link">
     <span class="md-ellipsis">
       
         最佳实践
@@ -1855,7 +1877,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_12" class="md-nav__link">
+  <a href="#_13" class="md-nav__link">
     <span class="md-ellipsis">
       
         下一步
@@ -1965,27 +1987,33 @@
 </span></code></pre></div>
 <p>每个 <code>GenericAPIView</code> / <code>BaseViewSet</code> 实例初始化时，若类上未声明
 <code>filter_class</code>，则使用 <code>settings.DEFAULT_FILTERS</code>。</p>
-<h4 id="_6">分页<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h4>
+<h4 id="_6">权限<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h4>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.permission.permission</span><span class="w"> </span><span class="kn">import</span> <span class="n">AllowAny</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">DEFAULT_PERMISSION_CLASSES</span> <span class="o">=</span> <span class="p">(</span><span class="n">AllowAny</span><span class="p">,)</span>
+</span></code></pre></div>
+<p>若 ViewSet 未声明 <code>permission_classes</code>，则使用 <code>settings.DEFAULT_PERMISSION_CLASSES</code>；类上声明的值优先。</p>
+<h4 id="_7">分页<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h4>
 <p><code>PAGINATION_CLASS = PageNumberPagination</code> 虽已定义，但内置 <code>list()</code> 当前没有
 读取它，而是直接使用 <code>PageNumberPagination</code>。当前也没有全局 <code>PAGE_SIZE</code>、
 <code>MAX_PAGE_SIZE</code> 配置；默认值在分页类中。</p>
-<h4 id="_7">限流<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">REQUEST_LIMITERS</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># 默认不限流；由应用设置为限流器实例列表</span>
+<h4 id="_8">限流<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h4>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">REQUEST_LIMITERS</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># 默认不限流；由应用设置为限流器实例列表</span>
 </span></code></pre></div>
 <p><code>throttle_rate()</code> 读取 <code>app.config.REQUEST_LIMITERS</code>（缺失时视为 <code>[]</code>）。</p>
-<h4 id="_8">健康检查<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h4>
+<h4 id="_9">健康检查<a class="headerlink" href="#_9" title="Permanent link">&para;</a></h4>
 <p><code>HEALTH_CHECK_LIST</code> 默认为空列表。健康检查路由实际读取
 <code>app.config.HEALTH_CHECK_LIST</code>：</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.health.checks</span><span class="w"> </span><span class="kn">import</span> <span class="n">RedisCheck</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">HEALTH_CHECK_LIST</span> <span class="o">=</span> <span class="p">[</span><span class="n">RedisCheck</span><span class="p">]</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">redis</span> <span class="o">=</span> <span class="n">redis_client</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.health.checks</span><span class="w"> </span><span class="kn">import</span> <span class="n">RedisCheck</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">HEALTH_CHECK_LIST</span> <span class="o">=</span> <span class="p">[</span><span class="n">RedisCheck</span><span class="p">]</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">redis</span> <span class="o">=</span> <span class="n">redis_client</span>
 </span></code></pre></div>
 <h4 id="json">JSON 编码<a class="headerlink" href="#json" title="Permanent link">&para;</a></h4>
 <p><code>DATETIME_FORMAT</code> 默认为 <code>"%Y-%m-%d %H:%M:%S"</code>。
 <code>JSON_ENCODER</code> 指向 <code>custom_dumps()</code>，可序列化 <code>datetime</code> 和异常对象。
 是否使用该编码器取决于应用如何接入 Sanic 配置；SRF 不会自动安装它。</p>
-<h4 id="_9">邮件<a class="headerlink" href="#_9" title="Permanent link">&para;</a></h4>
+<h4 id="_10">邮件<a class="headerlink" href="#_10" title="Permanent link">&para;</a></h4>
 <p><code>srf.tools.email.send_email()</code> 直接读取 <code>srf.config.settings.EmailConfig</code>：</p>
 <table>
 <thead>
@@ -2016,34 +2044,34 @@
 <p>这些值在模块导入时读取，后续修改 <code>app.config</code> 不会改变邮件配置。
 端口判断使用 <code>int(smtp_port) == 465</code> 选择 SSL。</p>
 <h4 id="github-oauth">GitHub OAuth<a class="headerlink" href="#github-oauth" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">SOCIAL_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="s2">&quot;github&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>        <span class="s2">&quot;CLIENT_ID&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>        <span class="s2">&quot;CLIENT_SECRET&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>        <span class="s2">&quot;REDIRECT_URI&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="o">...</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="p">}</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="p">}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">SOCIAL_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="s2">&quot;github&quot;</span><span class="p">:</span> <span class="p">{</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>        <span class="s2">&quot;CLIENT_ID&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        <span class="s2">&quot;CLIENT_SECRET&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="s2">&quot;REDIRECT_URI&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        <span class="o">...</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="p">}</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>默认值来自对应的大写环境变量。可以在绑定应用前通过
 <code>app.config.SOCIAL_CONFIG</code> 整体覆盖。</p>
-<h3 id="_10">完整示例<a class="headerlink" href="#_10" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sanic</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">srfconfig</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">app</span> <span class="o">=</span> <span class="n">Sanic</span><span class="p">(</span><span class="s2">&quot;MyApp&quot;</span><span class="p">)</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="p">{</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>        <span class="s2">&quot;JWT_SECRET&quot;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;SECRET_KEY&quot;</span><span class="p">],</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>        <span class="s2">&quot;NON_AUTH_ENDPOINTS&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;login&quot;</span><span class="p">,</span> <span class="s2">&quot;register&quot;</span><span class="p">,</span> <span class="s2">&quot;health&quot;</span><span class="p">),</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>        <span class="s2">&quot;HEALTH_CHECK_LIST&quot;</span><span class="p">:</span> <span class="p">[],</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="p">}</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="p">)</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">settings</span><span class="o">.</span><span class="n">set_app</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+<h3 id="_11">完整示例<a class="headerlink" href="#_11" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sanic</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">srfconfig</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">app</span> <span class="o">=</span> <span class="n">Sanic</span><span class="p">(</span><span class="s2">&quot;MyApp&quot;</span><span class="p">)</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="p">{</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>        <span class="s2">&quot;JWT_SECRET&quot;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;SECRET_KEY&quot;</span><span class="p">],</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>        <span class="s2">&quot;NON_AUTH_ENDPOINTS&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;login&quot;</span><span class="p">,</span> <span class="s2">&quot;register&quot;</span><span class="p">,</span> <span class="s2">&quot;health&quot;</span><span class="p">),</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>        <span class="s2">&quot;HEALTH_CHECK_LIST&quot;</span><span class="p">:</span> <span class="p">[],</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    <span class="p">}</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="p">)</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="n">settings</span><span class="o">.</span><span class="n">set_app</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
 </span></code></pre></div>
-<h3 id="_11">最佳实践<a class="headerlink" href="#_11" title="Permanent link">&para;</a></h3>
+<h3 id="_12">最佳实践<a class="headerlink" href="#_12" title="Permanent link">&para;</a></h3>
 <ol>
 <li><strong>分离敏感信息</strong>：使用环境变量存储密钥和密码</li>
 <li><strong>多环境配置</strong>：为开发、测试、生产环境创建不同配置</li>
@@ -2053,7 +2081,7 @@
 <li><strong>验证配置</strong>：应用启动时验证必需的配置项（如 <code>JWT_SECRET</code>）</li>
 <li><strong>文档化配置</strong>：在 README 中说明所有配置项</li>
 </ol>
-<h3 id="_12">下一步<a class="headerlink" href="#_12" title="Permanent link">&para;</a></h3>
+<h3 id="_13">下一步<a class="headerlink" href="#_13" title="Permanent link">&para;</a></h3>
 <ul>
 <li>阅读<a href="../usage/core/authentication/">认证</a>配置 JWT。</li>
 <li>阅读<a href="../usage/project-setup/">项目搭建</a>查看完整应用结构。</li>

@@ -2322,6 +2322,7 @@
 <p>Based on class-based permission system, supports view-level and object-level permission control.</p>
 <p><strong>Built-in Permission Classes:</strong></p>
 <ul>
+<li><code>AllowAny</code>: Always allow (default when <code>permission_classes</code> is undeclared)</li>
 <li><code>IsAuthenticated</code>: User must be authenticated</li>
 <li><code>IsRoleAdminUser</code>: User must be an admin role</li>
 <li><code>IsSafeMethodOnly</code>: Only allow safe HTTP methods (GET, HEAD, OPTIONS)</li>

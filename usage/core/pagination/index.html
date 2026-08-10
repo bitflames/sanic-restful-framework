@@ -2459,7 +2459,7 @@
 <li><strong>Unified Response</strong>: Returns a standardized pagination response format</li>
 </ul>
 <h3 id="pagenumberpagination">PageNumberPagination<a class="headerlink" href="#pagenumberpagination" title="Permanent link">&para;</a></h3>
-<p><code>PageNumberPagination</code> is the pagination handler class in SRF.</p>
+<p><code>PageNumberPagination</code> is the pagination handler class in SRF. Custom styles should subclass <code>BasePagination</code> (or <code>PageNumberPagination</code>) and implement the methods that raise <code>NotImplementedError</code> on the base class (<code>from_queryset</code>, <code>paginate</code>, <code>num_pages</code>). <code>to_dict</code> has a default implementation on <code>BasePagination</code>.</p>
 <h4 id="basic-usage">Basic Usage<a class="headerlink" href="#basic-usage" title="Permanent link">&para;</a></h4>
 <p>Pagination is automatically applied in the <code>list</code> method of <code>BaseViewSet</code>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.views</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseViewSet</span>

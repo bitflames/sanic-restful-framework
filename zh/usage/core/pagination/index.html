@@ -2461,7 +2461,7 @@
 <li><strong>统一响应</strong>：返回标准化的分页响应格式</li>
 </ul>
 <h3 id="pagenumberpagination">PageNumberPagination<a class="headerlink" href="#pagenumberpagination" title="Permanent link">&para;</a></h3>
-<p><code>PageNumberPagination</code> 是 SRF 的分页处理类。</p>
+<p><code>PageNumberPagination</code> 是 SRF 的分页处理类。自定义分页应继承 <code>BasePagination</code>（或 <code>PageNumberPagination</code>），并实现基类中会 <code>raise NotImplementedError</code> 的方法（<code>from_queryset</code>、<code>paginate</code>、<code>num_pages</code>）。<code>to_dict</code> 在 <code>BasePagination</code> 上已有默认实现。</p>
 <h4 id="_4">基本用法<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h4>
 <p>分页在 <code>BaseViewSet</code> 的 <code>list</code> 方法中自动应用：</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.views</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseViewSet</span>

@@ -1027,17 +1027,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#action" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        自定义 action
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1643,17 +1632,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#action" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        自定义 action
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1709,8 +1687,8 @@ ViewSet。权限类的完整说明和对象级权限接线方式见<a href="../p
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="k">class</span><span class="w"> </span><span class="nc">ProductViewSet</span><span class="p">(</span><span class="n">BaseViewSet</span><span class="p">):</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">(</span><span class="n">IsAuthenticated</span><span class="p">,)</span>
 </span></code></pre></div>
-<p>请求进入 ViewSet 前，<code>BaseViewSet.check_permissions()</code> 会依次实例化
-<code>permission_classes</code>，并调用 <code>has_permission(request)</code>。失败时抛出 403。
+<p>请求进入 ViewSet 前，<code>BaseViewSet.check_permissions()</code> 会在类上调用
+<code>has_permission(request, view)</code>（不实例化）。失败时抛出 Forbidden。
 如果认证中间件先发现 Bearer Token 缺失或无效，则会返回 401。</p>
 <h3 id="http">按 HTTP 方法设置权限<a class="headerlink" href="#http" title="Permanent link">&para;</a></h3>
 <p>当前框架没有 <code>self.action</code> 或 <code>get_permissions()</code>。需要按操作区分时，应重写
@@ -1732,73 +1710,57 @@ ViewSet。权限类的完整说明和对象级权限接线方式见<a href="../p
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>            <span class="k">else</span> <span class="p">(</span><span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">IsRoleAdminUser</span><span class="p">)</span>
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>        <span class="p">)</span>
 </span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>        <span class="k">for</span> <span class="n">permission_class</span> <span class="ow">in</span> <span class="n">classes</span><span class="p">:</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>            <span class="n">result</span> <span class="o">=</span> <span class="n">permission_class</span><span class="p">()</span><span class="o">.</span><span class="n">has_permission</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>            <span class="n">result</span> <span class="o">=</span> <span class="n">permission_class</span><span class="o">.</span><span class="n">has_permission</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
 </span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>            <span class="k">if</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">iscoroutine</span><span class="p">(</span><span class="n">result</span><span class="p">):</span>
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>                <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">result</span>
 </span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="p">:</span>
 </span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>                <span class="k">raise</span> <span class="n">Forbidden</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="s2">&quot;Forbidden&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="_3">对象级权限<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
-<p>当前 <code>BaseViewSet.check_object_permissions()</code> 是空钩子，不会自动调用权限类的
-<code>has_object_permission()</code>。需要对象级检查时，必须在 ViewSet 中接线：</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<p><code>BaseViewSet.check_object_permissions()</code> 会在类上调用
+<code>has_object_permission(request, view, obj)</code>。<code>get_object()</code> 会触发该检查，
+因此 <code>retrieve</code> / <code>update</code> / <code>destroy</code> 以及显式调用 <code>get_object()</code> 的自定义
+action 都会执行。自定义对象权限时使用 <code>@staticmethod</code>：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.permission.permission</span><span class="w"> </span><span class="kn">import</span> <span class="n">BasePermission</span><span class="p">,</span> <span class="n">IsAuthenticated</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">Forbidden</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.permission.permission</span><span class="w"> </span><span class="kn">import</span> <span class="n">BasePermission</span><span class="p">,</span> <span class="n">IsAuthenticated</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">IsOwner</span><span class="p">(</span><span class="n">BasePermission</span><span class="p">):</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="c1"># 框架调用视图级权限时只传 request，因此 view 必须可选。</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="k">return</span> <span class="kc">True</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_object_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">,</span> <span class="n">obj</span><span class="p">):</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>        <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">user_id</span> <span class="o">==</span> <span class="n">request</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">IsOwner</span><span class="p">(</span><span class="n">BasePermission</span><span class="p">):</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="nd">@staticmethod</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_object_permission</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">obj</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">user_id</span> <span class="o">==</span> <span class="n">request</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="k">class</span><span class="w"> </span><span class="nc">OrderViewSet</span><span class="p">(</span><span class="n">BaseViewSet</span><span class="p">):</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">(</span><span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">IsOwner</span><span class="p">)</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">列表接口仍需通过过滤</span> <span class="err">`</span><span class="n">queryset</span><span class="err">`</span> <span class="n">限制可见数据</span><span class="err">。</span>
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="k">class</span><span class="w"> </span><span class="nc">OrderViewSet</span><span class="p">(</span><span class="n">BaseViewSet</span><span class="p">):</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">(</span><span class="n">IsAuthenticated</span><span class="p">,</span> <span class="n">IsOwner</span><span class="p">)</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">check_object_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">obj</span><span class="p">):</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>        <span class="k">for</span> <span class="n">permission_class</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">permission_classes</span><span class="p">:</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>            <span class="n">checker</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>                <span class="n">permission_class</span><span class="p">(),</span> <span class="s2">&quot;has_object_permission&quot;</span><span class="p">,</span> <span class="kc">None</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>            <span class="p">)</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>            <span class="k">if</span> <span class="n">checker</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>                <span class="k">continue</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>            <span class="n">result</span> <span class="o">=</span> <span class="n">checker</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span>
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>            <span class="k">if</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">iscoroutine</span><span class="p">(</span><span class="n">result</span><span class="p">):</span>
-</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>                <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">result</span>
-</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="p">:</span>
-</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>                <span class="k">raise</span> <span class="n">Forbidden</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="s2">&quot;Forbidden&quot;</span><span class="p">)</span>
-</span></code></pre></div>
-<p><code>get_object()</code> 会调用这个钩子，因此 <code>retrieve</code>、<code>update</code>、<code>destroy</code> 以及显式
-调用 <code>get_object()</code> 的自定义 action 都会执行检查。列表接口仍需通过过滤
-<code>queryset</code> 限制可见数据。</p>
-<h3 id="action">自定义 action<a class="headerlink" href="#action" title="Permanent link">&para;</a></h3>
-<p>自定义 action 同样会先执行 ViewSet 的全局 <code>check_permissions()</code>，不能通过
-“手动实现 action”跳过权限。若某个 action 需要额外权限，可在 action 内
-再次调用权限类：</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">Forbidden</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.permission.permission</span><span class="w"> </span><span class="kn">import</span> <span class="n">IsRoleAdminUser</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.views.decorators</span><span class="w"> </span><span class="kn">import</span> <span class="n">action</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nd">@action</span><span class="p">(</span><span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;post&quot;</span><span class="p">],</span> <span class="n">detail</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">publish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">IsRoleAdminUser</span><span class="p">()</span><span class="o">.</span><span class="n">has_permission</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>        <span class="k">raise</span> <span class="n">Forbidden</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="s2">&quot;需要管理员权限&quot;</span><span class="p">)</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">product</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_object</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">pk</span><span class="p">)</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="c1"># ...</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1">## 自定义 action</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="n">自定义</span> <span class="n">action</span> <span class="n">同样会先执行</span> <span class="n">ViewSet</span> <span class="n">的全局</span> <span class="err">`</span><span class="n">check_permissions</span><span class="p">()</span><span class="err">`，</span><span class="n">不能通过</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="err">“</span><span class="n">手动实现</span> <span class="n">action</span><span class="err">”</span><span class="n">跳过权限</span><span class="err">。</span><span class="n">若某个</span> <span class="n">action</span> <span class="n">需要额外权限</span><span class="err">，</span><span class="n">可在</span> <span class="n">action</span> <span class="n">内</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="n">再次调用权限类</span><span class="err">：</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="err">```</span><span class="n">python</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">Forbidden</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.permission.permission</span><span class="w"> </span><span class="kn">import</span> <span class="n">IsRoleAdminUser</span>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.views.decorators</span><span class="w"> </span><span class="kn">import</span> <span class="n">action</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="nd">@action</span><span class="p">(</span><span class="n">detail</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;post&quot;</span><span class="p">],</span> <span class="n">url_path</span><span class="o">=</span><span class="s2">&quot;publish&quot;</span><span class="p">)</span>
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">publish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">IsRoleAdminUser</span><span class="o">.</span><span class="n">has_permission</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>        <span class="k">raise</span> <span class="n">Forbidden</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="s2">&quot;需要管理员权限&quot;</span><span class="p">)</span>
+</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>    <span class="n">product</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_object</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">pk</span><span class="p">)</span>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>    <span class="c1"># ...</span>
 </span></code></pre></div>
 <h3 id="_4">注意事项<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>NON_AUTH_ENDPOINTS</code> 只按 URL 最后一段匹配，详见
   <a href="../../advanced/middleware/auth-middleware/">认证中间件</a>。</li>
-<li>自定义 <code>has_permission</code> 应使用签名
-  <code>has_permission(self, request, view=None)</code>。</li>
-<li>对象级权限必须显式接线；不要只把对象权限类放进
-  <code>permission_classes</code> 就认为它已生效。</li>
+<li>自定义权限应使用 <code>@staticmethod</code>，签名为 <code>has_permission(request, view=None)</code> / <code>has_object_permission(request, view=None, obj=None)</code>。</li>
+<li>列表接口的对象可见性仍需通过 <code>get_queryset()</code>（或 <code>queryset</code>）限定范围。</li>
 <li>对公开接口，认证豁免与 ViewSet 权限都需要正确配置。</li>
 </ul>
 
