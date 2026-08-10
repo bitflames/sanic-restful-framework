@@ -40,7 +40,7 @@ class CreateModelMixin:
         sch_model: instance of BaseModel
         """
         try:
-            return await self.queryset.model.create(**sch_model.model_dump(exclude_unset=True))
+            return await self.get_queryset().model.create(**sch_model.model_dump(exclude_unset=True))
         except exceptions.IntegrityError:
             raise HTTPException(status_code=HTTPStatus.HTTP_409_CONFLICT, detail="data conflict")
 
@@ -96,11 +96,7 @@ class ListModelMixin:
     async def list(self, request: Request, *args, **kwargs) -> JSONResponse:
         """Get a list orm model instance."""
         sch_model: Type[BaseModel] = self._get_schema(request)
-        queryset: QuerySetType = self.queryset
-        if hasattr(self, "filter_class"):
-            for filter_class in self.filter_class:
-                filter_class = cast(BaseFilter, filter_class)
-                queryset = filter_class(self).filter_queryset(request, queryset)
+        queryset: QuerySetType = self.filter_queryset(self.get_queryset())
         paginator = PageNumberPagination.from_queryset(queryset, request)  # TODO，config
         result = await paginator.paginate(sch_model=sch_model)
         return JSONResponse(result.model_dump(by_alias=True))
@@ -109,6 +105,7 @@ class ListModelMixin:
 class GenericAPIView(HTTPMethodView):
     permission_classes: Iterable[Type[BasePermission]]
     search_fields: list = Field(default_factory=list)
+    queryset = None
 
     def __init__(self, *args, **kwargs):
         cls = type(self)
@@ -169,8 +166,7 @@ self.permission_classes = getattr(cls, "permission_classes", settings.DEFAULT_PE
 
     async def get_object(self, request: Request, id: int):
         """Get an orm model instance."""
-        self.request = request
-        instance: TorModel = await self.queryset.get_or_none(id=id)
+        instance: TorModel = await self.get_queryset().get_or_none(id=id)
         if instance is None:
             raise NotFound(message=f"Object with id={id} not found")
 
@@ -178,9 +174,28 @@ self.permission_classes = getattr(cls, "permission_classes", settings.DEFAULT_PE
 
         return instance
 
-    @property
-    def queryset(self) -> QuerySetType:
-        raise NotImplementedError
+    def get_queryset(self) -> QuerySetType:
+        """
+        Prioritize using get_queryset, followed by queryset
+        """
+        assert self.queryset is not None, (
+            f"'{self.__class__.__name__}' should either include a `queryset` attribute, " "or override the `get_queryset()` method."
+        )
+        queryset = self.queryset
+        if isinstance(queryset, QuerySetType):
+            # Ensure queryset is re-evaluated on each request, tortoise
+            queryset = queryset.all()
+        return queryset
+
+    def filter_queryset(self, queryset):
+        """
+        The filter class should be obtained first from view class or, if not, from settings
+        """
+        if hasattr(self, "filter_class"):
+            for filter_class in self.filter_class:
+                filter_class = cast(BaseFilter, filter_class)
+                queryset = filter_class(self).filter_queryset(self.request, queryset)
+        return queryset
 
     @classmethod
     def as_view(cls, actions=None):
