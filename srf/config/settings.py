@@ -18,8 +18,6 @@ PAGINATION_CLASS = PageNumberPagination
 
 # SECRET_KEY and JWT_SECRET must be set in your Sanic config
 # SECRET_KEY
-# JWT_SECRET
-JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
 
 # BASE_DIR = Path(__file__).resolve().parent.parent
 BASE_DIR = os.getcwd()
@@ -35,6 +33,7 @@ HEALTH_CHECK_LIST = []
 NON_AUTH_ENDPOINTS = (
     "register",
     "login",
+    "refresh",
     "send-verification-email",
     "health",
     "about",
@@ -102,3 +101,7 @@ EMAIL_CODE_REDIS = "EMAIL_CODE"
 
 # Default empty; apps can set REQUEST_LIMITERS on Sanic config
 REQUEST_LIMITERS = []
+
+# JWT_SECRET
+JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
+JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)

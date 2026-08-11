@@ -1,13 +1,13 @@
-import jwt
 from sanic import Request
 from sanic.exceptions import Unauthorized
+from sanic_jwt.exceptions import InvalidAuthorizationHeader, SanicJWTException
 
-from srf.auth.auth import retrieve_user
+from srf.config import settings
 
 
 def is_public_endpoint(request: Request) -> bool:
     tail = request.path.rstrip("/").rpartition("/")[2]
-    return tail in getattr(request.app.config, "NON_AUTH_ENDPOINTS", [])
+    return tail in getattr(settings, "NON_AUTH_ENDPOINTS", [])
 
 
 def extract_bearer_token(request: Request) -> str:
@@ -27,20 +27,21 @@ def extract_bearer_token(request: Request) -> str:
 
 
 async def authenticate_request(request: Request):
-    token = extract_bearer_token(request)
+    if not hasattr(request.app.ctx, "auth"):
+        raise Unauthorized("Authentication is not configured")
 
     try:
-        payload = jwt.decode(token, request.app.config.JWT_SECRET, algorithms=["HS256"])
-    except jwt.ExpiredSignatureError:
-        raise Unauthorized("Token has expired, please login again")
-    except jwt.InvalidTokenError:
-        raise Unauthorized("Invalid token")
+        payload = await request.app.ctx.auth.extract_payload(request)
+    except (InvalidAuthorizationHeader, SanicJWTException) as exc:
+        raise Unauthorized(str(exc) or "Invalid authorization header format") from exc
 
-    user = await retrieve_user(payload)
-    if not user:
+    if not payload:
+        raise Unauthorized("Authentication required")
+
+    # Sole User lookup: retrieve_user loads ORM onto request.ctx.user
+    user_data = await request.app.ctx.auth.retrieve_user(request, payload)
+    if not user_data or getattr(request.ctx, "user", None) is None:
         raise Unauthorized("User not found")
-
-    request.ctx.user = user
 
 
 async def set_user_to_request_ctx(request: Request):

@@ -7,8 +7,8 @@ import os
 import pytest
 
 # Optional for tests that still read env-based email/social settings
-os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest")
-os.environ.setdefault("JWT_SECRET", "test-jwt-secret-for-pytest")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest-32bytes!!")
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-for-pytest-32bytes!!")
 
 
 @pytest.fixture

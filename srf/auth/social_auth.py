@@ -10,14 +10,13 @@ from sanic.exceptions import BadRequest, NotFound
 from sanic.log import error_logger
 from sanic.response import JSONResponse
 from sanic.response import redirect as RedirectResponse
-from sanic_jwt.authentication import Authentication
 
 from srf.config import settings
 from srf.tools.signing import sign_state, unsign_state
 from srf.views.http_status import HTTPStatus
 
 from . import models
-from .schema import UserSchemaReader
+from .auth import gen_user_access_token
 
 DEFAULT_EXCHANGE_CODE_TTL = 300
 DEFAULT_EXCHANGE_CODE_PREFIX = "social-login"
@@ -271,18 +270,5 @@ async def login_by_code(request: Request):
     if user_db is None:
         raise NotFound("User not found")
 
-    authentication = Authentication(request.app, request.app.ctx.jwt.config)
-    user_data = UserSchemaReader.model_validate(user_db).model_dump(
-        by_alias=True,
-        mode="json",
-    )
-    role_name = user_db.role.name if user_db.role else None
-    access_token = await authentication.generate_access_token(
-        user={
-            "user_id": user_db.id,
-            "username": user_db.name,
-            "role": role_name,
-        }
-    )
-    user_data["access_token"] = access_token
-    return JSONResponse(user_data)
+    user_return_data = await gen_user_access_token(request, user_db)
+    return JSONResponse(user_return_data, status=HTTPStatus.HTTP_200_OK)

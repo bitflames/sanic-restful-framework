@@ -147,12 +147,14 @@ class TestLoginByCode:
 
         auth_instance = MagicMock()
         auth_instance.generate_access_token = AsyncMock(return_value="jwt-token")
+        auth_instance.generate_refresh_token = AsyncMock(return_value="refresh-token")
+        auth_instance.config.refresh_token_enabled = MagicMock(return_value=True)
+        request.app.ctx.auth = auth_instance
 
         with (
             patch("srf.auth.social_auth.models.User") as UserMock,
-            patch("srf.auth.social_auth.Authentication", return_value=auth_instance),
             patch(
-                "srf.auth.social_auth.UserSchemaReader.model_validate",
+                "srf.auth.auth.UserSchemaReader.model_validate",
                 return_value=MagicMock(model_dump=MagicMock(return_value={"id": 7, "username": "alice"})),
             ),
         ):
@@ -161,3 +163,5 @@ class TestLoginByCode:
 
         assert response.status == 200
         auth_instance.generate_access_token.assert_awaited()
+        auth_instance.generate_refresh_token.assert_awaited()
+        assert isinstance(auth_instance.generate_refresh_token.await_args.args[1], dict)

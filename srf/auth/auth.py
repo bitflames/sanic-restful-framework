@@ -1,12 +1,26 @@
+from datetime import UTC, datetime, timedelta
+
 from pydantic import ValidationError
-from sanic.exceptions import BadRequest, Unauthorized
+from sanic.exceptions import BadRequest, ServerError, Unauthorized
 from sanic.request import Request
+from sanic_jwt.authentication import Authentication
 from tortoise.expressions import Q
 
-from .models import User
-from .schema import UserLoginSchema
+from srf.config import settings
+
+from .models import RefreshToken, User
+from .schema import UserLoginSchema, UserSchemaReader
 
 LOGIN_FAILED_MESSAGE = "Unable to log in with provided credentials."
+
+
+def build_user_payload(user: User) -> dict:
+    """JWT payload dict for sanic-jwt (login / refresh / me / token issue)."""
+    return {
+        "user_id": user.id,
+        "username": user.name,
+        "role": user.role.name if user.role else None,
+    }
 
 
 async def authenticate(request: Request, *args, **kwargs):
@@ -31,23 +45,82 @@ async def authenticate(request: Request, *args, **kwargs):
     if not user.verify_password(sch_user.password):
         raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
-    role_name = user.role.name if user.role else None
-    return {"user_id": user.id, "username": user.name, "role": role_name}
+    return build_user_payload(user)
 
 
-async def retrieve_user(payload, *args, **kwargs):
-    if payload:
-        user_id = payload.get("user_id", None)
-        if user_id is not None:
-            user = await User.filter(id=user_id).select_related("role").first()
-            return user
-    return None
+async def retrieve_user(request, payload, *args, **kwargs):
+    """
+    Single place to resolve an active User from JWT payload.
+
+    - Loads ORM User once per request and stores it on ``request.ctx.user``
+    - Returns a dict for sanic-jwt (refresh / me); ViewSets use ``request.ctx.user``
+    """
+    if not payload:
+        return None
+    user_id = payload.get("user_id")
+    if user_id is None:
+        return None
+
+    # Reuse ORM user already attached earlier in this request
+    ctx = getattr(request, "ctx", None) if request is not None else None
+    cached = getattr(ctx, "user", None) if ctx is not None else None
+    if cached is not None and getattr(cached, "id", None) == user_id and await check_active(cached):
+        return build_user_payload(cached)
+
+    user = await User.filter(id=user_id).select_related("role").first()
+    if user is None or not await check_active(user):
+        return None
+    if ctx is not None:
+        ctx.user = user
+    return build_user_payload(user)
 
 
 async def check_active(user: User):
     return getattr(user, "is_active", True)
 
 
-async def store_user(request, user_id, *args, **kwargs):
-    user = await retrieve_user({"user_id": user_id})
-    request.ctx.user = user
+async def gen_user_access_token(request: Request, user_db: User) -> dict:
+    """Serialize user and attach a JWT access_token from app.ctx.auth."""
+    auth: Authentication | None = getattr(request.app.ctx, "auth", None)
+    if auth is None:
+        raise ServerError("JWT is not configured; call register_auth_urls() first")
+
+    user_payload = build_user_payload(user_db)
+    access_token = await auth.generate_access_token(user=user_payload)
+    data = UserSchemaReader.model_validate(user_db, from_attributes=True).model_dump(
+        by_alias=True,
+        mode="json",
+    )
+    data["access_token"] = access_token
+    if auth.config.refresh_token_enabled():
+        data["refresh_token"] = await auth.generate_refresh_token(request, user_payload)
+    return data
+
+
+def _refresh_ttl() -> timedelta:
+    ttl = getattr(settings, "JWT_REFRESH_TOKEN_EXPIRES", timedelta(days=30))
+    if isinstance(ttl, timedelta):
+        return ttl if ttl.total_seconds() > 0 else timedelta(seconds=1)
+    return timedelta(seconds=max(int(ttl), 1))
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+async def store_refresh_token(user_id, refresh_token, request):
+    """Persist refresh token in DB; replace any existing token for this user."""
+    expires_at = _utc_now() + _refresh_ttl()
+    await RefreshToken.filter(user_id=user_id).delete()
+    await RefreshToken.create(user_id=user_id, token=refresh_token, expires_at=expires_at)
+
+
+async def retrieve_refresh_token(request, user_id):
+    """Return the active (non-expired) refresh token for user, or None."""
+    row = await RefreshToken.filter(user_id=user_id, expires_at__gt=_utc_now()).first()
+    return row.token if row else None
+
+
+async def revoke_refresh_token(request, user_id) -> None:
+    """Delete all refresh tokens for the user (logout)."""
+    await RefreshToken.filter(user_id=user_id).delete()

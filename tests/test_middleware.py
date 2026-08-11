@@ -24,12 +24,11 @@ class TestIsPublicEndpoint:
         request.app.config.NON_AUTH_ENDPOINTS = ("login",)
         assert is_public_endpoint(request) is False
 
-    def test_missing_config_returns_false(self):
+    def test_refresh_is_public(self):
         request = MagicMock()
-        request.path = "/api/auth/login"
-        request.app.config = {}
-        result = is_public_endpoint(request)
-        assert result is False  # getattr(config, "NON_AUTH_ENDPOINTS", []) is []
+        request.path = "/api/auth/refresh"
+        request.app.config = SimpleNamespace()
+        assert is_public_endpoint(request) is True
 
 
 class TestExtractBearerToken:

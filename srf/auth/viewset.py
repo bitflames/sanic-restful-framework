@@ -17,8 +17,8 @@ from srf.tools.utils import generate_code
 from srf.views import BaseViewSet, action
 from srf.views.http_status import HTTPStatus
 
-from .auth import authenticate, retrieve_user
-from .schema import UserSchemaReader, UserSchemaWriter
+from .auth import authenticate, gen_user_access_token, retrieve_refresh_token, retrieve_user, revoke_refresh_token, store_refresh_token
+from .schema import UserSchemaWriter
 
 
 def setup_auth(app: Sanic, *args, **kwargs) -> Initialize:
@@ -47,12 +47,26 @@ def setup_auth(app: Sanic, *args, **kwargs) -> Initialize:
         path_to_authenticate=path_to_authenticate,
         secret=secret,
         url_prefix=url_prefix,
+        refresh_token_enabled=True,
+        store_refresh_token=store_refresh_token,
+        retrieve_refresh_token=retrieve_refresh_token,
+        expiration_delta=int(settings.JWT_ACCESS_TOKEN_EXPIRES.total_seconds()),
         **kwargs,
     )
 
 
 async def logout(request: Request):
-    # TODO token handle
+    auth: Authentication | None = getattr(request.app.ctx, "auth", None)
+    if auth is None:
+        raise ServerError("JWT is not configured; call register_auth_urls() first")
+    try:
+        payload = await auth.extract_payload(request, verify=False)
+    except Exception:  # noqa: BLE001
+        return HTTPResponse(status=HTTPStatus.HTTP_200_OK)
+    if isinstance(payload, dict):
+        user_id = payload.get("user_id")
+        if user_id is not None:
+            await revoke_refresh_token(request, user_id)
     return HTTPResponse(status=HTTPStatus.HTTP_200_OK)
 
 
@@ -76,25 +90,8 @@ async def register(request: Request):
     # Validate schema and create user (User.create hashes password and resolves role)
     sch_user_in = UserSchemaWriter.model_validate(request.json, by_alias=True, extra="ignore")
     user_db = await models.User.create(sch_user_in.model_dump(exclude_unset=True, exclude_none=True))
-    user_db_data = UserSchemaReader.model_validate(user_db, from_attributes=True).model_dump(by_alias=True)
-
-    # Generate JWT payload with serializable role (name string, not FK object)
-
-    jwt = request.app.ctx.jwt
-    if jwt is None:
-        raise ServerError("JWT is not configured; call register_auth_urls() first")
-    aut = Authentication(request.app, jwt.config)
-
-    # Generate access token
-    access_token = await aut.generate_access_token(
-        user={
-            "user_id": user_db.id,
-            "username": user_db.name,
-            "role": user_db.role.name if user_db.role else None,
-        }
-    )
-    user_db_data["access_token"] = access_token
-    return JSONResponse(user_db_data, status=HTTPStatus.HTTP_200_OK)
+    user_return_data = await gen_user_access_token(request, user_db)
+    return JSONResponse(user_return_data, status=HTTPStatus.HTTP_200_OK)
 
 
 async def verify_email(request: Request):

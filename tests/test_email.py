@@ -1,6 +1,5 @@
 """Unit tests for srf.tools.email and auth email verification flow."""
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -105,11 +104,11 @@ class TestSendVerifyCode:
             assert "12345" in args[2]
 
 
-def _make_request(json_body=None, redis=None):
+def _make_request(json_body=None, redis=None, auth=None):
     request = MagicMock()
     request.json = json_body
     request.app.ctx.redis = redis if redis is not None else AsyncMock()
-    request.app.ctx.jwt = SimpleNamespace(config={})
+    request.app.ctx.auth = auth
     return request
 
 
@@ -244,6 +243,11 @@ class TestRegisterEmailCode:
         mock_role.name = "user"
         mock_user.role = mock_role
 
+        auth_inst = MagicMock()
+        auth_inst.generate_access_token = AsyncMock(return_value="tok")
+        auth_inst.generate_refresh_token = AsyncMock(return_value="rtok")
+        auth_inst.config.refresh_token_enabled = MagicMock(return_value=True)
+
         request = _make_request(
             json_body={
                 "email": "u@example.com",
@@ -252,15 +256,12 @@ class TestRegisterEmailCode:
                 "password1": "secret",
             },
             redis=redis,
+            auth=auth_inst,
         )
-
-        auth_inst = AsyncMock()
-        auth_inst.generate_access_token = AsyncMock(return_value="tok")
 
         with (
             patch("srf.auth.viewset.models.User.create", new_callable=AsyncMock, return_value=mock_user),
-            patch("srf.auth.viewset.Authentication", return_value=auth_inst),
-            patch("srf.auth.viewset.UserSchemaReader.model_validate") as reader_validate,
+            patch("srf.auth.auth.UserSchemaReader.model_validate") as reader_validate,
         ):
             reader_validate.return_value.model_dump.return_value = {
                 "id": 1,
@@ -272,3 +273,6 @@ class TestRegisterEmailCode:
         assert response.status == 200
         redis.delete.assert_awaited()
         auth_inst.generate_access_token.assert_awaited_once()
+        auth_inst.generate_refresh_token.assert_awaited_once()
+        refresh_user = auth_inst.generate_refresh_token.await_args.args[1]
+        assert refresh_user == {"user_id": 1, "username": "alice", "role": "user"}

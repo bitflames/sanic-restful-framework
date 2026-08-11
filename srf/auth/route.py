@@ -5,8 +5,7 @@ from .viewset import logout, register, setup_auth, verify_email
 
 
 def register_auth_urls(app: Sanic, prefix='/api/auth'):
-    jwt = setup_auth(app, url_prefix=prefix, secret=app.config.JWT_SECRET)  # JWT_SECRET must be set in your Sanic config, no default value
-    setattr(app.ctx, "jwt", jwt)
+    setup_auth(app, url_prefix=prefix, secret=app.config.JWT_SECRET)  # JWT_SECRET must be set in your Sanic config, no default value
 
     app.add_route(logout, uri=f'{prefix}/logout', methods=['POST'])
     app.add_route(register, uri=f'{prefix}/register', methods=['POST'])

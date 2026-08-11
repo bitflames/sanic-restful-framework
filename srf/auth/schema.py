@@ -1,5 +1,4 @@
 import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, model_validator
 
@@ -7,7 +6,7 @@ from srf.config.settings import DATETIME_FORMAT
 
 
 def utc_now() -> datetime.datetime:
-    return datetime.datetime.now(datetime.timezone.utc)
+    return datetime.datetime.now(datetime.UTC)
 
 
 class SchemaBaseTime(BaseModel):
@@ -27,13 +26,13 @@ class CreateUserEmail(BaseModel):
 
 
 class UserSchemaWriter(SchemaBaseTime):
-    id: Optional[int] = None
+    id: int | None = None
     name: str = Field(..., alias="username")
-    email: Optional[EmailStr] = None
+    email: EmailStr | None = None
     is_active: bool = True
     is_staff: bool = False
     is_superuser: bool = False
-    password: Optional[str] = Field(None, alias="password1")
+    password: str | None = Field(None, alias="password1")
     role_name: str = Field(default="user")
 
     model_config = ConfigDict(
@@ -44,12 +43,12 @@ class UserSchemaWriter(SchemaBaseTime):
 class UserSchemaReader(SchemaBaseTime):
     id: int
     name: str = Field(..., alias="username")
-    email: Optional[EmailStr] = None
+    email: EmailStr | None = None
     is_active: bool = True
     is_staff: bool = False
     is_superuser: bool = False
-    last_login: Optional[datetime.datetime] = None
-    date_joined: Optional[datetime.datetime] = None
+    last_login: datetime.datetime | None = None
+    date_joined: datetime.datetime | None = None
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, ser_json_alias=True)
     # Both name and alias are allowed to be assigned. The output of ser_json_alias must use alias
@@ -60,8 +59,8 @@ class UserSchemaReader(SchemaBaseTime):
 
 
 class UserLoginSchema(BaseModel):
-    email: Optional[EmailStr] = Field(None)
-    username: Optional[str] = Field(None)
+    email: EmailStr | None = Field(None)
+    username: str | None = Field(None)
     password: str
 
     @model_validator(mode='after')

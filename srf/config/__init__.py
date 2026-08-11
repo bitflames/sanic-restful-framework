@@ -9,7 +9,7 @@ from srf.exceptions import ImproperlyConfigured
 
 SETTINGS_PATH = "srf.config.settings"
 
-__all__ = ["srfconfig", "settings"]
+__all__ = ["settings", "srfconfig"]
 
 
 class LazySettings:
@@ -20,7 +20,7 @@ class LazySettings:
             cls.__instance = object.__new__(cls)
         return cls.__instance
 
-    def __init__(self, app: Sanic = None):
+    def __init__(self, app: Sanic | None = None):
         if getattr(self, '_inited', False):
             return
         self._inited = True
@@ -45,7 +45,7 @@ class LazySettings:
                 setattr(self, name, value)
 
     def set_app(self, app: Sanic):
-        setattr(self, "app", app.config)
+        self.app = app.config
 
     def __getattribute__(self, name):
         """Prefer Sanic app.config, then fall back to SRF module settings."""

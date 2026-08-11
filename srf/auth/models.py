@@ -1,5 +1,3 @@
-from typing import Dict
-
 import bcrypt
 from tortoise import fields
 from tortoise.models import Model as TorModel
@@ -29,6 +27,8 @@ class User(TorModel):
     create_time = fields.DatetimeField(auto_now_add=True, read_only=True)
     update_time = fields.DatetimeField(auto_now=True, null=True)
 
+    refresh_tokens: fields.ReverseRelation["RefreshToken"]
+
     class Meta:
         table = "auth_user"
 
@@ -42,7 +42,7 @@ class User(TorModel):
         return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     @classmethod
-    async def create(cls, user_info: Dict) -> "User":
+    async def create(cls, user_info: dict) -> "User":
         """
         Override Tortoise's create: create user with hashed password and role resolution.
         """
@@ -70,3 +70,17 @@ class UserRoles(TorModel):
 
     class Meta:
         table = "auth_user_role"
+
+
+class RefreshToken(TorModel):
+    """Persisted JWT refresh token (one active row per user; login replaces it)."""
+
+    id = fields.BigIntField(pk=True, generated=True)
+    user = fields.ForeignKeyField("models.User", related_name="refresh_tokens", on_delete=fields.CASCADE)
+    token = fields.CharField(max_length=512, null=False)
+    expires_at = fields.DatetimeField(null=False)
+    create_time = fields.DatetimeField(auto_now_add=True)
+    update_time = fields.DatetimeField(auto_now=True, null=True)
+
+    class Meta:
+        table = "auth_refresh_token"
