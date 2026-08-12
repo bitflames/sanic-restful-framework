@@ -1,8 +1,8 @@
 import asyncio
 from collections.abc import Iterable
-from typing import cast
+from typing import ClassVar, cast
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ValidationError
 from sanic import Request
 from sanic.exceptions import Forbidden, HTTPException, NotFound
 from sanic.log import error_logger
@@ -13,6 +13,7 @@ from tortoise.models import Model as TorModel
 from tortoise.queryset import QuerySet as QuerySetType
 
 from srf.config import settings
+from srf.exceptions import TargetObjectAlreadyExist
 from srf.filters.filter import BaseFilter
 from srf.paginator import PageNumberPagination
 from srf.permission.permission import BasePermission
@@ -43,7 +44,7 @@ class CreateModelMixin:
         try:
             return await self.get_queryset().model.create(**sch_model.model_dump(exclude_unset=True))
         except exceptions.IntegrityError:
-            raise HTTPException(status_code=HTTPStatus.HTTP_409_CONFLICT, detail="data conflict")
+            raise TargetObjectAlreadyExist(message="data conflict")
 
 
 class RetrieveModelMixin:
@@ -105,7 +106,7 @@ class ListModelMixin:
 
 class GenericAPIView(HTTPMethodView):
     permission_classes: Iterable[type[BasePermission]]
-    search_fields: list = Field(default_factory=list)
+    search_fields: ClassVar[list[str]] = []
     queryset = None
 
     def __init__(self, *args, **kwargs):
@@ -252,7 +253,7 @@ class GenericAPIView(HTTPMethodView):
             except HTTPException as e:
                 error_logger.exception("HTTPException")
                 return JSONResponse(
-                    {"detail": getattr(e, "detail", "Error")},
+                    {"detail": getattr(e, "message", "Error")},
                     status=e.status_code,
                 )
 
