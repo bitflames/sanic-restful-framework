@@ -3,10 +3,10 @@ from sanic.response import JSONResponse
 
 from srf.views.http_status import HTTPStatus
 
-bp = Blueprint("health", url_prefix="/health")
+bp = Blueprint("health")
 
 
-@bp.get("/")
+@bp.get("/health")
 async def health_check(request):
     checked = []
     HEALTH_CHECK_LIST = request.app.config.HEALTH_CHECK_LIST or []
