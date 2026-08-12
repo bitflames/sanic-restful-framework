@@ -77,7 +77,7 @@ async def ensure_seed_data() -> User:
 
     user = await User.filter(email=SEED_EMAIL).first()
     if user is None:
-        return await User.create(
+        return await User.create_user(
             {
                 "name": SEED_USERNAME,
                 "email": SEED_EMAIL,
@@ -99,10 +99,7 @@ def create_app() -> Sanic:
     app.config.JWT_SECRET = JWT_SECRET
     app.config.SECRET_KEY = SECRET_KEY
     app.config.NON_AUTH_ENDPOINTS = tuple(settings.NON_AUTH_ENDPOINTS) + (
-        "logout",
-        "verify",
-        "me",
-        "hello",
+        "/api/public/hello",
     )
     settings.set_app(app)
 

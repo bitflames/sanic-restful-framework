@@ -42,9 +42,10 @@ class User(TorModel):
         return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     @classmethod
-    async def create(cls, user_info: dict) -> "User":
+    async def create_user(cls, user_info: dict) -> "User":
         """
-        Override Tortoise's create: create user with hashed password and role resolution.
+        Do not override Tortoise's create method,
+        create user with hashed password and role resolution.
         """
         user_info = dict(user_info)
         user_info.pop("id", None)

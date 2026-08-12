@@ -260,7 +260,7 @@ class TestRegisterEmailCode:
         )
 
         with (
-            patch("srf.auth.viewset.models.User.create", new_callable=AsyncMock, return_value=mock_user),
+            patch("srf.auth.viewset.models.User.create_user", new_callable=AsyncMock, return_value=mock_user),
             patch("srf.auth.auth.UserSchemaReader.model_validate") as reader_validate,
         ):
             reader_validate.return_value.model_dump.return_value = {

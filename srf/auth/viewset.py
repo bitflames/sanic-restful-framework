@@ -87,9 +87,9 @@ async def register(request: Request):
         return HTTPResponse("The verification code is incorrect or timeout, please retry!", status=HTTPStatus.HTTP_400_BAD_REQUEST)
     await redis.delete(email_cache_key)
 
-    # Validate schema and create user (User.create hashes password and resolves role)
+    # Validate schema and create user (create_user hashes password and resolves role)
     sch_user_in = UserSchemaWriter.model_validate(request.json, by_alias=True, extra="ignore")
-    user_db = await models.User.create(sch_user_in.model_dump(exclude_unset=True, exclude_none=True))
+    user_db = await models.User.create_user(sch_user_in.model_dump(exclude_unset=True, exclude_none=True))
     user_return_data = await gen_user_access_token(request, user_db)
     return JSONResponse(user_return_data, status=HTTPStatus.HTTP_200_OK)
 
@@ -159,4 +159,4 @@ class UserViewSet(BaseViewSet):
     async def perform_create(self, sch_model):
         """Create ORM user from Pydantic schema. TODO: verify email availability."""
         data = sch_model.model_dump(exclude_unset=True, exclude_none=True)
-        return await models.User.create(data)
+        return await models.User.create_user(data)

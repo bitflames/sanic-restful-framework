@@ -1,9 +1,11 @@
 """Unit tests for srf.middleware (auth and throttle)."""
 
-import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from srf.config import settings
 from srf.middleware.authmiddleware import (
     extract_bearer_token,
     is_public_endpoint,
@@ -11,23 +13,48 @@ from srf.middleware.authmiddleware import (
 from srf.middleware.throttlemiddleware import IPRateLimit, MemoryStorage, throttle_rate
 
 
+@pytest.fixture
+def public_endpoints_via_app():
+    """Bind NON_AUTH_ENDPOINTS through settings.set_app; restore afterward."""
+    previous_app = getattr(settings, "app", None)
+
+    def _bind(endpoints):
+        app = MagicMock()
+        app.config = SimpleNamespace(NON_AUTH_ENDPOINTS=endpoints)
+        settings.set_app(app)
+
+    yield _bind
+
+    if previous_app is None:
+        if hasattr(settings, "app"):
+            delattr(settings, "app")
+    else:
+        object.__setattr__(settings, "app", previous_app)
+
+
 class TestIsPublicEndpoint:
-    def test_tail_in_list_returns_true(self):
+    def test_full_path_match_returns_true(self, public_endpoints_via_app):
+        public_endpoints_via_app(("/api/auth/login", "/api/auth/register"))
         request = MagicMock()
         request.path = "/api/auth/login"
-        request.app.config.NON_AUTH_ENDPOINTS = ("login", "register")
         assert is_public_endpoint(request) is True
 
-    def test_tail_not_in_list_returns_false(self):
+    def test_suffix_only_does_not_match(self, public_endpoints_via_app):
+        """Old tail-segment matching would treat /api/admin/login as public; full path must not."""
+        public_endpoints_via_app(("/api/auth/login",))
         request = MagicMock()
-        request.path = "/api/projects/1"
-        request.app.config.NON_AUTH_ENDPOINTS = ("login",)
+        request.path = "/api/admin/login"
         assert is_public_endpoint(request) is False
 
-    def test_refresh_is_public(self):
+    def test_unlisted_path_returns_false(self, public_endpoints_via_app):
+        public_endpoints_via_app(("/api/auth/login",))
+        request = MagicMock()
+        request.path = "/api/projects/1"
+        assert is_public_endpoint(request) is False
+
+    def test_default_refresh_is_public(self):
         request = MagicMock()
         request.path = "/api/auth/refresh"
-        request.app.config = SimpleNamespace()
         assert is_public_endpoint(request) is True
 
 

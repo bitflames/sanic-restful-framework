@@ -79,7 +79,7 @@ SOCIAL_CONFIG = {
 }
 
 
-# SRF authentication-free URL suffixes
+# SRF authentication-free URL paths (full path match, not last segment)
 NON_AUTH_ENDPOINTS = [
     "/api/auth/register",
     "/api/auth/login",

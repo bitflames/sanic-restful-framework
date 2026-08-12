@@ -269,9 +269,10 @@ class TestLogout:
 
 
 class TestNonAuthEndpoints:
-    def test_refresh_is_public_suffix(self):
-        assert "refresh" in settings.NON_AUTH_ENDPOINTS
-        assert "send-verification-email" in settings.NON_AUTH_ENDPOINTS
+    def test_public_endpoints_use_full_paths(self):
+        assert "/api/auth/refresh" in settings.NON_AUTH_ENDPOINTS
+        assert "/api/auth/send-verification-email" in settings.NON_AUTH_ENDPOINTS
+        assert "refresh" not in settings.NON_AUTH_ENDPOINTS
 
 
 class TestUserVerifyPassword:
