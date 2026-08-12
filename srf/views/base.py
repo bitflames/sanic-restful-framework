@@ -1,5 +1,6 @@
 import asyncio
-from typing import Dict, Iterable, Type, cast
+from collections.abc import Iterable
+from typing import cast
 
 from pydantic import BaseModel, Field, ValidationError
 from sanic import Request
@@ -59,7 +60,7 @@ class UpdateModelMixin:
         if request.json is None:
             return HTTPResponse(status=HTTPStatus.HTTP_400_BAD_REQUEST)
 
-        data: Dict = request.json
+        data: dict = request.json
         sch_model_in: BaseModel = self._get_schema(request).model_validate(data, strict=True, by_alias=True)
         orm_model: TorModel = await self.get_object(request, pk)
         orm_model = await self.perform_update(sch_model_in, orm_model)
@@ -95,7 +96,7 @@ class DestroyModelMixin:
 class ListModelMixin:
     async def list(self, request: Request, *args, **kwargs) -> JSONResponse:
         """Get a list orm model instance."""
-        sch_model: Type[BaseModel] = self._get_schema(request)
+        sch_model: type[BaseModel] = self._get_schema(request)
         queryset: QuerySetType = self.filter_queryset(self.get_queryset())
         paginator = PageNumberPagination.from_queryset(queryset, request)  # TODO，config
         result = await paginator.paginate(sch_model=sch_model)
@@ -103,7 +104,7 @@ class ListModelMixin:
 
 
 class GenericAPIView(HTTPMethodView):
-    permission_classes: Iterable[Type[BasePermission]]
+    permission_classes: Iterable[type[BasePermission]]
     search_fields: list = Field(default_factory=list)
     queryset = None
 

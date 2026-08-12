@@ -2,7 +2,8 @@ import functools
 import json
 import operator
 from abc import ABC, abstractmethod
-from typing import Any, Callable, ClassVar, Dict, List, Union, cast
+from collections.abc import Callable
+from typing import Any, ClassVar, cast
 from urllib.parse import unquote
 
 from sanic import Request
@@ -102,7 +103,7 @@ class JsonLogicFilter(BaseFilter):
     def __init__(self, view_class):
         super().__init__(view_class)
         self.filter_fields = cast(
-            Dict,
+            dict,
             getattr(view_class, "filter_fields", {}),
         )
 
@@ -126,7 +127,7 @@ class JsonLogicFilter(BaseFilter):
             return queryset.filter(q_expr)
         return queryset
 
-    def _parse_logic_recursively(self, logic: Dict[str, Any]) -> Union[Q, None]:
+    def _parse_logic_recursively(self, logic: dict[str, Any]) -> Q | None:
         """Recursively parse JSON Logic into a Tortoise ORM Q expression."""
         if not isinstance(logic, dict):
             return None
@@ -164,9 +165,9 @@ class QueryParamFilter(BaseFilter):
         super().__init__(view_class)
 
     @property
-    def _filter_params(self) -> Dict:
+    def _filter_params(self) -> dict:
         if hasattr(self.view_class, "filter_fields"):
-            return cast(Dict, self.view_class.filter_fields)
+            return cast(dict, self.view_class.filter_fields)
         return {}
 
     def filter_queryset(self, request, queryset: QuerySet):
@@ -195,9 +196,9 @@ class OrderingFactory(BaseFilter):
         super().__init__(view_class)
 
     @property
-    def _filter_params(self) -> Dict:
+    def _filter_params(self) -> dict:
         if hasattr(self.view_class, "ordering_fields"):
-            ordering_fields = cast(List | Dict, self.view_class.ordering_fields)
+            ordering_fields = cast(list | dict, self.view_class.ordering_fields)
             # If it's a list, convert to dict for easier lookup
             if isinstance(ordering_fields, list):
                 return {field: field for field in ordering_fields}

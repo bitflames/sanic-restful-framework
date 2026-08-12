@@ -1,5 +1,5 @@
 from math import ceil
-from typing import Any, Dict, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, field_validator
 from sanic.request import Request
@@ -41,7 +41,7 @@ class BasePagination:
     async def paginate(self, sch_model: BaseModel = None) -> PaginationResult:
         raise NotImplementedError("paginate() must be implemented.")
 
-    async def to_dict(self, sch_model: BaseModel = None) -> Dict[str, Any]:
+    async def to_dict(self, sch_model: BaseModel = None) -> dict[str, Any]:
         result = await self.paginate(sch_model=sch_model)
         return result.model_dump(by_alias=True)
 
@@ -110,7 +110,7 @@ class PageNumberPagination(BasePagination):
             count=total_count,
         )
 
-    async def to_dict(self, sch_model: BaseModel = None) -> Dict[str, Any]:
+    async def to_dict(self, sch_model: BaseModel = None) -> dict[str, Any]:
         result = await self.paginate(sch_model=sch_model)
         return result.model_dump(by_alias=True)
 

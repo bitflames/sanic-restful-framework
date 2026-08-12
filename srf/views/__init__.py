@@ -11,13 +11,13 @@ from .base import (
 from .decorators import action
 
 __all__ = [
+    "BaseViewSet",
     "CreateModelMixin",
-    "RetrieveModelMixin",
-    "UpdateModelMixin",
     "DestroyModelMixin",
+    "GenericAPIView",
     "ListModelMixin",
     "ModelMixin",
-    "GenericAPIView",
-    "BaseViewSet",
+    "RetrieveModelMixin",
+    "UpdateModelMixin",
     "action",
 ]
