@@ -6,8 +6,8 @@ from srf.config import settings
 
 
 def is_public_endpoint(request: Request) -> bool:
-    tail = request.path.rstrip("/").rpartition("/")[2]
-    return tail in getattr(settings, "NON_AUTH_ENDPOINTS", [])
+    # tail = request.path
+    return request.path in getattr(settings, "NON_AUTH_ENDPOINTS", [])
 
 
 def extract_bearer_token(request: Request) -> str:

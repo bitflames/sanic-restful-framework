@@ -29,20 +29,6 @@ DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"  # Time string template
 # health check list
 HEALTH_CHECK_LIST = []
 
-# SRF authentication-free URL suffixes
-NON_AUTH_ENDPOINTS = (
-    "register",
-    "login",
-    "refresh",
-    "send-verification-email",
-    "health",
-    "about",
-    "social_login",
-    "callback",
-    "login_by_code",
-    "rules",
-)
-
 
 def custom_dumps(obj):
     def default(obj):
@@ -91,6 +77,19 @@ SOCIAL_CONFIG = {
         "GITHUB_USER_EMAIL": "https://api.github.com/user/emails",
     }
 }
+
+
+# SRF authentication-free URL suffixes
+NON_AUTH_ENDPOINTS = [
+    "/api/auth/register",
+    "/api/auth/login",
+    "/api/auth/refresh",
+    "/api/auth/send-verification-email",
+    "/api/auth/social/github/login",
+    "/api/auth/social/callback",
+    "/api/auth/social/github/login_by_code",
+]
+
 
 SOCIAL_LOGIN_COOKIE_KEY = "oauth_state"
 SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE = 600  # seconds
