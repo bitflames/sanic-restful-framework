@@ -18,9 +18,7 @@ class RedisCheck(BaseHealthCheck):
                 if not pong:
                     raise RuntimeError("Redis returned abnormal ping response")
         except TimeoutError:
-            raise RuntimeError(f"Redis health check timed out after {self.timeout}s")
-        except Exception as e:
-            raise RuntimeError(f"Redis health check failed: {str(e)}") from e
+            raise RuntimeError(f"Redis health check timed out after {self.timeout}s") from None
 
 
 # sqlite
@@ -41,6 +39,4 @@ class SQLiteCheck(BaseHealthCheck):
             async with asyncio.timeout(self.timeout):
                 await asyncio.to_thread(_ping)
         except TimeoutError:
-            raise RuntimeError(f"SQLite health check timed out after {self.timeout}s")
-        except Exception as e:
-            raise RuntimeError(f"SQLite health check failed: {str(e)}") from e
+            raise RuntimeError(f"SQLite health check timed out after {self.timeout}s") from None

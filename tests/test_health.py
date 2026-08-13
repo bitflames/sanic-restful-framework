@@ -51,9 +51,15 @@ class TestBaseHealthCheck:
     @pytest.mark.asyncio
     async def test_run_failure(self):
         c = FailingHealthCheck(make_app(failing=object()))
-        name, status = await c.run()
+        with patch("srf.health.base.error_logger.exception") as log_exc:
+            name, status = await c.run()
         assert name == "failing"
-        assert status.startswith("down (")
+        assert status == "down"
+        assert "service down" not in status
+        log_exc.assert_called_once()
+        assert log_exc.call_args.args[0] == "Health check %s failed: %s"
+        assert log_exc.call_args.args[1:] == ("failing", log_exc.call_args.args[2])
+        assert str(log_exc.call_args.args[2]) == "service down"
 
     @pytest.mark.asyncio
     async def test_base_check_raises(self):
@@ -84,9 +90,11 @@ class TestBuiltinChecks:
         redis = AsyncMock()
         redis.ping = AsyncMock(return_value=False)
         check = RedisCheck(make_app(redis=redis))
-        name, status = await check.run()
+        with patch("srf.health.base.error_logger.exception") as log_exc:
+            name, status = await check.run()
         assert name == "redis"
-        assert status.startswith("down (")
+        assert status == "down"
+        assert "abnormal ping" in str(log_exc.call_args.args[2])
 
     @pytest.mark.asyncio
     async def test_sqlite_check(self):

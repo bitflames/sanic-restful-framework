@@ -1,3 +1,6 @@
+from sanic.log import error_logger
+
+
 class HealthCheckRegistry:
     def __init__(self):
         self.checks = []
@@ -38,4 +41,5 @@ class BaseHealthCheck:
             await self.check()
             return (self.name, "up")
         except Exception as e:  # noqa: BLE001
-            return (self.name, f"down ({str(e)})")
+            error_logger.exception("Health check %s failed: %s", self.name, e)
+            return (self.name, "down")
