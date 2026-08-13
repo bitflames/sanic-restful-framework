@@ -123,6 +123,62 @@ class TestUpdateModelMixin:
 
         orm_model.update_from_dict.assert_called_once_with({"title": "x"})
 
+    @pytest.mark.asyncio
+    async def test_partial_update_passes_partial_true_to_get_schema(self):
+        mixin = UpdateModelMixin()
+        schema_in = MagicMock()
+        sch_model = MagicMock()
+        schema_in.model_validate.return_value = sch_model
+        schema_out = MagicMock()
+        schema_out.model_validate.return_value = MagicMock(model_dump=MagicMock(return_value={"id": 1}))
+        seen = []
+
+        def _get_schema(request, is_safe=False, partial=False):
+            seen.append({"is_safe": is_safe, "partial": partial})
+            return schema_out if is_safe else schema_in
+
+        mixin._get_schema = MagicMock(side_effect=_get_schema)
+        orm = MagicMock()
+        mixin.get_object = AsyncMock(return_value=orm)
+        mixin.perform_update = AsyncMock(return_value=orm)
+        request = MagicMock()
+        request.json = {"username": "bob"}
+
+        response = await mixin.partial_update(request, pk=1)
+        assert response.status == 200
+        schema_in.model_validate.assert_called_once_with(
+            {"username": "bob"},
+            strict=True,
+            by_alias=True,
+        )
+        assert {"is_safe": False, "partial": True} in seen
+        assert {"is_safe": True, "partial": False} in seen
+
+    @pytest.mark.asyncio
+    async def test_update_defaults_partial_false(self):
+        mixin = UpdateModelMixin()
+        schema_in = MagicMock()
+        sch_model = MagicMock()
+        schema_in.model_validate.return_value = sch_model
+        schema_out = MagicMock()
+        schema_out.model_validate.return_value = MagicMock(model_dump=MagicMock(return_value={"id": 1}))
+        seen = {}
+
+        def _get_schema(request, is_safe=False, partial=False):
+            if not is_safe:
+                seen["partial"] = partial
+            return schema_out if is_safe else schema_in
+
+        mixin._get_schema = MagicMock(side_effect=_get_schema)
+        orm = MagicMock()
+        mixin.get_object = AsyncMock(return_value=orm)
+        mixin.perform_update = AsyncMock(return_value=orm)
+        request = MagicMock()
+        request.json = {"username": "bob"}
+
+        await mixin.update(request, pk=1)
+        assert seen["partial"] is False
+
 
 class TestDestroyModelMixin:
     """Tests for DestroyModelMixin."""

@@ -26,14 +26,7 @@ class SanicRouter:
         # Retrieve, update, destroy: detail route (with pk)
         detail_uri = f"{base_uri}/<pk:int>"
         self.bp.add_route(
-            view_cls.as_view(
-                actions={
-                    "get": "retrieve",
-                    "put": "update",
-                    "patch": "update",
-                    "delete": "destroy",
-                }
-            ),
+            view_cls.as_view(actions={"get": "retrieve"}),
             detail_uri,
             methods=["GET", "PUT", "PATCH", "DELETE"],
             name=f"{name}-detail",

@@ -61,8 +61,8 @@ class UpdateModelMixin:
         if request.json is None:
             return HTTPResponse(status=HTTPStatus.HTTP_400_BAD_REQUEST)
 
-        data: dict = request.json
-        sch_model_in: BaseModel = self._get_schema(request).model_validate(data, strict=True, by_alias=True)
+        partial: bool = kwargs.get("partial", False)
+        sch_model_in: BaseModel = self._get_schema(request, partial=partial).model_validate(request.json, strict=True, by_alias=True)
         orm_model: TorModel = await self.get_object(request, pk)
         orm_model = await self.perform_update(sch_model_in, orm_model)
         sch_model_out: BaseModel = self._get_schema(request, is_safe=True).model_validate(orm_model, from_attributes=True)
@@ -78,6 +78,13 @@ class UpdateModelMixin:
         orm_model.update_from_dict(data)
         await orm_model.save()
         return orm_model
+
+    async def partial_update(self, request: Request, pk: int, *args, **kwargs):
+        """
+        Partial update an orm model instance.
+        """
+        kwargs["partial"] = True
+        return await self.update(request, pk, *args, **kwargs)
 
 
 class DestroyModelMixin:
@@ -209,7 +216,7 @@ class GenericAPIView(HTTPMethodView):
             "get": "list",
             "post": "create",
             "put": "update",
-            "patch": "update",  # TODO partial_update
+            "patch": "partial_update",
             "delete": "destroy",
         }
 

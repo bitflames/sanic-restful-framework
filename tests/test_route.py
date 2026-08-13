@@ -39,6 +39,35 @@ class TestSanicRouter:
         # Detail URI is built as base_uri + /<pk:int>; just ensure register completes
         assert r.prefix == "/api"
 
+    def test_detail_route_only_overrides_get_retrieve(self):
+        """Detail registration passes get→retrieve; put/patch/delete come from defaults."""
+        captured = {}
+
+        class CapturingViewSet(DummyViewSet):
+            @classmethod
+            def as_view(cls, actions=None):
+                captured["actions"] = actions
+                return super().as_view(actions=actions)
+
+        bp = Blueprint("test_bp_patch")
+        r = SanicRouter(bp=bp, prefix="api")
+        r.register("items", CapturingViewSet, name="items")
+        assert captured["actions"] == {"get": "retrieve"}
+
+        # Merge behavior used inside as_view
+        default_actions = {
+            "get": "list",
+            "post": "create",
+            "put": "update",
+            "patch": "partial_update",
+            "delete": "destroy",
+        }
+        merged = {**default_actions, **captured["actions"]}
+        assert merged["get"] == "retrieve"
+        assert merged["put"] == "update"
+        assert merged["patch"] == "partial_update"
+        assert merged["delete"] == "destroy"
+
     def test_get_blueprint_returns_bp(self):
         r = SanicRouter(prefix="api")
         bp = r.get_blueprint()
