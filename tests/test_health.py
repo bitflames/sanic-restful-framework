@@ -5,9 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from srf.health.base import BaseHealthCheck, HealthCheckRegistry
-from srf.health.checks import RedisCheck, SQLiteCheck
-from srf.health.route import health_check
+from srf.health.checks import BaseHealthCheck, HealthCheckRegistry, RedisCheck, SQLiteCheck
+from srf.health.viewset import health_check
 
 
 def make_app(**clients):
@@ -51,7 +50,7 @@ class TestBaseHealthCheck:
     @pytest.mark.asyncio
     async def test_run_failure(self):
         c = FailingHealthCheck(make_app(failing=object()))
-        with patch("srf.health.base.error_logger.exception") as log_exc:
+        with patch("srf.health.checks.error_logger.exception") as log_exc:
             name, status = await c.run()
         assert name == "failing"
         assert status == "down"
@@ -90,7 +89,7 @@ class TestBuiltinChecks:
         redis = AsyncMock()
         redis.ping = AsyncMock(return_value=False)
         check = RedisCheck(make_app(redis=redis))
-        with patch("srf.health.base.error_logger.exception") as log_exc:
+        with patch("srf.health.checks.error_logger.exception") as log_exc:
             name, status = await check.run()
         assert name == "redis"
         assert status == "down"
@@ -110,7 +109,7 @@ class TestBuiltinChecks:
         cursor.execute.assert_called_once_with("SELECT 1;")
 
 
-class TestHealthRoute:
+class TestHealthViewset:
     @pytest.mark.asyncio
     async def test_empty_health_check_list_returns_ok(self):
         request = MagicMock()
