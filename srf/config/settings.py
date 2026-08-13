@@ -90,6 +90,8 @@ NON_AUTH_ENDPOINTS = [
     "/api/auth/social/github/login_by_code",
 ]
 
+# Minimum password length
+MIN_PASSWORD_LENGTH = 8
 
 SOCIAL_LOGIN_COOKIE_KEY = "oauth_state"
 SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE = 600  # seconds

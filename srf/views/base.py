@@ -73,9 +73,9 @@ class UpdateModelMixin:
         sch_model: instance of BaseModel
         orm_model: instance of TorModel
         """
-        for key, val in sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"]).items():
-            if hasattr(orm_model, key):
-                setattr(orm_model, key, val)
+        data = sch_model.model_dump(exclude_unset=True, exclude_none=True)
+        data.pop(orm_model._meta.pk_attr, None)
+        orm_model.update_from_dict(data)
         await orm_model.save()
         return orm_model
 

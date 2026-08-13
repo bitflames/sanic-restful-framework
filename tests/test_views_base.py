@@ -92,6 +92,37 @@ class TestUpdateModelMixin:
         assert isinstance(response, HTTPResponse)
         assert response.status == HTTPStatus.HTTP_400_BAD_REQUEST
 
+    @pytest.mark.asyncio
+    async def test_perform_update_uses_update_from_dict(self):
+        mixin = UpdateModelMixin()
+        sch_model = MagicMock()
+        sch_model.model_dump.return_value = {"id": 99, "name": "alice"}
+        orm_model = MagicMock()
+        orm_model._meta.pk_attr = "id"
+        orm_model.update_from_dict = MagicMock(return_value=orm_model)
+        orm_model.save = AsyncMock()
+
+        result = await mixin.perform_update(sch_model, orm_model)
+
+        sch_model.model_dump.assert_called_once_with(exclude_unset=True, exclude_none=True)
+        orm_model.update_from_dict.assert_called_once_with({"name": "alice"})
+        orm_model.save.assert_awaited_once()
+        assert result is orm_model
+
+    @pytest.mark.asyncio
+    async def test_perform_update_strips_custom_pk_attr(self):
+        mixin = UpdateModelMixin()
+        sch_model = MagicMock()
+        sch_model.model_dump.return_value = {"uuid": "keep-me-out", "title": "x"}
+        orm_model = MagicMock()
+        orm_model._meta.pk_attr = "uuid"
+        orm_model.update_from_dict = MagicMock(return_value=orm_model)
+        orm_model.save = AsyncMock()
+
+        await mixin.perform_update(sch_model, orm_model)
+
+        orm_model.update_from_dict.assert_called_once_with({"title": "x"})
+
 
 class TestDestroyModelMixin:
     """Tests for DestroyModelMixin."""

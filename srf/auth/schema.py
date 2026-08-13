@@ -1,12 +1,65 @@
 import datetime
+import re
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    SecretStr,
+    computed_field,
+    model_validator,
+)
 
+from srf.config import settings
 from srf.config.settings import DATETIME_FORMAT
+
+MIN_PASSWORD_LENGTH = settings.MIN_PASSWORD_LENGTH
 
 
 def utc_now() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)
+
+
+def unwrap_secret(value: SecretStr | str | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, SecretStr):
+        return value.get_secret_value()
+    return value
+
+
+def validate_password_strength(password: str) -> str:
+    """Common password rules: length, letter and digit.
+
+    Raising ValueError here is the Pydantic V2 convention: field/model validators
+    convert it into a ValidationError (there is no separate password API in Pydantic).
+    """
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+    if not re.search(r"[A-Za-z]", password):
+        raise ValueError("Password must contain at least one letter")
+    if not re.search(r"\d", password):
+        raise ValueError("Password must contain at least one digit")
+    return password
+
+
+def _strong_secret(v: SecretStr) -> SecretStr:
+    validate_password_strength(v.get_secret_value())
+    return v
+
+
+# Reusable type: SecretStr masks repr/logs; AfterValidator enforces strength → ValidationError
+StrongPassword = Annotated[SecretStr, AfterValidator(_strong_secret)]
+
+
+def _require_matching_passwords(password: SecretStr, password_confirm: SecretStr) -> None:
+    plain = password.get_secret_value()
+    confirm = password_confirm.get_secret_value()
+    if plain != confirm:
+        raise ValueError("password1 and password2 do not match")
 
 
 class SchemaBaseTime(BaseModel):
@@ -16,15 +69,6 @@ class SchemaBaseTime(BaseModel):
     model_config = ConfigDict(json_encoders={datetime.datetime: lambda v: (v.strftime(DATETIME_FORMAT) if v else None)})  # for model_dump_json
 
 
-class CreateUserEmail(BaseModel):
-    name: str
-    email: EmailStr
-    create_time: datetime.datetime = Field(default_factory=utc_now, alias="created_date")
-    confirm_time: datetime.datetime = Field(default_factory=utc_now, alias="confirm_date")
-
-    # model_config = ConfigDict(json_encoders={datetime.datetime: lambda v: (v.strftime(DATETIME_FORMAT) if v else None)})
-
-
 class UserSchemaWriter(SchemaBaseTime):
     id: int | None = None
     name: str = Field(..., alias="username")
@@ -32,12 +76,44 @@ class UserSchemaWriter(SchemaBaseTime):
     is_active: bool = True
     is_staff: bool = False
     is_superuser: bool = False
-    password: str | None = Field(None, alias="password1")
+    password: StrongPassword = Field(..., alias="password1")
+    password_confirm: StrongPassword = Field(..., alias="password2")
     role_name: str = Field(default="user")
 
     model_config = ConfigDict(
         from_attributes=True, populate_by_name=True, ser_json_alias=True
     )  # Both name and alias are allowed to be assigned. The output of ser_json_alias must use alias
+
+    @model_validator(mode="after")
+    def check_passwords(self) -> "UserSchemaWriter":
+        _require_matching_passwords(self.password, self.password_confirm)
+        return self
+
+
+class UserSchemaUpdate(SchemaBaseTime):
+    """Profile update payload — no password fields (use change-password action)."""
+
+    id: int | None = None
+    name: str | None = Field(None, alias="username")
+    email: EmailStr | None = None
+    is_active: bool | None = None
+    is_staff: bool | None = None
+    is_superuser: bool | None = None
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True, ser_json_alias=True)
+
+
+class ChangePasswordSchema(BaseModel):
+    old_password: SecretStr
+    password: StrongPassword = Field(..., alias="password1")
+    password_confirm: StrongPassword = Field(..., alias="password2")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def check_passwords(self) -> "ChangePasswordSchema":
+        _require_matching_passwords(self.password, self.password_confirm)
+        return self
 
 
 class UserSchemaReader(SchemaBaseTime):
@@ -61,10 +137,10 @@ class UserSchemaReader(SchemaBaseTime):
 class UserLoginSchema(BaseModel):
     email: EmailStr | None = Field(None)
     username: str | None = Field(None)
-    password: str
+    password: SecretStr
 
-    @model_validator(mode='after')
-    def check_identifier(self) -> 'UserLoginSchema':
+    @model_validator(mode="after")
+    def check_identifier(self) -> "UserLoginSchema":
         if not self.email and not self.username:
-            raise ValueError('email or username is required')
+            raise ValueError("email or username is required")
         return self

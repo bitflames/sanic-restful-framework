@@ -16,8 +16,8 @@ from srf.auth.auth import (
     store_refresh_token,
 )
 from srf.auth.models import User
-from srf.auth.schema import UserLoginSchema
-from srf.auth.viewset import logout, setup_auth
+from srf.auth.schema import ChangePasswordSchema, UserLoginSchema, UserSchemaUpdate, UserSchemaWriter
+from srf.auth.viewset import UserViewSet, logout, setup_auth
 from srf.config import settings
 
 
@@ -26,6 +26,8 @@ class TestUserLoginSchema:
         sch = UserLoginSchema(email="u@example.com", password="secret")
         assert sch.email == "u@example.com"
         assert sch.username is None
+        assert sch.password.get_secret_value() == "secret"
+        assert "secret" not in repr(sch)
 
     def test_username_only(self):
         sch = UserLoginSchema(username="alice", password="secret")
@@ -281,16 +283,147 @@ class TestUserVerifyPassword:
         user.password = None
         assert user.verify_password("anything") is False
 
-    def test_verify_password_uses_bcrypt(self):
+    def test_verify_password_uses_sha256_bcrypt(self):
+        import hashlib
+
         import bcrypt
 
-        pwd = b"secret"
-        hashed = bcrypt.hashpw(pwd, bcrypt.gensalt())
+        hashed = User.hash_password("secret")
+        assert hashed.startswith("$2")
+        digest = hashlib.sha256(b"secret").digest()
+        assert bcrypt.checkpw(digest, hashed.encode("utf-8")) is True
+        # Must not be raw bcrypt(password)
+        assert bcrypt.checkpw(b"secret", hashed.encode("utf-8")) is False
+
         user = object.__new__(User)
-        user.password = hashed.decode("utf-8")
+        user.password = hashed
+        object.__setattr__(user, "id", 1)
+        object.__setattr__(user, "name", "alice")
         assert user.verify_password("secret") is True
         assert user.verify_password("wrong") is False
+        assert "secret" not in repr(user)
+        assert "**********" in repr(user)
 
+    def test_legacy_bcrypt_password_hash_is_rejected(self):
+        """No fallback: stored bcrypt(password) must not verify."""
+        import bcrypt
+
+        legacy = bcrypt.hashpw(b"password123", bcrypt.gensalt()).decode("utf-8")
+        user = object.__new__(User)
+        user.password = legacy
+        assert user.verify_password("password123") is False
+
+
+class TestPasswordSchemas:
+    def test_writer_accepts_matching_strong_password(self):
+        sch = UserSchemaWriter.model_validate(
+            {"username": "alice", "email": "a@example.com", "password1": "Secret123", "password2": "Secret123"},
+            by_alias=True,
+        )
+        assert sch.password.get_secret_value() == "Secret123"
+
+    def test_writer_rejects_mismatch(self):
+        with pytest.raises(ValidationError, match="do not match"):
+            UserSchemaWriter.model_validate(
+                {"username": "alice", "password1": "Secret123", "password2": "Secret124"},
+                by_alias=True,
+            )
+
+    def test_writer_rejects_short_password(self):
+        with pytest.raises(ValidationError, match="at least 8"):
+            UserSchemaWriter.model_validate(
+                {"username": "alice", "password1": "Ab1", "password2": "Ab1"},
+                by_alias=True,
+            )
+
+    def test_writer_strength_failure_is_validation_error(self):
+        with pytest.raises(ValidationError) as exc_info:
+            UserSchemaWriter.model_validate(
+                {"username": "alice", "password1": "nodigit!", "password2": "nodigit!"},
+                by_alias=True,
+            )
+        assert "digit" in str(exc_info.value)
+
+    def test_writer_rejects_password_without_digit(self):
+        with pytest.raises(ValidationError, match="digit"):
+            UserSchemaWriter.model_validate(
+                {"username": "alice", "password1": "SecretOnly", "password2": "SecretOnly"},
+                by_alias=True,
+            )
+
+    def test_writer_requires_password(self):
+        with pytest.raises(ValidationError):
+            UserSchemaWriter.model_validate({"username": "alice", "email": "a@example.com"}, by_alias=True)
+
+    def test_update_schema_has_no_password_fields(self):
+        sch = UserSchemaUpdate.model_validate({"username": "alice", "email": "a@example.com"}, by_alias=True)
+        assert sch.name == "alice"
+        assert not hasattr(sch, "password")
+
+    def test_change_password_schema_requires_old(self):
+        sch = ChangePasswordSchema.model_validate(
+            {"old_password": "password123", "password1": "Secret123", "password2": "Secret123"},
+            by_alias=True,
+        )
+        assert sch.old_password.get_secret_value() == "password123"
+
+
+class TestUserPerformUpdateAndChangePassword:
+    @pytest.mark.asyncio
+    async def test_perform_update_does_not_touch_password(self):
+        """User update uses base perform_update; schema has no password fields."""
+        user = MagicMock(spec=User)
+        user.password = "$2b$keep-me"
+        user.update_from_dict = MagicMock(side_effect=lambda d: user)
+        user.save = AsyncMock()
+
+        sch = UserSchemaUpdate.model_validate({"username": "alice"}, by_alias=True)
+        vs = UserViewSet()
+        await vs.perform_update(sch, user)
+
+        payload = user.update_from_dict.call_args.args[0]
+        assert "password" not in payload
+        assert payload.get("name") == "alice"
+        user.save.assert_awaited_once()
+        assert user.password == "$2b$keep-me"
+
+    @pytest.mark.asyncio
+    async def test_change_password_action(self):
+        old_hash = User.hash_password("password123")
+        user = object.__new__(User)
+        user.password = old_hash
+        user.save = AsyncMock()
+
+        request = MagicMock()
+        request.json = {
+            "old_password": "password123",
+            "password1": "Secret123",
+            "password2": "Secret123",
+        }
+        request.ctx.user = user
+
+        vs = UserViewSet()
+        response = await vs.change_password(request)
+        assert response.status == 200
+        assert user.password != old_hash
+        assert user.password.startswith("$2")
+        assert user.verify_password("Secret123") is True
+        user.save.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_change_password_rejects_wrong_old(self):
+        user = MagicMock(spec=User)
+        user.verify_password = MagicMock(return_value=False)
+        request = MagicMock()
+        request.json = {
+            "old_password": "wrong",
+            "password1": "Secret123",
+            "password2": "Secret123",
+        }
+        request.ctx.user = user
+        vs = UserViewSet()
+        with pytest.raises(BadRequest, match="Old password is incorrect"):
+            await vs.change_password(request)
 
 class TestBuildUserPayload:
     def test_build_user_payload(self):

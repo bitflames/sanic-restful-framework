@@ -17,8 +17,15 @@ from srf.tools.utils import generate_code
 from srf.views import BaseViewSet, action
 from srf.views.http_status import HTTPStatus
 
-from .auth import authenticate, gen_user_access_token, retrieve_refresh_token, retrieve_user, revoke_refresh_token, store_refresh_token
-from .schema import UserSchemaWriter
+from .auth import (
+    authenticate,
+    gen_user_access_token,
+    retrieve_refresh_token,
+    retrieve_user,
+    revoke_refresh_token,
+    store_refresh_token,
+)
+from .schema import ChangePasswordSchema, UserSchemaWriter, unwrap_secret
 
 
 def setup_auth(app: Sanic, *args, **kwargs) -> Initialize:
@@ -87,9 +94,15 @@ async def register(request: Request):
         return HTTPResponse("The verification code is incorrect or timeout, please retry!", status=HTTPStatus.HTTP_400_BAD_REQUEST)
     await redis.delete(email_cache_key)
 
-    # Validate schema and create user (create_user hashes password and resolves role)
+    # Validate schema; unwrap SecretStr here, create_user only accepts plaintext str.
     sch_user_in = UserSchemaWriter.model_validate(request.json, by_alias=True, extra="ignore")
-    user_db = await models.User.create_user(sch_user_in.model_dump(exclude_unset=True, exclude_none=True))
+    user_data = sch_user_in.model_dump(
+        exclude_unset=True,
+        exclude_none=True,
+        exclude={"password", "password_confirm"},
+    )
+    user_data["password"] = unwrap_secret(sch_user_in.password)
+    user_db = await models.User.create_user(user_data)
     user_return_data = await gen_user_access_token(request, user_db)
     return JSONResponse(user_return_data, status=HTTPStatus.HTTP_200_OK)
 
@@ -148,15 +161,37 @@ class UserViewSet(BaseViewSet):
     def get_schema(self, request: Request, *args, is_safe=False, **kwargs):
         if request.method.lower() in SAFE_HTTP_METHODS or is_safe is True:
             return schema.UserSchemaReader
-        else:
-            return schema.UserSchemaWriter
+        if request.method.upper() in ("PUT", "PATCH"):
+            return schema.UserSchemaUpdate
+        return schema.UserSchemaWriter
 
     @action(detail=False, url_name="self", url_path="self")
     async def get_self(self, request: Request):
         user_json = self.get_schema(request).model_validate(request.ctx.user).model_dump(mode="json", by_alias=True)
         return JSONResponse(user_json)
 
-    async def perform_create(self, sch_model):
+    @action(detail=False, methods=["post"], url_name="change-password", url_path="change-password")
+    async def change_password(self, request: Request):
+        """Change password for the authenticated user (SHA-256 + bcrypt)."""
+        if not request.json:
+            raise BadRequest("Request body is required")
+        sch = ChangePasswordSchema.model_validate(request.json, by_alias=True)
+        user: models.User = request.ctx.user
+        old_password = unwrap_secret(sch.old_password)
+        if not old_password or not user.verify_password(old_password):
+            raise BadRequest("Old password is incorrect")
+        new_password = unwrap_secret(sch.password)
+        assert new_password is not None  # validated by ChangePasswordSchema
+        user.password = models.User.hash_password(new_password)
+        await user.save()
+        return HTTPResponse(status=HTTPStatus.HTTP_200_OK)
+
+    async def perform_create(self, sch_model: UserSchemaWriter):
         """Create ORM user from Pydantic schema. TODO: verify email availability."""
-        data = sch_model.model_dump(exclude_unset=True, exclude_none=True)
+        data = sch_model.model_dump(
+            exclude_unset=True,
+            exclude_none=True,
+            exclude={"password", "password_confirm"},
+        )
+        data["password"] = unwrap_secret(sch_model.password)
         return await models.User.create_user(data)

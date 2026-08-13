@@ -1,3 +1,5 @@
+import hashlib
+
 import bcrypt
 from tortoise import fields
 from tortoise.models import Model as TorModel
@@ -32,24 +34,45 @@ class User(TorModel):
     class Meta:
         table = "auth_user"
 
+    def __repr__(self) -> str:
+        # Never print stored credential material (hash or otherwise) during debug.
+        return f"<User id={getattr(self, 'id', None)} name={getattr(self, 'name', None)!r} password='**********'>"
+
+    @staticmethod
+    def _password_digest(password: str) -> bytes:
+        """SHA-256 digest for bcrypt input.
+
+        Only supported scheme: bcrypt(sha256(password)).
+        No legacy bcrypt(password) fallback (avoids bcrypt's 72-byte limit).
+        """
+        return hashlib.sha256(password.encode("utf-8")).digest()
+
     def verify_password(self, password: str) -> bool:
         if self.password is None:
             return False
-        return bcrypt.checkpw(password.encode("utf-8"), self.password.encode("utf-8"))
+        try:
+            return bcrypt.checkpw(self._password_digest(password), self.password.encode("utf-8"))
+        except ValueError:
+            # bcrypt raises ValueError on malformed stored hash — treat as failed verify.
+            return False
 
-    @staticmethod
-    def hash_password(password: str) -> str:
-        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    @classmethod
+    def hash_password(cls, password: str) -> str:
+        """Store bcrypt(sha256(password)); never bcrypt(raw password)."""
+        return bcrypt.hashpw(cls._password_digest(password), bcrypt.gensalt()).decode("utf-8")
 
     @classmethod
     async def create_user(cls, user_info: dict) -> "User":
         """
         Do not override Tortoise's create method,
         create user with hashed password and role resolution.
+
+        user_info["password"]:
+            Expect plaintext str; callers unwrap SecretStr at the API boundary.
         """
         user_info = dict(user_info)
         user_info.pop("id", None)
-        user_info["password"] = cls.hash_password(user_info["password"])
+        user_info["password"] = cls.hash_password(user_info.pop("password"))
 
         async with in_transaction() as conn:
             if await cls.filter(email=user_info["email"]).using_db(conn).exists():

@@ -42,7 +42,7 @@ async def authenticate(request: Request, *args, **kwargs):
     if user is None or not await check_active(user):
         raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
-    if not user.verify_password(sch_user.password):
+    if not user.verify_password(sch_user.password.get_secret_value()):
         raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
     return build_user_payload(user)
