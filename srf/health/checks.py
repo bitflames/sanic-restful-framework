@@ -65,19 +65,19 @@ class RedisCheck(BaseHealthCheck):
 # sqlite
 class SQLiteCheck(BaseHealthCheck):
     """
-    SQLite health check
+    aiosqlite health check.
+
+    Requires ``app.ctx.sqlite`` to be an ``aiosqlite.Connection`` (not stdlib sqlite3).
     """
 
     name = "sqlite"
 
     async def check(self):
-        def _ping():
-            with self.sqlite.cursor() as cursor:
-                cursor.execute("SELECT 1;")
-                cursor.fetchone()
-
         try:
             async with asyncio.timeout(self.timeout):
-                await asyncio.to_thread(_ping)
+                async with self.sqlite.execute("SELECT 1") as cursor:
+                    row = await cursor.fetchone()
+                    if row != (1,):
+                        raise RuntimeError("Unexpected SQLite response")
         except TimeoutError:
             raise RuntimeError(f"SQLite health check timed out after {self.timeout}s") from None

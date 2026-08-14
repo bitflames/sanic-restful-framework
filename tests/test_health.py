@@ -97,16 +97,47 @@ class TestBuiltinChecks:
 
     @pytest.mark.asyncio
     async def test_sqlite_check(self):
+        cursor = AsyncMock()
+        cursor.fetchone = AsyncMock(return_value=(1,))
+        execute_cm = MagicMock()
+        execute_cm.__aenter__ = AsyncMock(return_value=cursor)
+        execute_cm.__aexit__ = AsyncMock(return_value=False)
+
         conn = MagicMock()
-        cursor = MagicMock()
-        cursor.fetchone.return_value = (1,)
-        cursor_cm = MagicMock()
-        cursor_cm.__enter__.return_value = cursor
-        cursor_cm.__exit__.return_value = None
-        conn.cursor.return_value = cursor_cm
+        conn.execute = MagicMock(return_value=execute_cm)
+
         check = SQLiteCheck(make_app(sqlite=conn))
         assert await check.run() == ("sqlite", "up")
-        cursor.execute.assert_called_once_with("SELECT 1;")
+        conn.execute.assert_called_once_with("SELECT 1")
+        cursor.fetchone.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_sqlite_check_with_aiosqlite_memory(self):
+        import aiosqlite
+
+        db = await aiosqlite.connect(":memory:")
+        try:
+            check = SQLiteCheck(make_app(sqlite=db))
+            assert await check.run() == ("sqlite", "up")
+        finally:
+            await db.close()
+
+    @pytest.mark.asyncio
+    async def test_sqlite_check_unexpected_row(self):
+        cursor = AsyncMock()
+        cursor.fetchone = AsyncMock(return_value=(0,))
+        execute_cm = MagicMock()
+        execute_cm.__aenter__ = AsyncMock(return_value=cursor)
+        execute_cm.__aexit__ = AsyncMock(return_value=False)
+        conn = MagicMock()
+        conn.execute = MagicMock(return_value=execute_cm)
+
+        check = SQLiteCheck(make_app(sqlite=conn))
+        with patch("srf.health.checks.error_logger.exception") as log_exc:
+            name, status = await check.run()
+        assert name == "sqlite"
+        assert status == "down"
+        assert "Unexpected SQLite response" in str(log_exc.call_args.args[2])
 
 
 class TestHealthViewset:
@@ -116,7 +147,7 @@ class TestHealthViewset:
         request.app.config.HEALTH_CHECK_LIST = []
         response = await health_check(request)
         assert response.status == 200
-        assert b'"status":"ok"' in response.body or b'"status": "ok"' in response.body
+        assert response.body == b"{}"
 
     @pytest.mark.asyncio
     async def test_configured_checks_are_run(self):
@@ -127,4 +158,5 @@ class TestHealthViewset:
         request.app.config = SimpleNamespace(HEALTH_CHECK_LIST=[RedisCheck])
         response = await health_check(request)
         assert response.status == 200
+        assert b'"redis":"up"' in response.body or b'"redis": "up"' in response.body
         redis.ping.assert_awaited()
