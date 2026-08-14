@@ -23,6 +23,7 @@ from srf.auth.models import Role, User
 from srf.auth.route import register_auth_urls
 from srf.auth.viewset import UserViewSet
 from srf.config import settings
+from srf.event.viewset import EventViewSet
 from srf.middleware.authmiddleware import set_user_to_request_ctx
 from srf.permission.permission import IsAuthenticated
 from srf.route import SanicRouter
@@ -38,6 +39,11 @@ SEED_EMAIL = "alice@example.com"
 SEED_USERNAME = "alice"
 SEED_PASSWORD = "password123"
 SEED_ROLE = "user"
+
+ADMIN_EMAIL = "admin@example.com"
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "Admin12345"
+ADMIN_ROLE = "admin"
 
 # Shared across Sanic reloads so refresh tokens survive worker restarts in debug mode
 _REDIS = fakeredis_aio.FakeRedis(decode_responses=False)
@@ -73,11 +79,11 @@ async def ensure_seed_data() -> User:
         name=SEED_ROLE,
         defaults={"description": "default user role"},
     )
-    await Role.get_or_create(name="admin", defaults={"description": "admin role"})
+    admin_role, _ = await Role.get_or_create(name=ADMIN_ROLE, defaults={"description": "admin role"})
 
     user = await User.filter(email=SEED_EMAIL).first()
     if user is None:
-        return await User.create_user(
+        user = await User.create_user(
             {
                 "name": SEED_USERNAME,
                 "email": SEED_EMAIL,
@@ -86,11 +92,29 @@ async def ensure_seed_data() -> User:
                 "is_active": True,
             }
         )
+    else:
+        user.password = User.hash_password(SEED_PASSWORD)
+        user.is_active = True
+        user.role = role
+        await user.save()
 
-    user.password = User.hash_password(SEED_PASSWORD)
-    user.is_active = True
-    user.role = role
-    await user.save()
+    admin = await User.filter(email=ADMIN_EMAIL).first()
+    if admin is None:
+        await User.create_user(
+            {
+                "name": ADMIN_USERNAME,
+                "email": ADMIN_EMAIL,
+                "password": ADMIN_PASSWORD,
+                "role_name": ADMIN_ROLE,
+                "is_active": True,
+            }
+        )
+    else:
+        admin.password = User.hash_password(ADMIN_PASSWORD)
+        admin.is_active = True
+        admin.role = admin_role
+        await admin.save()
+
     return user
 
 
@@ -100,13 +124,14 @@ def create_app() -> Sanic:
     app.config.SECRET_KEY = SECRET_KEY
     app.config.NON_AUTH_ENDPOINTS = tuple(settings.NON_AUTH_ENDPOINTS) + (
         "/api/public/hello",
+        "/health",
     )
     settings.set_app(app)
 
     register_tortoise(
         app,
         db_url=DB_URL,
-        modules={"models": ["srf.auth.models"]},
+        modules={"models": ["srf.auth.models", "srf.event.models"]},
         generate_schemas=True,
     )
     register_auth_urls(app, prefix="/api/auth")
@@ -114,6 +139,7 @@ def create_app() -> Sanic:
     router = SanicRouter(Blueprint("api"), prefix="api")
     router.register("users", UserViewSet, name="users")
     router.register("profile", ProfileViewSet, name="profile")
+    router.register("events", EventViewSet, name="events")
     app.blueprint(router.get_blueprint())
 
     @app.get("/health")
@@ -145,6 +171,7 @@ def main():
     print(f"DB   {DB_URL}  (sqlite)")
     print("Redis fakeredis (in-memory)")
     print(f"Login POST /api/auth/login  {SEED_EMAIL} / {SEED_PASSWORD}")
+    print(f"Admin  POST /api/auth/login  {ADMIN_EMAIL} / {ADMIN_PASSWORD}")
     print("API calls: python tests/api_call_tests.py")
     app.run(host=HOST, port=PORT, debug=True, access_log=True, single_process=True)
 

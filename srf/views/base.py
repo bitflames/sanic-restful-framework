@@ -33,7 +33,7 @@ class CreateModelMixin:
         sch_model_out: BaseModel = self._get_schema(request, is_safe=True).model_validate(orm_model, from_attributes=True)
         # return response
         return JSONResponse(
-            sch_model_out.model_dump(by_alias=True),
+            sch_model_out.model_dump(mode="json", by_alias=True),
             status=HTTPStatus.HTTP_201_CREATED,
         )
 
@@ -52,7 +52,7 @@ class RetrieveModelMixin:
         """Get an orm model instance."""
         orm_model: TorModel = await self.get_object(request, pk)
         schema_out: BaseModel = self._get_schema(request).model_validate(orm_model)
-        return JSONResponse(schema_out.model_dump(by_alias=True))
+        return JSONResponse(schema_out.model_dump(mode="json", by_alias=True))
 
 
 class UpdateModelMixin:
@@ -66,7 +66,7 @@ class UpdateModelMixin:
         orm_model: TorModel = await self.get_object(request, pk)
         orm_model = await self.perform_update(sch_model_in, orm_model)
         sch_model_out: BaseModel = self._get_schema(request, is_safe=True).model_validate(orm_model, from_attributes=True)
-        return JSONResponse(sch_model_out.model_dump(by_alias=True))
+        return JSONResponse(sch_model_out.model_dump(mode="json", by_alias=True))
 
     async def perform_update(self, sch_model: BaseModel, orm_model: TorModel) -> TorModel:
         """
@@ -108,7 +108,7 @@ class ListModelMixin:
         queryset: QuerySetType = self.filter_queryset(self.get_queryset())
         paginator = PageNumberPagination.from_queryset(queryset, request)  # TODO，config
         result = await paginator.paginate(sch_model=sch_model)
-        return JSONResponse(result.model_dump(by_alias=True))
+        return JSONResponse(result.model_dump(mode="json", by_alias=True))
 
 
 class GenericAPIView(HTTPMethodView):
@@ -277,3 +277,9 @@ class ModelMixin(
 
 
 class BaseViewSet(GenericAPIView, ModelMixin): ...
+
+
+class ReadOnlyModelViewSet(GenericAPIView, ListModelMixin, RetrieveModelMixin): ...
+
+
+class CreateAndReadOnlyModelViewSet(GenericAPIView, CreateModelMixin, ListModelMixin, RetrieveModelMixin): ...

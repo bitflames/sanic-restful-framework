@@ -26,6 +26,10 @@ ENV/
 .DS_Store
 Thumbs.db
 
-
 docs/DOC_REVIEW.md
 scripts/
+
+# tests
+tests/app_server.sqlite3
+tests/app_server.sqlite3-shm
+tests/app_server.sqlite3-wal

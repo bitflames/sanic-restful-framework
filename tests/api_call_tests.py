@@ -20,9 +20,12 @@ from typing import Any
 
 BASE = "http://127.0.0.1:8800"
 AUTH = f"{BASE}/api/auth"
+EVENTS = f"{BASE}/api/events"
 SEED_EMAIL = "alice@example.com"
 SEED_PASSWORD = "password123"
 SEED_USERNAME = "alice"
+ADMIN_EMAIL = "admin@example.com"
+ADMIN_PASSWORD = "Admin12345"
 
 _passed = 0
 _failed = 0
@@ -198,6 +201,65 @@ def call_relogin_after_logout() -> None:
     _ok("new access after re-login works", status2 == 200, status2)
 
 
+def call_events_without_token() -> None:
+    status, _ = _request("GET", EVENTS)
+    _ok("GET /api/events no token → 401", status == 401, status)
+
+
+def call_events_forbidden_as_user(user_access: str) -> None:
+    status, _ = _request("GET", EVENTS, token=user_access)
+    _ok("GET /api/events as user → 403", status == 403, status)
+
+
+def call_login_admin() -> dict:
+    status, data = _request(
+        "POST",
+        f"{AUTH}/login",
+        body={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+    )
+    ok = status == 200 and bool(data.get("access_token"))
+    _ok("POST /api/auth/login (admin)", ok, (status, data))
+    return data if ok else {}
+
+
+def call_events_create_list_retrieve(admin_access: str) -> None:
+    payload = {
+        "action": "user.update",
+        "obj_id": 7,
+        "obj_name": "User",
+        "req_source": "api_call_tests",
+        "req_data": {"username": "alice"},
+        "res_data": {"ok": True},
+    }
+    status, created = _request("POST", EVENTS, body=payload, token=admin_access)
+    ok = (
+        status == 201
+        and isinstance(created, dict)
+        and created.get("action") == "user.update"
+        and created.get("obj_id") == 7
+        and created.get("user_id") is not None
+        and created.get("url", "").startswith("/events/")
+    )
+    _ok("POST /api/events → 201", ok, (status, created))
+    if not ok:
+        return
+
+    event_id = created["id"]
+    status, listed = _request("GET", EVENTS, token=admin_access)
+    results = (listed or {}).get("results") if isinstance(listed, dict) else None
+    ok_list = status == 200 and isinstance(results, list) and any(item.get("id") == event_id for item in results)
+    _ok("GET /api/events → 200 with created id", ok_list, (status, listed))
+
+    status, detail = _request("GET", f"{EVENTS}/{event_id}", token=admin_access)
+    ok_detail = (
+        status == 200
+        and detail.get("id") == event_id
+        and detail.get("action") == "user.update"
+        and detail.get("req_source") == "api_call_tests"
+    )
+    _ok(f"GET /api/events/{event_id} → 200", ok_detail, (status, detail))
+
+
 def main() -> int:
     print(f"Target: {BASE}")
     print("---")
@@ -212,6 +274,7 @@ def main() -> int:
     call_public_hello()
     call_login_wrong_password()
     call_protected_without_token()
+    call_events_without_token()
 
     call_login_username()
 
@@ -224,6 +287,7 @@ def main() -> int:
         call_users_self(access)
         call_verify(access)
         call_me(access)
+        call_events_forbidden_as_user(access)
         call_refresh_wrong_token(access)
         # refresh must use the same login pair (a later login overwrites redis)
         new_access = call_refresh(access, refresh) if refresh else None
@@ -239,6 +303,11 @@ def main() -> int:
             call_access_still_works_after_logout(access2)
             call_refresh_revoked_after_logout(access2, refresh2)
             call_relogin_after_logout()
+
+    admin_login = call_login_admin()
+    admin_access = admin_login.get("access_token", "")
+    if admin_access:
+        call_events_create_list_retrieve(admin_access)
 
     print("---")
     print(f"Result: {_passed} passed, {_failed} failed")
