@@ -23,7 +23,7 @@ def build_user_payload(user: User) -> dict:
     }
 
 
-async def authenticate(request: Request, *args, **kwargs):
+async def authenticate(request: Request, *args, **kwargs) -> dict:
     """Validate credentials and return JWT payload (user_id, username, role). Used by sanic_jwt."""
     if request.json is None:
         raise BadRequest("Request body is required")
@@ -39,7 +39,7 @@ async def authenticate(request: Request, *args, **kwargs):
     else:
         query = Q(name=sch_user.username)
     user = await User.filter(query).select_related("role").first()
-    if user is None or not await check_active(user):
+    if user is None or not check_active(user):
         raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
     if not user.verify_password(sch_user.password.get_secret_value()):
@@ -48,34 +48,32 @@ async def authenticate(request: Request, *args, **kwargs):
     return build_user_payload(user)
 
 
-async def retrieve_user(request, payload, *args, **kwargs):
+async def retrieve_user(request, payload, *args, **kwargs) -> dict | None:
     """
     Single place to resolve an active User from JWT payload.
 
     - Loads ORM User once per request and stores it on ``request.ctx.user``
     - Returns a dict for sanic-jwt (refresh / me); ViewSets use ``request.ctx.user``
     """
-    if not payload:
-        return None
-    user_id = payload.get("user_id")
-    if user_id is None:
+
+    if not payload or (user_id := payload.get("user_id")) is None:
         return None
 
     # Reuse ORM user already attached earlier in this request
     ctx = getattr(request, "ctx", None) if request is not None else None
     cached = getattr(ctx, "user", None) if ctx is not None else None
-    if cached is not None and getattr(cached, "id", None) == user_id and await check_active(cached):
+    if cached is not None and getattr(cached, "id", None) == user_id and check_active(cached):
         return build_user_payload(cached)
 
     user = await User.filter(id=user_id).select_related("role").first()
-    if user is None or not await check_active(user):
+    if user is None or not check_active(user):
         return None
     if ctx is not None:
         ctx.user = user
     return build_user_payload(user)
 
 
-async def check_active(user: User):
+def check_active(user: User):
     return getattr(user, "is_active", True)
 
 
