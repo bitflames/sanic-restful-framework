@@ -33,6 +33,36 @@ class TestActionDecorator:
         assert list_featured.extra_info["url_path"] == "/list_featured"
         assert list_featured.extra_info["url_name"] == "list_featured"
 
+    def test_action_custom_url_name_is_suffix_only(self):
+        @action(detail=False, url_path="ping", url_name="ping")
+        def ping(self, request):
+            pass
+
+        assert ping.extra_info["url_name"] == "ping"
+
+    def test_action_async_passthrough(self):
+        @action(detail=False, url_path="ping")
+        async def ping(self, request):
+            return {"ok": True}
+
+        assert ping.extra_info["url_path"] == "ping"
+
+    @pytest.mark.asyncio
+    async def test_action_async_wrapper_invokes_fun(self):
+        @action(detail=False, url_path="ping")
+        async def ping(self, request):
+            return {"ok": True, "user": request}
+
+        result = await ping(None, "req")
+        assert result == {"ok": True, "user": "req"}
+
+    def test_action_detail_must_be_bool(self):
+        with pytest.raises(TypeError, match="detail must be bool"):
+
+            @action(detail="yes")
+            def bad(self, request):
+                pass
+
     def test_action_keyword_only(self):
         with pytest.raises(TypeError):
 

@@ -59,7 +59,7 @@ class SanicRouter:
                     action_view,
                     methods=extra_info["methods"],
                     uri=uri,
-                    name=extra_info["url_name"],
+                    name=f"{name}-{extra_info['url_name']}",
                 )
 
     def get_blueprint(self):

@@ -61,7 +61,7 @@ class ProfileViewSet(BaseViewSet):
 
         return UserSchemaReader
 
-    @action(methods=["get"], detail=False, url_path="ping", url_name="profile-ping")
+    @action(methods=["get"], detail=False, url_path="ping", url_name="ping")
     async def ping(self, request):
         user = request.ctx.user
         return json(
