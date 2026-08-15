@@ -5,7 +5,6 @@ from typing import ClassVar, cast
 from pydantic import BaseModel, ValidationError
 from sanic import Request
 from sanic.exceptions import Forbidden, HTTPException, NotFound
-from sanic.log import error_logger
 from sanic.response import HTTPResponse, JSONResponse
 from sanic.views import HTTPMethodView
 from tortoise import exceptions
@@ -246,19 +245,16 @@ class GenericAPIView(HTTPMethodView):
             try:
                 return await handler(request, *args, **kwargs)
             except exceptions.DoesNotExist:
-                error_logger.exception("DoesNotExist")
                 return HTTPResponse(
                     "Please ensure that the resource you are accessing exists and that you have permission to access it",
                     status=HTTPStatus.HTTP_404_NOT_FOUND,
                 )
             except ValidationError as e:
-                error_logger.exception("ValidationError")
                 return JSONResponse(
                     {"detail": str(e)},
                     status=HTTPStatus.HTTP_422_UNPROCESSABLE_ENTITY,
                 )
             except HTTPException as e:
-                error_logger.exception("HTTPException")
                 return JSONResponse(
                     {"detail": getattr(e, "message", "Error")},
                     status=e.status_code,

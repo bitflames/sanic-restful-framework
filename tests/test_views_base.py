@@ -363,3 +363,45 @@ class TestBaseViewSet:
         request.method = "OPTIONS"
         response = await view_fn(request)
         assert response.status == HTTPStatus.HTTP_405_METHOD_NOT_ALLOWED
+
+    @pytest.mark.asyncio
+    async def test_as_view_validation_error_returns_422(self):
+        from pydantic import ValidationError
+
+        class View(MinimalViewSet):
+            async def list(self, request):
+                raise ValidationError.from_exception_data("Body", [{"type": "missing", "loc": ("name",), "input": {}}])
+
+        view_fn = View.as_view(actions={"get": "list"})
+        request = MagicMock()
+        request.method = "GET"
+        response = await view_fn(request)
+        assert response.status == HTTPStatus.HTTP_422_UNPROCESSABLE_ENTITY
+
+    @pytest.mark.asyncio
+    async def test_as_view_http_exception_returns_status(self):
+        from sanic.exceptions import Forbidden
+
+        class View(MinimalViewSet):
+            async def list(self, request):
+                raise Forbidden("nope")
+
+        view_fn = View.as_view(actions={"get": "list"})
+        request = MagicMock()
+        request.method = "GET"
+        response = await view_fn(request)
+        assert response.status == 403
+
+    @pytest.mark.asyncio
+    async def test_as_view_does_not_exist_returns_404(self):
+        from tortoise.exceptions import DoesNotExist
+
+        class View(MinimalViewSet):
+            async def retrieve(self, request, pk):
+                raise DoesNotExist("User")
+
+        view_fn = View.as_view(actions={"get": "retrieve"})
+        request = MagicMock()
+        request.method = "GET"
+        response = await view_fn(request, pk=1)
+        assert response.status == HTTPStatus.HTTP_404_NOT_FOUND
