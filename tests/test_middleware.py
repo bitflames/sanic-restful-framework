@@ -10,7 +10,12 @@ from srf.middleware.authmiddleware import (
     extract_bearer_token,
     is_public_endpoint,
 )
-from srf.middleware.throttlemiddleware import IPRateLimit, MemoryStorage, throttle_rate
+from srf.middleware.throttlemiddleware import (
+    IPRateLimit,
+    MemoryStorage,
+    RedisStorage,
+    throttle_rate,
+)
 
 
 @pytest.fixture
@@ -29,7 +34,7 @@ def public_endpoints_via_app():
         if hasattr(settings, "app"):
             delattr(settings, "app")
     else:
-        object.__setattr__(settings, "app", previous_app)
+        object.__setattr__(settings, "app", previous)
 
 
 class TestIsPublicEndpoint:
@@ -90,17 +95,74 @@ class TestExtractBearerToken:
 
 
 class TestThrottleMemoryStorage:
-    def test_incr_returns_count(self):
+    @pytest.mark.asyncio
+    async def test_incr_returns_count(self):
         storage = MemoryStorage()
-        n = storage.incr("key1", window=60)
+        n = await storage.incr("key1", window=60)
         assert n == 1
-        n = storage.incr("key1", window=60)
+        n = await storage.incr("key1", window=60)
         assert n == 2
 
-    def test_cleanup_expired(self):
-        storage = MemoryStorage()
-        storage.incr("k1", 1)
-        storage.cleanup_expired(window=1)
+    @pytest.mark.asyncio
+    async def test_cleanup_expired_drops_stale_keys(self):
+        storage = MemoryStorage(cleanup_every=0)
+        await storage.incr("k1", 1)
+        storage.data["k1"] = [0.0]
+        storage._windows["k1"] = 1
+        storage.cleanup_expired()
+        assert "k1" not in storage.data
+
+    @pytest.mark.asyncio
+    async def test_periodic_cleanup_runs(self):
+        storage = MemoryStorage(cleanup_every=2)
+        storage.cleanup_expired = MagicMock()
+        await storage.incr("a", 60)
+        await storage.incr("b", 60)
+        storage.cleanup_expired.assert_called_once()
+
+
+class TestRedisStorage:
+    def test_requires_redis_client(self):
+        with pytest.raises(ValueError, match="redis client is required"):
+            RedisStorage(None)
+
+    @pytest.mark.asyncio
+    async def test_incr_sets_expire_on_first_hit(self):
+        redis = AsyncMock()
+        redis.incr = AsyncMock(return_value=1)
+        redis.expire = AsyncMock()
+        storage = RedisStorage(redis, prefix="throttle")
+
+        count = await storage.incr("ip:1.2.3.4", window=60)
+
+        assert count == 1
+        redis.incr.assert_awaited_once_with("throttle:ip:1.2.3.4")
+        redis.expire.assert_awaited_once_with("throttle:ip:1.2.3.4", 60)
+
+    @pytest.mark.asyncio
+    async def test_incr_skips_expire_after_first_hit(self):
+        redis = AsyncMock()
+        redis.incr = AsyncMock(return_value=2)
+        redis.expire = AsyncMock()
+        storage = RedisStorage(redis)
+
+        count = await storage.incr("ip:1.2.3.4", window=30)
+
+        assert count == 2
+        redis.expire.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_shared_redis_counts_across_storage_instances(self):
+        """Two workers share one Redis client → same counter."""
+        redis = AsyncMock()
+        redis.incr = AsyncMock(side_effect=[1, 2, 3])
+        redis.expire = AsyncMock()
+        storage_a = RedisStorage(redis)
+        storage_b = RedisStorage(redis)
+
+        assert await storage_a.incr("ip:9.9.9.9", 60) == 1
+        assert await storage_b.incr("ip:9.9.9.9", 60) == 2
+        assert await storage_a.incr("ip:9.9.9.9", 60) == 3
 
 
 class TestIPRateLimit:
@@ -110,6 +172,20 @@ class TestIPRateLimit:
         limiter = IPRateLimit(limit=2, window=60, storage=storage)
         request = MagicMock()
         request.remote_addr = "127.0.0.1"
+        assert await limiter.allow(request) is True
+        assert await limiter.allow(request) is True
+        assert await limiter.allow(request) is False
+
+    @pytest.mark.asyncio
+    async def test_redis_storage_with_ip_limiter(self):
+        redis = AsyncMock()
+        redis.incr = AsyncMock(side_effect=[1, 2, 3])
+        redis.expire = AsyncMock()
+        storage = RedisStorage(redis)
+        limiter = IPRateLimit(limit=2, window=60, storage=storage)
+        request = MagicMock()
+        request.remote_addr = "10.0.0.1"
+
         assert await limiter.allow(request) is True
         assert await limiter.allow(request) is True
         assert await limiter.allow(request) is False

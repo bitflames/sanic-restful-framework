@@ -106,3 +106,7 @@ REQUEST_LIMITERS = []
 # JWT_SECRET
 JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
 JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
+
+
+# Redis key prefix for rate limiting (RedisStorage)
+THROTTLE_REDIS_PREFIX = "throttle"
