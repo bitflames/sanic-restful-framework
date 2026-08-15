@@ -15,22 +15,24 @@ class HealthCheckRegistry:
 
 
 class BaseHealthCheck:
-    name = "base"
+    name: str
     timeout = 5  # seconds
+
+    # def __init_subclass__(cls, **kwargs):
+    #     HealthCheckRegistry.register(cls)
 
     def __init__(self, app):
         """
-        app: Sanic application instance
-        """
+        app: Sanic application instance.
 
+        Requires ``app.ctx.<name>`` to already be set. Missing client is a
+        programming error and must not be reported as a check ``down``.
+        """
         self.app = app
         client = getattr(app.ctx, self.name, None)
         if client is None:
             raise ValueError(f"{self.name} not found in app.ctx")
         setattr(self, self.name, client)
-
-    # def __init_subclass__(cls, **kwargs):
-    #     HealthCheckRegistry.register(cls)
 
     async def check(self):
         raise NotImplementedError("Must implement check()")

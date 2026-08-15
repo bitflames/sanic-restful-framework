@@ -14,9 +14,6 @@ from pydantic import (
 )
 
 from srf.config import settings
-from srf.config.settings import DATETIME_FORMAT
-
-MIN_PASSWORD_LENGTH = settings.MIN_PASSWORD_LENGTH
 
 
 def utc_now() -> datetime.datetime:
@@ -37,8 +34,9 @@ def validate_password_strength(password: str) -> str:
     Raising ValueError here is the Pydantic V2 convention: field/model validators
     convert it into a ValidationError (there is no separate password API in Pydantic).
     """
-    if len(password) < MIN_PASSWORD_LENGTH:
-        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+    min_length = settings.MIN_PASSWORD_LENGTH
+    if len(password) < min_length:
+        raise ValueError(f"Password must be at least {min_length} characters")
     if not re.search(r"[A-Za-z]", password):
         raise ValueError("Password must contain at least one letter")
     if not re.search(r"\d", password):
@@ -62,7 +60,7 @@ class SchemaBaseTime(BaseModel):
     create_time: datetime.datetime = Field(default_factory=utc_now, alias="created_date")
     update_time: datetime.datetime = Field(default_factory=utc_now, alias="updated_date")
 
-    model_config = ConfigDict(json_encoders={datetime.datetime: lambda v: (v.strftime(DATETIME_FORMAT) if v else None)})  # for model_dump_json
+    model_config = ConfigDict(json_encoders={datetime.datetime: lambda v: (v.strftime(settings.DATETIME_FORMAT) if v else None)})
 
 
 # Reusable type: SecretStr masks repr/logs; AfterValidator enforces strength → ValidationError

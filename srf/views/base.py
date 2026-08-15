@@ -14,7 +14,7 @@ from tortoise.queryset import QuerySet as QuerySetType
 from srf.config import settings
 from srf.exceptions import TargetObjectAlreadyExist
 from srf.filters.filter import BaseFilter
-from srf.paginator import PageNumberPagination
+from srf.paginator import BasePagination
 from srf.permission.permission import BasePermission
 from srf.views.http_status import HTTPStatus
 
@@ -105,20 +105,22 @@ class ListModelMixin:
         """Get a list orm model instance."""
         sch_model: type[BaseModel] = self._get_schema(request)
         queryset: QuerySetType = self.filter_queryset(self.get_queryset())
-        paginator = PageNumberPagination.from_queryset(queryset, request)  # TODO，config
+        paginator: BasePagination = self.pagination_class.from_queryset(queryset, request)
         result = await paginator.paginate(sch_model=sch_model)
         return JSONResponse(result.model_dump(mode="json", by_alias=True))
 
 
 class GenericAPIView(HTTPMethodView):
     permission_classes: Iterable[type[BasePermission]]
-    search_fields: ClassVar[list[str]] = []
-    queryset = None
+    search_fields: ClassVar[list[str]]
+    pagination_class: type[BasePagination]
+    queryset: QuerySetType | None = None
 
     def __init__(self, *args, **kwargs):
         cls = type(self)
         self.filter_class = getattr(cls, "filter_class", settings.DEFAULT_FILTERS)
         self.permission_classes = getattr(cls, "permission_classes", settings.DEFAULT_PERMISSION_CLASSES)
+        self.pagination_class = getattr(cls, "pagination_class", settings.PAGINATION_CLASS)
         super().__init__(*args, **kwargs)
 
     def get_schema(self, request: Request, *args, is_safe=False, **kwargs):

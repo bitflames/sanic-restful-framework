@@ -227,7 +227,7 @@ def call_events_create_list_retrieve(admin_access: str) -> None:
         "action": "user.update",
         "obj_id": 7,
         "obj_name": "User",
-        "req_source": "api_call_tests",
+        "req_remote": "api_call_tests",
         "req_data": {"username": "alice"},
         "res_data": {"ok": True},
     }
@@ -255,7 +255,7 @@ def call_events_create_list_retrieve(admin_access: str) -> None:
         status == 200
         and detail.get("id") == event_id
         and detail.get("action") == "user.update"
-        and detail.get("req_source") == "api_call_tests"
+        and detail.get("req_remote") == "api_call_tests"
     )
     _ok(f"GET /api/events/{event_id} → 200", ok_detail, (status, detail))
 

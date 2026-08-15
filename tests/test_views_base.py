@@ -244,6 +244,92 @@ class TestGenericAPIView:
         view = View()
         assert view.permission_classes == (IsAuthenticated,)
 
+    def test_pagination_class_defaults_from_settings(self):
+        from srf.config import settings
+
+        view = MinimalViewSet()
+        assert view.pagination_class is settings.PAGINATION_CLASS
+
+    def test_pagination_class_follows_bound_app(self):
+        from types import SimpleNamespace
+
+        from srf.config import settings
+
+        class CustomPagination:
+            pass
+
+        previous = getattr(settings, "app", None)
+        try:
+            app = MagicMock()
+            app.config = SimpleNamespace(PAGINATION_CLASS=CustomPagination)
+            settings.set_app(app)
+            view = MinimalViewSet()
+            assert view.pagination_class is CustomPagination
+        finally:
+            if previous is None:
+                if hasattr(settings, "app"):
+                    delattr(settings, "app")
+            else:
+                object.__setattr__(settings, "app", previous)
+
+    def test_pagination_class_class_attr_override(self):
+        class CustomPagination:
+            pass
+
+        class View(GenericAPIView):
+            pagination_class = CustomPagination
+
+            @property
+            def queryset(self):
+                return MagicMock()
+
+        view = View()
+        assert view.pagination_class is CustomPagination
+
+    def test_new_view_follows_last_bound_app(self):
+        """Two apps in one process: each new ViewSet reads the currently bound app."""
+        from types import SimpleNamespace
+
+        from srf.config import settings
+        from srf.permission.permission import AllowAny, IsAuthenticated
+
+        class PaginationA:
+            pass
+
+        class PaginationB:
+            pass
+
+        previous = getattr(settings, "app", None)
+        try:
+            app1 = MagicMock()
+            app1.config = SimpleNamespace(
+                PAGINATION_CLASS=PaginationA,
+                DEFAULT_PERMISSION_CLASSES=(AllowAny,),
+            )
+            app2 = MagicMock()
+            app2.config = SimpleNamespace(
+                PAGINATION_CLASS=PaginationB,
+                DEFAULT_PERMISSION_CLASSES=(IsAuthenticated,),
+            )
+
+            settings.set_app(app1)
+            view1 = MinimalViewSet()
+            assert view1.pagination_class is PaginationA
+            assert view1.permission_classes == (AllowAny,)
+
+            settings.set_app(app2)
+            view2 = MinimalViewSet()
+            assert view2.pagination_class is PaginationB
+            assert view2.permission_classes == (IsAuthenticated,)
+            # Already-built instances keep the copy from their __init__
+            assert view1.pagination_class is PaginationA
+        finally:
+            if previous is None:
+                if hasattr(settings, "app"):
+                    delattr(settings, "app")
+            else:
+                object.__setattr__(settings, "app", previous)
+
 
 class TestBaseViewSet:
     """Tests for BaseViewSet."""

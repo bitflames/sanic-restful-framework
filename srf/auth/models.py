@@ -89,7 +89,7 @@ class User(TorModel):
 class UserRoles(TorModel):
     id = fields.BigIntField(pk=True, generated=True)
     user = fields.ForeignKeyField("models.User", on_delete=fields.CASCADE)
-    role = fields.ForeignKeyField("models.Role", on_delete=fields.SET_DEFAULT)
+    role = fields.ForeignKeyField("models.Role", on_delete=fields.CASCADE)
 
     class Meta:
         table = "auth_user_role"

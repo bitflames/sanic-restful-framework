@@ -1,5 +1,6 @@
 """Unit tests for srf.health."""
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -39,6 +40,14 @@ class FailingHealthCheck(BaseHealthCheck):
 class TestBaseHealthCheck:
     def test_default_timeout(self):
         assert BaseHealthCheck.timeout == 5
+
+    def test_subclass_without_name_raises_on_init(self):
+        class NoName(BaseHealthCheck):
+            async def check(self):
+                pass
+
+        with pytest.raises(AttributeError, match="name"):
+            NoName(make_app())
 
     @pytest.mark.asyncio
     async def test_run_success(self):
@@ -160,3 +169,44 @@ class TestHealthViewset:
         assert response.status == 200
         assert b'"redis":"up"' in response.body or b'"redis": "up"' in response.body
         redis.ping.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_missing_client_fails_endpoint(self):
+        redis = AsyncMock()
+        redis.ping = AsyncMock(return_value=True)
+        request = MagicMock()
+        request.app = make_app(redis=redis)
+        request.app.config = SimpleNamespace(HEALTH_CHECK_LIST=[RedisCheck, SQLiteCheck])
+
+        with pytest.raises(ValueError, match="sqlite not found in app.ctx"):
+            await health_check(request)
+
+    @pytest.mark.asyncio
+    async def test_checks_run_in_parallel(self):
+        started = {}
+
+        class FirstCheck(BaseHealthCheck):
+            name = "first"
+
+            async def check(self):
+                started["first"] = asyncio.get_running_loop().time()
+                await asyncio.sleep(0.05)
+
+        class SecondCheck(BaseHealthCheck):
+            name = "second"
+
+            async def check(self):
+                started["second"] = asyncio.get_running_loop().time()
+                await asyncio.sleep(0.05)
+
+        request = MagicMock()
+        request.app = make_app(first=object(), second=object())
+        request.app.config = SimpleNamespace(HEALTH_CHECK_LIST=[FirstCheck, SecondCheck])
+
+        t0 = asyncio.get_running_loop().time()
+        response = await health_check(request)
+        elapsed = asyncio.get_running_loop().time() - t0
+
+        assert response.status == 200
+        assert abs(started["first"] - started["second"]) < 0.04
+        assert elapsed < 0.09
