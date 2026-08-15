@@ -10,7 +10,7 @@ class SanicRouter:
         self.prefix = f"/{prefix.strip('/')}" if prefix else ""
         self.bp = bp or Blueprint(self.prefix.strip("/") or "api")
 
-    def register(self, path: str, view_cls: BaseViewSet, name: str | None = None):
+    def register(self, path: str, view_cls: type[BaseViewSet], name: str | None = None) -> None:
         name = name or path
         path = path.strip("/")
         base_uri = f"{self.prefix}/{path}"

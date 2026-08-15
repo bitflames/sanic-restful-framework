@@ -38,10 +38,10 @@ class BasePagination:
     def from_queryset(cls, queryset: QuerySet[T], request: Request) -> "BasePagination":
         raise NotImplementedError("from_queryset() must be implemented.")
 
-    async def paginate(self, sch_model: BaseModel | None = None) -> PaginationResult:
+    async def paginate(self, sch_model: type[BaseModel] | None = None) -> PaginationResult:
         raise NotImplementedError("paginate() must be implemented.")
 
-    async def to_dict(self, sch_model: BaseModel | None = None) -> dict[str, Any]:
+    async def to_dict(self, sch_model: type[BaseModel] | None = None) -> dict[str, Any]:
         result = await self.paginate(sch_model=sch_model)
         return result.model_dump(by_alias=True)
 
@@ -94,7 +94,7 @@ class PageNumberPagination(BasePagination):
 
         return cls(queryset=queryset, page=page, page_size=page_size)
 
-    async def paginate(self, sch_model: BaseModel | None = None) -> PaginationResult:
+    async def paginate(self, sch_model: type[BaseModel] | None = None) -> PaginationResult:
         offset = (self.page - 1) * self.page_size
         total_count = await self.queryset.count()
         items = await self.queryset.offset(offset).limit(self.page_size)
@@ -110,11 +110,11 @@ class PageNumberPagination(BasePagination):
             count=total_count,
         )
 
-    async def to_dict(self, sch_model: BaseModel | None = None) -> dict[str, Any]:
+    async def to_dict(self, sch_model: type[BaseModel] | None = None) -> dict[str, Any]:
         result = await self.paginate(sch_model=sch_model)
         return result.model_dump(by_alias=True)
 
-    def num_pages(self, total_count: int):
+    def num_pages(self, total_count: int) -> int:
         """Return the total number of pages."""
 
         total_count = total_count or 0

@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Iterable
-from typing import ClassVar, cast
+from typing import ClassVar
 
 from pydantic import BaseModel, ValidationError
 from sanic import Request
@@ -13,7 +13,6 @@ from tortoise.queryset import QuerySet as QuerySetType
 
 from srf.config import settings
 from srf.exceptions import TargetObjectAlreadyExist
-from srf.filters.filter import BaseFilter
 from srf.paginator import BasePagination
 from srf.permission.permission import BasePermission
 from srf.views.http_status import HTTPStatus
@@ -123,13 +122,13 @@ class GenericAPIView(HTTPMethodView):
         self.pagination_class = getattr(cls, "pagination_class", settings.PAGINATION_CLASS)
         super().__init__(*args, **kwargs)
 
-    def get_schema(self, request: Request, *args, is_safe=False, **kwargs):
+    def get_schema(self, request: Request, *args, is_safe=False, **kwargs) -> type[BaseModel] | None:
         """
         Default implementation that returns the schema attribute
         """
         return getattr(self, "schema", None)
 
-    def _get_schema(self, request: Request, *args, is_safe=False, **kwargs):
+    def _get_schema(self, request: Request, *args, is_safe=False, **kwargs) -> type[BaseModel] | None:
         """
         get pydantic model,
         params:
@@ -202,9 +201,8 @@ class GenericAPIView(HTTPMethodView):
         The filter class should be obtained first from view class or, if not, from settings
         """
         if hasattr(self, "filter_class"):
-            for filter_class in self.filter_class:
-                filter_class = cast(BaseFilter, filter_class)
-                queryset = filter_class(self).filter_queryset(self.request, queryset)
+            for filter_cls in self.filter_class:
+                queryset = filter_cls(self).filter_queryset(self.request, queryset)
         return queryset
 
     @classmethod

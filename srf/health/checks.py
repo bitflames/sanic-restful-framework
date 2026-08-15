@@ -7,7 +7,7 @@ class HealthCheckRegistry:
     def __init__(self):
         self.checks = []
 
-    def register(self, check_class):
+    def register(self, check_class: type["BaseHealthCheck"]):
         self.checks.append(check_class)
 
     def get_checks(self):
