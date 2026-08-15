@@ -236,12 +236,12 @@ class TestRegisterEmailCode:
         mock_user.is_staff = False
         mock_user.is_superuser = False
         mock_user.last_login = None
-        mock_user.date_joined = None
         mock_user.create_time = MagicMock()
         mock_user.update_time = MagicMock()
         mock_role = MagicMock()
         mock_role.name = "user"
         mock_user.role = mock_role
+        mock_user.save = AsyncMock()
 
         auth_inst = MagicMock()
         auth_inst.generate_access_token = AsyncMock(return_value="tok")

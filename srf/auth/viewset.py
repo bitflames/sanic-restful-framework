@@ -24,6 +24,7 @@ from .auth import (
     retrieve_user,
     revoke_refresh_token,
     store_refresh_token,
+    update_user_last_login,
 )
 from .schema import ChangePasswordSchema, UserSchemaWriter, unwrap_secret
 
@@ -50,8 +51,8 @@ def setup_auth(app: Sanic, *args, **kwargs) -> Initialize:
     return Initialize(
         app,
         authenticate=authenticate,
-        retrieve_user=retrieve_user,
         path_to_authenticate=path_to_authenticate,
+        retrieve_user=retrieve_user,
         secret=secret,
         url_prefix=url_prefix,
         refresh_token_enabled=True,
@@ -103,6 +104,7 @@ async def register(request: Request):
     )
     user_data["password"] = unwrap_secret(sch_user_in.password)
     user_db = await models.User.create_user(user_data)
+    await update_user_last_login(user_db)
     user_return_data = await gen_user_access_token(request, user_db)
     return JSONResponse(user_return_data, status=HTTPStatus.HTTP_200_OK)
 

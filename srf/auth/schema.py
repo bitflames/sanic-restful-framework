@@ -46,13 +46,9 @@ def validate_password_strength(password: str) -> str:
     return password
 
 
-def _strong_secret(v: SecretStr) -> SecretStr:
+def validate_secret(v: SecretStr) -> SecretStr:
     validate_password_strength(v.get_secret_value())
     return v
-
-
-# Reusable type: SecretStr masks repr/logs; AfterValidator enforces strength → ValidationError
-StrongPassword = Annotated[SecretStr, AfterValidator(_strong_secret)]
 
 
 def _require_matching_passwords(password: SecretStr, password_confirm: SecretStr) -> None:
@@ -67,6 +63,10 @@ class SchemaBaseTime(BaseModel):
     update_time: datetime.datetime = Field(default_factory=utc_now, alias="updated_date")
 
     model_config = ConfigDict(json_encoders={datetime.datetime: lambda v: (v.strftime(DATETIME_FORMAT) if v else None)})  # for model_dump_json
+
+
+# Reusable type: SecretStr masks repr/logs; AfterValidator enforces strength → ValidationError
+StrongPassword = Annotated[SecretStr, AfterValidator(validate_secret)]
 
 
 class UserSchemaWriter(SchemaBaseTime):
@@ -93,7 +93,7 @@ class UserSchemaWriter(SchemaBaseTime):
 class UserSchemaUpdate(SchemaBaseTime):
     """Profile update payload — no password fields (use change-password action)."""
 
-    id: int | None = None
+    id: int | None = Field(None, frozen=True)
     name: str | None = Field(None, alias="username")
     email: EmailStr | None = None
     is_active: bool | None = None
@@ -124,7 +124,6 @@ class UserSchemaReader(SchemaBaseTime):
     is_staff: bool = False
     is_superuser: bool = False
     last_login: datetime.datetime | None = None
-    date_joined: datetime.datetime | None = None
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, ser_json_alias=True)
     # Both name and alias are allowed to be assigned. The output of ser_json_alias must use alias

@@ -68,11 +68,13 @@ class TestAuthenticate:
         mock_user.verify_password = MagicMock(return_value=True)
         mock_user.role = MagicMock(name="user")
         mock_user.role.name = "user"
+        mock_user.save = AsyncMock()
         with patch("srf.auth.auth.User") as UserMock:
             UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=mock_user)
             payload = await authenticate(request)
             assert payload["user_id"] == 2
             assert payload["username"] == "alice"
+            mock_user.save.assert_awaited_once()
             filter_arg = UserMock.filter.call_args[0][0]
             assert "email" not in str(filter_arg).lower() or "None" not in str(filter_arg)
 
@@ -94,6 +96,7 @@ class TestAuthenticate:
         mock_role = MagicMock()
         mock_role.name = "user"
         mock_user.role = mock_role
+        mock_user.save = AsyncMock()
         with patch("srf.auth.auth.User") as UserMock:
             UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=mock_user)
             payload = await authenticate(request)
@@ -179,20 +182,18 @@ class TestRefreshTokenHandlers:
     async def test_store_and_retrieve_refresh_token(self):
         request = MagicMock()
         mock_qs = MagicMock()
-        mock_qs.delete = AsyncMock()
         mock_qs.first = AsyncMock(return_value=MagicMock(token="rtok"))
 
         with patch("srf.auth.auth.RefreshToken") as RT:
             RT.filter.return_value = mock_qs
-            RT.create = AsyncMock()
+            RT.update_or_create = AsyncMock(return_value=(MagicMock(), True))
 
             await store_refresh_token(user_id=3, refresh_token="rtok", request=request)
-            mock_qs.delete.assert_awaited()
-            RT.create.assert_awaited()
-            create_kw = RT.create.await_args.kwargs
-            assert create_kw["user_id"] == 3
-            assert create_kw["token"] == "rtok"
-            assert create_kw["expires_at"] is not None
+            RT.update_or_create.assert_awaited_once()
+            call_kwargs = RT.update_or_create.await_args.kwargs
+            assert call_kwargs["user_id"] == 3
+            assert call_kwargs["defaults"]["token"] == "rtok"
+            assert call_kwargs["defaults"]["expires_at"] is not None
 
             assert await retrieve_refresh_token(request, 3) == "rtok"
             retrieve_kwargs = RT.filter.call_args.kwargs
@@ -229,7 +230,6 @@ class TestRefreshTokenHandlers:
         user.is_staff = False
         user.is_superuser = False
         user.last_login = None
-        user.date_joined = None
         user.create_time = MagicMock()
         user.update_time = MagicMock()
 

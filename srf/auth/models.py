@@ -24,8 +24,7 @@ class User(TorModel):
     role = fields.ForeignKeyField("models.Role", on_delete=fields.SET_DEFAULT)
     is_active = fields.BooleanField(default=True, null=False)
     email = fields.CharField(max_length=256, null=False, unique=True)
-    last_login = fields.DatetimeField(auto_now_add=True, null=False)
-    date_joined = fields.DatetimeField(auto_now_add=True, null=False)
+    last_login = fields.DatetimeField(null=True)
     create_time = fields.DatetimeField(auto_now_add=True, read_only=True)
     update_time = fields.DatetimeField(auto_now=True, null=True)
 
@@ -100,7 +99,7 @@ class RefreshToken(TorModel):
     """Persisted JWT refresh token (one active row per user; login replaces it)."""
 
     id = fields.BigIntField(pk=True, generated=True)
-    user = fields.ForeignKeyField("models.User", related_name="refresh_tokens", on_delete=fields.CASCADE)
+    user = fields.ForeignKeyField("models.User", related_name="refresh_tokens", on_delete=fields.CASCADE, unique=True)
     token = fields.CharField(max_length=512, null=False)
     expires_at = fields.DatetimeField(null=False)
     create_time = fields.DatetimeField(auto_now_add=True)

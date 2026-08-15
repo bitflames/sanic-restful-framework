@@ -16,7 +16,7 @@ from srf.tools.signing import sign_state, unsign_state
 from srf.views.http_status import HTTPStatus
 
 from . import models
-from .auth import gen_user_access_token
+from .auth import gen_user_access_token, update_user_last_login
 
 DEFAULT_EXCHANGE_CODE_TTL = 300
 DEFAULT_EXCHANGE_CODE_PREFIX = "social-login"
@@ -59,7 +59,6 @@ def _exchange_code_key(request: Request, code: str) -> str:
 
 def _delete_state_cookie(response, request: Request, github_config: dict) -> None:
     """Delete the state cookie."""
-
     cookie_name, _, _ = _cookie_settings(request)
     response.delete_cookie(cookie_name, path=_callback_cookie_path(github_config))
 
@@ -109,7 +108,7 @@ async def _store_exchange_code(request: Request, user_id: int) -> str:
     raise RuntimeError("Could not allocate a unique social login exchange code")
 
 
-async def github_login(request: Request):
+async def github_login_access(request: Request):
     """Redirect the user to the GitHub login page."""
 
     # get the github configurations from the request
@@ -155,7 +154,7 @@ def clear_oauth_state_cookie(func):
 
 
 @clear_oauth_state_cookie
-async def github_callback(request: Request):
+async def github_login_callback(request: Request):
     """Handle the GitHub callback and exchange the code for a JWT."""
     # get the github configurations from the request
     github_config = request.app.config.SOCIAL_CONFIG["github"]
@@ -214,9 +213,11 @@ async def github_callback(request: Request):
                 github_config["GITHUB_USER_EMAIL"],
                 headers=github_headers,
             )
-    except (aiohttp.ClientError, TimeoutError, ValueError):
-        error_logger.exception("GitHub OAuth request failed")
+    except (aiohttp.ClientError, TimeoutError, ValueError, TypeError):
         return JSONResponse({"error": "GitHub is temporarily unavailable"}, status=HTTPStatus.HTTP_502_BAD_GATEWAY)
+    except Exception:  # noqa: BLE001
+        error_logger.exception("Unexpected error during GitHub OAuth requests")
+        return JSONResponse({"error": "Could not complete social login"}, status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR)
 
     primary_email = _verified_email(emails) if isinstance(emails, list) else None
     if not primary_email:
@@ -241,14 +242,14 @@ async def github_callback(request: Request):
         # Redirect with a temporary code so the JWT is never exposed in a URL.
         one_time_code = await _store_exchange_code(request, user_db.id)
     except Exception:  # noqa: BLE001 - Catch all to log and sanitize 500 response
-        error_logger.exception("Could not complete GitHub user login")
+        error_logger.exception("Could not complete GitHub user login for email=%s", primary_email)
         return JSONResponse({"error": "Could not complete social login"}, status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR)
 
     separator = "&" if "?" in github_config["OAUTHCALLBACK"] else "?"
     return RedirectResponse(f"{github_config['OAUTHCALLBACK']}{separator}{urlencode({'code': one_time_code})}")
 
 
-async def login_by_code(request: Request):
+async def github_login_by_code(request: Request):
     """Consume a one-time social login code and return the application's JWT."""
     code = request.args.get("code")
     if not code:
@@ -263,12 +264,12 @@ async def login_by_code(request: Request):
     try:
         user_id = int(user_id.decode("ascii") if isinstance(user_id, bytes) else user_id)
     except (TypeError, ValueError, UnicodeDecodeError):
-        error_logger.error("Social login code contained an invalid user ID")
         raise NotFound("Invalid authorization code") from None
 
     user_db = await models.User.filter(pk=user_id).select_related("role").first()
     if user_db is None:
         raise NotFound("User not found")
 
+    await update_user_last_login(user_db)
     user_return_data = await gen_user_access_token(request, user_db)
     return JSONResponse(user_return_data, status=HTTPStatus.HTTP_200_OK)

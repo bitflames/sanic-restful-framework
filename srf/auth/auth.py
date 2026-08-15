@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from pydantic import ValidationError
 from sanic.exceptions import BadRequest, ServerError, Unauthorized
@@ -9,7 +9,7 @@ from tortoise.expressions import Q
 from srf.config import settings
 
 from .models import RefreshToken, User
-from .schema import UserLoginSchema, UserSchemaReader
+from .schema import UserLoginSchema, UserSchemaReader, utc_now
 
 LOGIN_FAILED_MESSAGE = "Unable to log in with provided credentials."
 
@@ -21,6 +21,12 @@ def build_user_payload(user: User) -> dict:
         "username": user.name,
         "role": user.role.name if user.role else None,
     }
+
+
+async def update_user_last_login(user: User) -> None:
+    """Record successful login time without rewriting unrelated columns."""
+    user.last_login = utc_now()
+    await user.save(update_fields=["last_login"])
 
 
 async def authenticate(request: Request, *args, **kwargs) -> dict:
@@ -45,6 +51,7 @@ async def authenticate(request: Request, *args, **kwargs) -> dict:
     if not user.verify_password(sch_user.password.get_secret_value()):
         raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
+    await update_user_last_login(user)
     return build_user_payload(user)
 
 
@@ -61,9 +68,9 @@ async def retrieve_user(request, payload, *args, **kwargs) -> dict | None:
 
     # Reuse ORM user already attached earlier in this request
     ctx = getattr(request, "ctx", None) if request is not None else None
-    cached = getattr(ctx, "user", None) if ctx is not None else None
-    if cached is not None and getattr(cached, "id", None) == user_id and check_active(cached):
-        return build_user_payload(cached)
+    ctx_user = getattr(ctx, "user", None) if ctx is not None else None
+    if ctx_user is not None and getattr(ctx_user, "id", None) == user_id and check_active(ctx_user):
+        return build_user_payload(ctx_user)
 
     user = await User.filter(id=user_id).select_related("role").first()
     if user is None or not check_active(user):
@@ -102,20 +109,18 @@ def _refresh_ttl() -> timedelta:
     return timedelta(seconds=max(int(ttl), 1))
 
 
-def _utc_now() -> datetime:
-    return datetime.now(UTC)
-
-
 async def store_refresh_token(user_id, refresh_token, request):
-    """Persist refresh token in DB; replace any existing token for this user."""
-    expires_at = _utc_now() + _refresh_ttl()
-    await RefreshToken.filter(user_id=user_id).delete()
-    await RefreshToken.create(user_id=user_id, token=refresh_token, expires_at=expires_at)
+    """Persist refresh token in DB; upsert the single row for this user."""
+    expires_at = utc_now() + _refresh_ttl()
+    await RefreshToken.update_or_create(
+        user_id=user_id,
+        defaults={"token": refresh_token, "expires_at": expires_at},
+    )
 
 
 async def retrieve_refresh_token(request, user_id):
     """Return the active (non-expired) refresh token for user, or None."""
-    row = await RefreshToken.filter(user_id=user_id, expires_at__gt=_utc_now()).first()
+    row = await RefreshToken.filter(user_id=user_id, expires_at__gt=utc_now()).first()
     return row.token if row else None
 
 
