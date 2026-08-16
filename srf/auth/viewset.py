@@ -133,8 +133,7 @@ async def send_email_with_redis_code(request: Request):
         ok = await send_verify_code(email, code)
         if not ok:
             await redis.delete(email_cache_key)
-            return False
-        return True
+        return ok
 
     # asyncio.create_task(_send_and_cleanup(email, code))  # no need to use asyncio, await is enough
 

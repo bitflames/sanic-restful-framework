@@ -16,18 +16,24 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 import fakeredis.aioredis as fakeredis_aio
+from pydantic import BaseModel, ConfigDict
 from sanic import Blueprint, Sanic, json
+from sanic.exceptions import BadRequest, ServerError
 from tortoise.contrib.sanic import register_tortoise
+from tortoise.exceptions import IntegrityError
 
+from srf.auth.auth import gen_user_access_token, update_user_last_login
 from srf.auth.models import Role, User
 from srf.auth.route import register_auth_urls
 from srf.auth.viewset import UserViewSet
 from srf.config import settings
 from srf.event.viewset import EventViewSet
+from srf.exceptions import TargetObjectAlreadyExist
 from srf.middleware.authmiddleware import set_user_to_request_ctx
-from srf.permission.permission import IsAuthenticated
+from srf.permission.permission import BasePermission, IsAuthenticated
 from srf.route import SanicRouter
 from srf.views import BaseViewSet, action
+from tests.app_models import SecretNote
 
 HOST = "127.0.0.1"
 PORT = 8800
@@ -47,6 +53,57 @@ ADMIN_ROLE = "admin"
 
 # Shared across Sanic reloads so refresh tokens survive worker restarts in debug mode
 _REDIS = fakeredis_aio.FakeRedis(decode_responses=False)
+
+
+class IsNoteOwner(BasePermission):
+    """Object-level: only the note owner may access a row."""
+
+    @staticmethod
+    def has_permission(request, view=None) -> bool:
+        return getattr(getattr(request, "ctx", None), "user", None) is not None
+
+    @staticmethod
+    def has_object_permission(request, view, obj) -> bool:
+        user = getattr(getattr(request, "ctx", None), "user", None)
+        owner_id = getattr(obj, "owner_id", None)
+        return user is not None and owner_id is not None and owner_id == user.id
+
+
+class SecretNoteSchemaWriter(BaseModel):
+    title: str
+    body: str | None = None
+
+
+class SecretNoteSchemaReader(BaseModel):
+    id: int
+    title: str
+    body: str | None = None
+    owner_id: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SecretNoteViewSet(BaseViewSet):
+    permission_classes = (IsAuthenticated, IsNoteOwner)
+    search_fields = ["title", "body"]
+    filter_fields = {"id": "id", "title": "title"}
+
+    @property
+    def queryset(self):
+        return SecretNote.all()
+
+    def get_schema(self, request, *args, is_safe=False, **kwargs):
+        if request.method.lower() in ("get", "head", "options") or is_safe:
+            return SecretNoteSchemaReader
+        return SecretNoteSchemaWriter
+
+    async def perform_create(self, sch_model: SecretNoteSchemaWriter):
+        data = sch_model.model_dump(exclude_unset=True)
+        data["owner_id"] = self.request.ctx.user.id
+        try:
+            return await self.get_queryset().model.create(**data)
+        except IntegrityError:
+            raise TargetObjectAlreadyExist(message="data conflict")
 
 
 class ProfileViewSet(BaseViewSet):
@@ -125,13 +182,14 @@ def create_app() -> Sanic:
     app.config.NON_AUTH_ENDPOINTS = tuple(settings.NON_AUTH_ENDPOINTS) + (
         "/api/public/hello",
         "/health",
+        "/api/auth/test/social-provision",
     )
     settings.set_app(app)
 
     register_tortoise(
         app,
         db_url=DB_URL,
-        modules={"models": ["srf.auth.models", "srf.event.models"]},
+        modules={"models": ["srf.auth.models", "srf.event.models", "tests.app_models"]},
         generate_schemas=True,
     )
     register_auth_urls(app, prefix="/api/auth")
@@ -140,6 +198,7 @@ def create_app() -> Sanic:
     router.register("users", UserViewSet, name="users")
     router.register("profile", ProfileViewSet, name="profile")
     router.register("events", EventViewSet, name="events")
+    router.register("notes", SecretNoteViewSet, name="notes")
     app.blueprint(router.get_blueprint())
 
     @app.get("/health")
@@ -149,6 +208,32 @@ def create_app() -> Sanic:
     @app.get("/api/public/hello")
     async def public_hello(_request):
         return json({"message": "hello"})
+
+    @app.post("/api/auth/test/social-provision")
+    async def test_social_provision(request):
+        """Local harness: mimic GitHub OAuth get_or_create for a brand-new social user."""
+        if request.json is None:
+            raise BadRequest("Request body is required")
+        email = request.json.get("email")
+        if not email:
+            raise BadRequest("email is required")
+        username = request.json.get("username") or email.split("@", 1)[0]
+        role = await Role.filter(name=SEED_ROLE).first()
+        if role is None:
+            raise ServerError("default role is not configured")
+        user_db, created = await User.get_or_create(
+            email=email,
+            defaults={"name": username, "role": role},
+        )
+        user_db = await User.filter(id=user_db.id).select_related("role").first()
+        if user_db is None:
+            raise ServerError("user provisioning failed")
+        if user_db.role_id and not isinstance(getattr(user_db, "role", None), Role):
+            user_db.role = await Role.get(id=user_db.role_id)
+        await update_user_last_login(user_db)
+        payload = await gen_user_access_token(request, user_db)
+        payload["created"] = created
+        return json(payload)
 
     @app.middleware("request")
     async def auth_middleware(request):

@@ -1,11 +1,33 @@
+from functools import lru_cache
 from math import ceil
 from typing import Any, TypeVar
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, TypeAdapter, field_validator
 from sanic.request import Request
 from tortoise.queryset import QuerySet
 
 T = TypeVar("T")
+
+
+@lru_cache
+def _list_type_adapter(schema: type[BaseModel]) -> TypeAdapter:
+    """Compile list[schema] validation once per schema class (process-local cache)."""
+    return TypeAdapter(list[schema])
+
+
+def serialize_page(schema: type[BaseModel], rows: list[Any]) -> list[dict[str, Any]]:
+    """
+    Serialize ORM rows through a Reader/Writer schema for list responses.
+
+    Uses a cached TypeAdapter so schema structure is not re-built per row.
+    Row data is still validated on every call; only the adapter is reused.
+    """
+    if not rows:
+        return []
+    adapter = _list_type_adapter(schema)
+    validated = adapter.validate_python(list(rows), from_attributes=True)
+    dumped = adapter.dump_python(validated, by_alias=True, mode="json")
+    return list(dumped)
 
 
 class PaginationParams(BaseModel):
@@ -47,6 +69,10 @@ class BasePagination:
 
     def num_pages(self, total_count: int) -> int:
         raise NotImplementedError("num_pages() must be implemented.")
+
+    def serialize_list(self, sch_model: type[BaseModel], rows: list[Any]) -> list[dict[str, Any]]:
+        """Convert ORM rows to JSON-ready dicts; override for custom list serialization."""
+        return serialize_page(sch_model, rows)
 
 
 class PageNumberPagination(BasePagination):
@@ -99,7 +125,7 @@ class PageNumberPagination(BasePagination):
         total_count = await self.queryset.count()
         items = await self.queryset.offset(offset).limit(self.page_size)
         if sch_model is not None:
-            items = [sch_model.model_validate(instance).model_dump(by_alias=True) for instance in items]
+            items = self.serialize_list(sch_model, list(items))
         else:
             raise ValueError("sch_model is required for paginate() to serialize results")
         total_pages = ceil(total_count / self.page_size) if total_count > 0 else 1

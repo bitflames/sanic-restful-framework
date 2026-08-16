@@ -3,7 +3,45 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from srf.paginator import BasePagination, PageNumberPagination, PaginationParams, PaginationResult
+from pydantic import BaseModel, ConfigDict, Field
+
+from srf.paginator import (
+    BasePagination,
+    PageNumberPagination,
+    PaginationParams,
+    PaginationResult,
+    _list_type_adapter,
+    serialize_page,
+)
+
+
+class _Row:
+    def __init__(self, id: int, name: str):
+        self.id = id
+        self.name = name
+
+
+class _Reader(BaseModel):
+    id: int
+    name: str = Field(alias="username")
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class TestSerializePage:
+    def test_empty_rows(self):
+        assert serialize_page(_Reader, []) == []
+
+    def test_serializes_orm_like_rows_with_aliases(self):
+        rows = [_Row(1, "alice"), _Row(2, "bob")]
+        out = serialize_page(_Reader, rows)
+        assert out == [{"id": 1, "username": "alice"}, {"id": 2, "username": "bob"}]
+
+    def test_type_adapter_cached_per_schema_class(self):
+        _list_type_adapter.cache_clear()
+        a1 = _list_type_adapter(_Reader)
+        a2 = _list_type_adapter(_Reader)
+        assert a1 is a2
 
 
 class TestPaginationParams:
@@ -91,30 +129,26 @@ class TestPageNumberPagination:
     async def test_paginate_returns_result(self):
         paginator = PageNumberPagination(queryset=MagicMock(), page=1, page_size=10)
         paginator.queryset.count = AsyncMock(return_value=5)
-        paginator.queryset.offset.return_value.limit = AsyncMock(return_value=[MagicMock(id=1), MagicMock(id=2)])
-        schema = MagicMock()
-        schema.model_validate.side_effect = lambda obj: MagicMock(
-            model_dump=MagicMock(return_value={"id": getattr(obj, "id", None)})
+        paginator.queryset.offset.return_value.limit = AsyncMock(
+            return_value=[_Row(1, "alice"), _Row(2, "bob")]
         )
-        result = await paginator.paginate(sch_model=schema)
+        result = await paginator.paginate(sch_model=_Reader)
         assert result.count == 5
         assert result.next is False
         assert result.previous is False
         assert len(result.results) == 2
+        assert result.results[0]["username"] == "alice"
 
     @pytest.mark.asyncio
     async def test_to_dict_returns_dict(self):
         paginator = PageNumberPagination(queryset=MagicMock(), page=2, page_size=2)
         paginator.queryset.count = AsyncMock(return_value=5)
-        paginator.queryset.offset.return_value.limit = AsyncMock(return_value=[MagicMock(id=3)])
-        schema = MagicMock()
-        schema.model_validate.side_effect = lambda obj: MagicMock(
-            model_dump=MagicMock(return_value={"id": getattr(obj, "id", None)})
-        )
-        result = await paginator.to_dict(sch_model=schema)
+        paginator.queryset.offset.return_value.limit = AsyncMock(return_value=[_Row(3, "carol")])
+        result = await paginator.to_dict(sch_model=_Reader)
         assert result["count"] == 5
         assert result["previous"] is True
         assert result["next"] is True
+        assert result["results"][0]["username"] == "carol"
 
     def test_num_pages_zero_count(self):
         paginator = PageNumberPagination(queryset=MagicMock(), page=1, page_size=10)

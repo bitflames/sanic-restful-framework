@@ -14,13 +14,18 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
 BASE = "http://127.0.0.1:8800"
 AUTH = f"{BASE}/api/auth"
 EVENTS = f"{BASE}/api/events"
+USERS = f"{BASE}/api/users"
+NOTES = f"{BASE}/api/notes"
+SOCIAL_PROVISION = f"{AUTH}/test/social-provision"
 SEED_EMAIL = "alice@example.com"
 SEED_PASSWORD = "password123"
 SEED_USERNAME = "alice"
@@ -260,6 +265,114 @@ def call_events_create_list_retrieve(admin_access: str) -> None:
     _ok(f"GET /api/events/{event_id} → 200", ok_detail, (status, detail))
 
 
+def _results(payload: Any) -> list:
+    if isinstance(payload, dict):
+        results = payload.get("results")
+        if isinstance(results, list):
+            return results
+    return []
+
+
+def call_users_search(admin_access: str) -> None:
+    status, data = _request("GET", f"{USERS}?search={SEED_USERNAME}", token=admin_access)
+    names = {item.get("username") or item.get("name") for item in _results(data)}
+    ok = status == 200 and SEED_USERNAME in names
+    _ok("GET /api/users?search=alice → includes seed user", ok, (status, data))
+
+
+def call_users_query_param_filter(admin_access: str) -> None:
+    status, data = _request("GET", f"{USERS}?name={SEED_USERNAME}", token=admin_access)
+    names = {item.get("username") or item.get("name") for item in _results(data)}
+    ok = status == 200 and names == {SEED_USERNAME}
+    _ok("GET /api/users?name=alice → query-param filter", ok, (status, data))
+
+
+def call_users_json_logic_filter(admin_access: str) -> None:
+    logic = json.dumps({"==": [{"var": "name"}, SEED_USERNAME]})
+    url = f"{USERS}?filter={urllib.parse.quote(logic)}"
+    status, data = _request("GET", url, token=admin_access)
+    names = {item.get("username") or item.get("name") for item in _results(data)}
+    ok = status == 200 and names == {SEED_USERNAME}
+    _ok("GET /api/users?filter=(name) → JsonLogic whitelist field", ok, (status, data))
+
+
+def call_users_query_param_ignores_unknown_field(admin_access: str) -> None:
+    status, data = _request("GET", f"{USERS}?password=should-be-ignored", token=admin_access)
+    ok = status == 200 and len(_results(data)) >= 2
+    _ok("GET /api/users?password=… → unknown query param ignored", ok, (status, data))
+
+
+def call_users_create_duplicate_email_409(admin_access: str) -> None:
+    body = {
+        "username": "duplicate-alice",
+        "email": SEED_EMAIL,
+        "password1": "Password123",
+        "password2": "Password123",
+    }
+    status, data = _request("POST", USERS, body=body, token=admin_access)
+    ok = status == 409 and isinstance(data, dict) and "detail" in data
+    _ok("POST /api/users duplicate email → 409", ok, (status, data))
+
+
+def call_notes_create_duplicate_title_409(user_access: str) -> None:
+    title = f"integration-dup-title-{int(time.time() * 1000)}"
+    body = {"title": title, "body": "first"}
+    status1, _ = _request("POST", NOTES, body=body, token=user_access)
+    status2, data2 = _request("POST", NOTES, body=body, token=user_access)
+    ok = status1 == 201 and status2 == 409 and isinstance(data2, dict) and "detail" in data2
+    _ok("POST /api/notes duplicate title → 409 (IntegrityError path)", ok, (status1, status2, data2))
+
+
+def call_notes_idor_forbidden(user_access: str, admin_access: str) -> None:
+    suffix = int(time.time() * 1000)
+    status_admin, admin_note = _request(
+        "POST",
+        NOTES,
+        body={"title": f"admin-private-{suffix}", "body": "admin only"},
+        token=admin_access,
+    )
+    if status_admin != 201 or not isinstance(admin_note, dict):
+        _ok("POST /api/notes as admin (setup for IDOR)", False, (status_admin, admin_note))
+        return
+
+    note_id = admin_note["id"]
+    status, data = _request("GET", f"{NOTES}/{note_id}", token=user_access)
+    ok = status == 403 and isinstance(data, dict) and "detail" in data
+    _ok("GET /api/notes/{admin_id} as alice → 403 IDOR blocked", ok, (status, data))
+
+    status_self, own = _request(
+        "POST",
+        NOTES,
+        body={"title": f"alice-own-{suffix}", "body": "mine"},
+        token=user_access,
+    )
+    if status_self != 201 or not isinstance(own, dict):
+        _ok("POST /api/notes as alice (setup for owner retrieve)", False, (status_self, own))
+        return
+
+    status_ok, detail = _request("GET", f"{NOTES}/{own['id']}", token=user_access)
+    ok_owner = status_ok == 200 and detail.get("title") == f"alice-own-{suffix}"
+    _ok("GET /api/notes/{own_id} as owner → 200", ok_owner, (status_ok, detail))
+
+
+def call_social_provision_new_user() -> None:
+    email = f"social-new-{int(time.time() * 1000)}@example.com"
+    body = {"email": email, "username": "social_new_user"}
+    status, data = _request("POST", SOCIAL_PROVISION, body=body)
+    ok = (
+        status == 200
+        and isinstance(data, dict)
+        and data.get("created") is True
+        and bool(data.get("access_token"))
+        and (data.get("email") == email or data.get("username") == "social_new_user")
+    )
+    _ok("POST /api/auth/test/social-provision new user → 200 created", ok, (status, data))
+
+    status2, data2 = _request("POST", SOCIAL_PROVISION, body=body)
+    ok2 = status2 == 200 and isinstance(data2, dict) and data2.get("created") is False and bool(data2.get("access_token"))
+    _ok("POST /api/auth/test/social-provision existing user → 200 not created", ok2, (status2, data2))
+
+
 def main() -> int:
     print(f"Target: {BASE}")
     print("---")
@@ -275,6 +388,7 @@ def main() -> int:
     call_login_wrong_password()
     call_protected_without_token()
     call_events_without_token()
+    call_social_provision_new_user()
 
     call_login_username()
 
@@ -305,9 +419,20 @@ def main() -> int:
             call_relogin_after_logout()
 
     admin_login = call_login_admin()
-    admin_access = admin_login.get("access_token", "")
+    admin_access = admin_login.get("access_token", "") or ""
     if admin_access:
         call_events_create_list_retrieve(admin_access)
+        call_users_search(admin_access)
+        call_users_query_param_filter(admin_access)
+        call_users_json_logic_filter(admin_access)
+        call_users_query_param_ignores_unknown_field(admin_access)
+        call_users_create_duplicate_email_409(admin_access)
+
+    login_for_notes = call_login_email()
+    user_access = login_for_notes.get("access_token", "")
+    if user_access and admin_access:
+        call_notes_create_duplicate_title_409(user_access)
+        call_notes_idor_forbidden(user_access, admin_access)
 
     print("---")
     print(f"Result: {_passed} passed, {_failed} failed")
