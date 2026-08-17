@@ -7,6 +7,7 @@ from typing import Any, ClassVar, cast
 from urllib.parse import unquote
 
 from sanic import Request
+from sanic.exceptions import BadRequest
 from sanic.log import logger
 from sanic.views import HTTPMethodView
 from tortoise.expressions import Q
@@ -113,14 +114,14 @@ class JsonLogicFilter(BaseFilter):
 
     def filter_queryset(self, request, queryset: QuerySet):
         raw_logic = request.args.get(self._filter_params)
-        if not raw_logic:
+        if not raw_logic or not self.filter_fields:
             return queryset
 
         if isinstance(raw_logic, str):
             try:
                 raw_logic = json.loads(raw_logic)
-            except (json.JSONDecodeError, TypeError):
-                return queryset
+            except (json.JSONDecodeError, TypeError) as exc:
+                raise BadRequest("Invalid filter JSON") from exc
 
         q_expr = self._parse_logic_recursively(raw_logic)
         if q_expr:
@@ -138,7 +139,6 @@ class JsonLogicFilter(BaseFilter):
                 sub_qs = [q for q in sub_qs if q is not None]
                 if not sub_qs:
                     return None
-                # return (sub_qs[0] if op == "and" else sub_qs[0]).__class__.reduce(op.upper(), sub_qs)
                 if op == "and":
                     return functools.reduce(operator.and_, sub_qs)
                 elif op == "or":
@@ -153,10 +153,9 @@ class JsonLogicFilter(BaseFilter):
                     left, right = args
                     key = left.get("var") if isinstance(left, dict) and "var" in left else None
                     value = right
-                    if key:
-                        if self.filter_fields and self.filter_fields.get(key):
-                            return self.OPERATOR_MAP[op](self.filter_fields.get(key), value)
-                        return self.OPERATOR_MAP[op](key, value)
+                    if key and self.filter_fields.get(key):
+                        return self.OPERATOR_MAP[op](self.filter_fields[key], value)
+                    return None
         return None
 
 

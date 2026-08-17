@@ -4,6 +4,8 @@ import json
 import pytest
 from unittest.mock import MagicMock
 
+from sanic.exceptions import BadRequest
+
 from srf.filters.filter import (
     JsonLogicFilter,
     OrderingFactory,
@@ -18,6 +20,10 @@ class ViewWithSearchFields:
 
 class ViewWithFilterFields:
     filter_fields = {"id": "id", "name": "name", "is_active": "is_active"}
+
+
+class ViewWithoutFilterFields:
+    pass
 
 
 class ViewWithOrderingFields:
@@ -91,14 +97,34 @@ class TestJsonLogicFilter:
         result = f.filter_queryset(request, qs)
         assert result is qs
 
-    def test_filter_queryset_invalid_json_returns_unchanged(self):
+    def test_filter_queryset_invalid_json_raises_bad_request(self):
         view = ViewWithFilterFields()
         f = JsonLogicFilter(view)
         request = MagicMock()
         request.args.get.return_value = "not-valid-json{{{"
         qs = MagicMock()
+        with pytest.raises(BadRequest, match="Invalid filter JSON"):
+            f.filter_queryset(request, qs)
+
+    def test_filter_queryset_without_filter_fields_skips_filtering(self):
+        view = ViewWithoutFilterFields()
+        f = JsonLogicFilter(view)
+        request = MagicMock()
+        request.args.get.return_value = json.dumps({"==": [{"var": "name"}, "alice"]})
+        qs = MagicMock()
         result = f.filter_queryset(request, qs)
         assert result is qs
+        qs.filter.assert_not_called()
+
+    def test_filter_queryset_unknown_field_skips_filtering(self):
+        view = ViewWithFilterFields()
+        f = JsonLogicFilter(view)
+        request = MagicMock()
+        request.args.get.return_value = json.dumps({"==": [{"var": "password_hash"}, "xxx"]})
+        qs = MagicMock()
+        result = f.filter_queryset(request, qs)
+        assert result is qs
+        qs.filter.assert_not_called()
 
     def test_filter_queryset_valid_logic(self):
         view = ViewWithFilterFields()
