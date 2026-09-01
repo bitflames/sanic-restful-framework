@@ -7,6 +7,7 @@ Local SRF server for manual API testing (sqlite + fakeredis).
 
 from __future__ import annotations
 
+import secrets
 import sys
 from pathlib import Path
 
@@ -223,7 +224,13 @@ def create_app() -> Sanic:
             raise ServerError("default role is not configured")
         user_db, created = await User.get_or_create(
             email=email,
-            defaults={"name": username, "role": role},
+            defaults={
+                "name": username,
+                "role": role,
+                # User.password is NOT NULL; social_auth.github_login_callback
+                # currently omits this and fails the same way on first login.
+                "password": User.hash_password(secrets.token_urlsafe(32)),
+            },
         )
         user_db = await User.filter(id=user_db.id).select_related("role").first()
         if user_db is None:

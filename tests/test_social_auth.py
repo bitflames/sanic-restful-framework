@@ -10,7 +10,6 @@ from sanic.exceptions import BadRequest, NotFound
 from srf.auth import social_auth
 from srf.tools.signing import sign_state
 
-
 GITHUB_CONFIG = {
     "CLIENT_ID": "client-id",
     "CLIENT_SECRET": "client-secret",

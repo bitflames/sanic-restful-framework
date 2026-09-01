@@ -2,7 +2,6 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 from sanic import Request
-from sanic.constants import SAFE_HTTP_METHODS
 from tortoise.queryset import QuerySet
 
 from srf.event import models, schema
@@ -33,10 +32,8 @@ class EventViewSet(CreateAndReadOnlyModelViewSet):
     def queryset(self) -> QuerySet:
         return models.Event.all()
 
-    def get_schema(self, request: Request, *args, is_safe=False, **kwargs):
-        if request.method.lower() in SAFE_HTTP_METHODS or is_safe is True:
-            return schema.EventSchemaReader
-        return schema.EventSchemaWriter
+    def get_schema(self, request: Request, *args, **kwargs):
+        return schema.EventSchema
 
     async def perform_create(self, sch_model: BaseModel) -> models.Event:
         data = sch_model.model_dump(exclude_unset=True, exclude_none=True)

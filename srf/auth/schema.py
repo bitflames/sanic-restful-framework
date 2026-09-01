@@ -68,14 +68,14 @@ StrongPassword = Annotated[SecretStr, AfterValidator(validate_secret)]
 
 
 class UserSchemaWriter(SchemaBaseTime):
-    id: int | None = None
+    id: int | None = Field(None, frozen=True)
     name: str = Field(..., alias="username")
     email: EmailStr | None = None
     is_active: bool = True
     is_staff: bool = False
     is_superuser: bool = False
-    password: StrongPassword = Field(..., alias="password1")
-    password_confirm: StrongPassword = Field(..., alias="password2")
+    password: StrongPassword = Field(..., alias="password1", exclude=True)
+    password_confirm: StrongPassword = Field(..., alias="password2", exclude=True)
     role_name: str = Field(default="user")
 
     model_config = ConfigDict(
@@ -84,6 +84,10 @@ class UserSchemaWriter(SchemaBaseTime):
 
     @model_validator(mode="after")
     def check_passwords(self) -> "UserSchemaWriter":
+        if self.id is not None:
+            return self  # if orm instance, skip password check
+        if self.password is None or self.password_confirm is None:
+            raise ValueError("password1 and password2 are required")
         _require_matching_passwords(self.password, self.password_confirm)
         return self
 
@@ -115,7 +119,7 @@ class ChangePasswordSchema(BaseModel):
 
 
 class UserSchemaReader(SchemaBaseTime):
-    id: int
+    id: int = Field(..., frozen=True)
     name: str = Field(..., alias="username")
     email: EmailStr | None = None
     is_active: bool = True

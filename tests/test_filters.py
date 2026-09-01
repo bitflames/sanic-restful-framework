@@ -1,9 +1,9 @@
 """Unit tests for srf.filters.filter."""
 
 import json
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 from sanic.exceptions import BadRequest
 
 from srf.filters.filter import (

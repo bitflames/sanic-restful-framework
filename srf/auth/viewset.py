@@ -159,8 +159,8 @@ class UserViewSet(BaseViewSet):
     def queryset(self) -> QuerySet:
         return models.User.all()
 
-    def get_schema(self, request: Request, *args, is_safe=False, **kwargs):
-        if request.method.lower() in SAFE_HTTP_METHODS or is_safe is True:
+    def get_schema(self, request: Request, *args, **kwargs):
+        if request.method.lower() in SAFE_HTTP_METHODS:
             return schema.UserSchemaReader
         if request.method.upper() in ("PUT", "PATCH"):
             return schema.UserSchemaUpdate

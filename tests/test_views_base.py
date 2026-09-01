@@ -1,7 +1,8 @@
 """Unit tests for srf.views.base (ViewSet mixins and BaseViewSet)."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from srf.views import GenericAPIView
 from srf.views.base import (
@@ -47,13 +48,16 @@ class TestCreateModelMixin:
         schema_in.model_validate.return_value = sch_model
         schema_out = MagicMock()
         schema_out.model_validate.return_value = MagicMock(model_dump=MagicMock(return_value={"id": 1, "name": "x"}))
-        mixin._get_schema = MagicMock(side_effect=lambda req, is_safe=False: schema_out if is_safe else schema_in)
+        mixin.get_schema = MagicMock(return_value=schema_in)
         orm = MagicMock()
         mixin.perform_create = AsyncMock(return_value=orm)
         request = MagicMock()
         request.json = {"name": "x"}
         response = await mixin.create(request)
         mixin.perform_create.assert_awaited_once_with(sch_model)
+        schema_in.model_validate.assert_any_call(request.json)
+        schema_in.model_validate.assert_any_call(orm, from_attributes=True)
+        mixin.get_schema.assert_called_once_with(request)
         assert response.status == HTTPStatus.HTTP_201_CREATED
 
 
@@ -65,14 +69,15 @@ class TestRetrieveModelMixin:
         mixin = RetrieveModelMixin()
         mixin.check_permissions = AsyncMock()
         mixin.get_object = AsyncMock(return_value=MagicMock(id=1, name="x"))
-        mixin._get_schema = MagicMock()
         schema_class = MagicMock()
         schema_instance = MagicMock()
         schema_instance.model_dump.return_value = {"id": 1, "name": "x"}
         schema_class.model_validate.return_value = schema_instance
-        mixin._get_schema.return_value = schema_class
+        mixin.get_schema = MagicMock(return_value=schema_class)
         request = MagicMock()
         response = await mixin.retrieve(request, pk=1)
+        mixin.get_schema.assert_called_once_with(request)
+        schema_class.model_validate.assert_called_once()
         assert response.body is not None
         assert response.status == 200
 
@@ -126,18 +131,12 @@ class TestUpdateModelMixin:
     @pytest.mark.asyncio
     async def test_partial_update_passes_partial_true_to_get_schema(self):
         mixin = UpdateModelMixin()
-        schema_in = MagicMock()
-        sch_model = MagicMock()
-        schema_in.model_validate.return_value = sch_model
-        schema_out = MagicMock()
-        schema_out.model_validate.return_value = MagicMock(model_dump=MagicMock(return_value={"id": 1}))
-        seen = []
-
-        def _get_schema(request, is_safe=False, partial=False):
-            seen.append({"is_safe": is_safe, "partial": partial})
-            return schema_out if is_safe else schema_in
-
-        mixin._get_schema = MagicMock(side_effect=_get_schema)
+        schema_cls = MagicMock()
+        sch_in = MagicMock()
+        sch_out = MagicMock()
+        sch_out.model_dump.return_value = {"id": 1}
+        schema_cls.model_validate.side_effect = [sch_in, sch_out]
+        mixin.get_schema = MagicMock(return_value=schema_cls)
         orm = MagicMock()
         mixin.get_object = AsyncMock(return_value=orm)
         mixin.perform_update = AsyncMock(return_value=orm)
@@ -146,30 +145,23 @@ class TestUpdateModelMixin:
 
         response = await mixin.partial_update(request, pk=1)
         assert response.status == 200
-        schema_in.model_validate.assert_called_once_with(
+        mixin.get_schema.assert_called_once_with(request, partial=True)
+        schema_cls.model_validate.assert_any_call(
             {"username": "bob"},
             strict=True,
             by_alias=True,
         )
-        assert {"is_safe": False, "partial": True} in seen
-        assert {"is_safe": True, "partial": False} in seen
+        schema_cls.model_validate.assert_any_call(orm, from_attributes=True)
 
     @pytest.mark.asyncio
     async def test_update_defaults_partial_false(self):
         mixin = UpdateModelMixin()
-        schema_in = MagicMock()
-        sch_model = MagicMock()
-        schema_in.model_validate.return_value = sch_model
-        schema_out = MagicMock()
-        schema_out.model_validate.return_value = MagicMock(model_dump=MagicMock(return_value={"id": 1}))
-        seen = {}
-
-        def _get_schema(request, is_safe=False, partial=False):
-            if not is_safe:
-                seen["partial"] = partial
-            return schema_out if is_safe else schema_in
-
-        mixin._get_schema = MagicMock(side_effect=_get_schema)
+        schema_cls = MagicMock()
+        sch_in = MagicMock()
+        sch_out = MagicMock()
+        sch_out.model_dump.return_value = {"id": 1}
+        schema_cls.model_validate.side_effect = [sch_in, sch_out]
+        mixin.get_schema = MagicMock(return_value=schema_cls)
         orm = MagicMock()
         mixin.get_object = AsyncMock(return_value=orm)
         mixin.perform_update = AsyncMock(return_value=orm)
@@ -177,7 +169,7 @@ class TestUpdateModelMixin:
         request.json = {"username": "bob"}
 
         await mixin.update(request, pk=1)
-        assert seen["partial"] is False
+        mixin.get_schema.assert_called_once_with(request, partial=False)
 
 
 class TestDestroyModelMixin:

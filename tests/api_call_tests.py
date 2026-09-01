@@ -257,10 +257,7 @@ def call_events_create_list_retrieve(admin_access: str) -> None:
 
     status, detail = _request("GET", f"{EVENTS}/{event_id}", token=admin_access)
     ok_detail = (
-        status == 200
-        and detail.get("id") == event_id
-        and detail.get("action") == "user.update"
-        and detail.get("req_remote") == "api_call_tests"
+        status == 200 and detail.get("id") == event_id and detail.get("action") == "user.update" and detail.get("req_remote") == "api_call_tests"
     )
     _ok(f"GET /api/events/{event_id} → 200", ok_detail, (status, detail))
 
@@ -296,6 +293,66 @@ def call_users_json_logic_filter(admin_access: str) -> None:
     _ok("GET /api/users?filter=(name) → JsonLogic whitelist field", ok, (status, data))
 
 
+def call_users_json_logic_unknown_field(admin_access: str) -> None:
+    logic = json.dumps({"==": [{"var": "password"}, "should-not-filter"]})
+    url = f"{USERS}?filter={urllib.parse.quote(logic)}"
+    status, data = _request("GET", url, token=admin_access)
+    ok = status == 200 and len(_results(data)) >= 2
+    _ok("GET /api/users?filter=(password) → non-whitelist field skipped", ok, (status, data))
+
+
+def call_users_patch_and_restore(admin_access: str) -> None:
+    status, listed = _request("GET", f"{USERS}?name={SEED_USERNAME}", token=admin_access)
+    rows = _results(listed)
+    if status != 200 or not rows:
+        _ok("PATCH setup: find alice", False, (status, listed))
+        return
+    user_id = rows[0]["id"]
+    status, patched = _request(
+        "PATCH",
+        f"{USERS}/{user_id}",
+        body={"username": "alice_patched"},
+        token=admin_access,
+    )
+    ok = status == 200 and patched.get("username") == "alice_patched"
+    _ok(f"PATCH /api/users/{user_id} → 200", ok, (status, patched))
+    status, restored = _request(
+        "PATCH",
+        f"{USERS}/{user_id}",
+        body={"username": SEED_USERNAME},
+        token=admin_access,
+    )
+    _ok("PATCH restore alice username", status == 200 and restored.get("username") == SEED_USERNAME, (status, restored))
+
+
+def call_change_password_and_restore(user_access: str) -> None:
+    new_password = "Secret123"
+    status, _ = _request(
+        "POST",
+        f"{USERS}/change-password",
+        body={"old_password": SEED_PASSWORD, "password1": new_password, "password2": new_password},
+        token=user_access,
+    )
+    _ok("POST /api/users/change-password → 200", status == 200, status)
+
+    status_old, _ = _request("POST", f"{AUTH}/login", body={"email": SEED_EMAIL, "password": SEED_PASSWORD})
+    _ok("old password rejected after change", status_old == 401, status_old)
+
+    status_new, data = _request("POST", f"{AUTH}/login", body={"email": SEED_EMAIL, "password": new_password})
+    new_access = (data or {}).get("access_token") if status_new == 200 else None
+    _ok("new password logs in", bool(new_access), (status_new, data))
+    if not new_access:
+        return
+
+    status, _ = _request(
+        "POST",
+        f"{USERS}/change-password",
+        body={"old_password": new_password, "password1": SEED_PASSWORD, "password2": SEED_PASSWORD},
+        token=new_access,
+    )
+    _ok("change-password restore seed password", status == 200, status)
+
+
 def call_users_query_param_ignores_unknown_field(admin_access: str) -> None:
     status, data = _request("GET", f"{USERS}?password=should-be-ignored", token=admin_access)
     ok = status == 200 and len(_results(data)) >= 2
@@ -323,35 +380,55 @@ def call_notes_create_duplicate_title_409(user_access: str) -> None:
     _ok("POST /api/notes duplicate title → 409 (IntegrityError path)", ok, (status1, status2, data2))
 
 
+def _note_id_by_title(token: str, title: str) -> int | None:
+    """Create responses use the write schema (no id); list uses the read schema."""
+    status, data = _request("GET", f"{NOTES}?title={urllib.parse.quote(title)}", token=token)
+    if status != 200:
+        return None
+    for item in _results(data):
+        if item.get("title") == title:
+            return item.get("id")
+    return None
+
+
 def call_notes_idor_forbidden(user_access: str, admin_access: str) -> None:
     suffix = int(time.time() * 1000)
+    admin_title = f"admin-private-{suffix}"
     status_admin, admin_note = _request(
         "POST",
         NOTES,
-        body={"title": f"admin-private-{suffix}", "body": "admin only"},
+        body={"title": admin_title, "body": "admin only"},
         token=admin_access,
     )
     if status_admin != 201 or not isinstance(admin_note, dict):
         _ok("POST /api/notes as admin (setup for IDOR)", False, (status_admin, admin_note))
         return
 
-    note_id = admin_note["id"]
+    note_id = admin_note.get("id") or _note_id_by_title(admin_access, admin_title)
+    if note_id is None:
+        _ok("resolve admin note id after create", False, admin_note)
+        return
     status, data = _request("GET", f"{NOTES}/{note_id}", token=user_access)
     ok = status == 403 and isinstance(data, dict) and "detail" in data
     _ok("GET /api/notes/{admin_id} as alice → 403 IDOR blocked", ok, (status, data))
 
+    own_title = f"alice-own-{suffix}"
     status_self, own = _request(
         "POST",
         NOTES,
-        body={"title": f"alice-own-{suffix}", "body": "mine"},
+        body={"title": own_title, "body": "mine"},
         token=user_access,
     )
     if status_self != 201 or not isinstance(own, dict):
         _ok("POST /api/notes as alice (setup for owner retrieve)", False, (status_self, own))
         return
 
-    status_ok, detail = _request("GET", f"{NOTES}/{own['id']}", token=user_access)
-    ok_owner = status_ok == 200 and detail.get("title") == f"alice-own-{suffix}"
+    own_id = own.get("id") or _note_id_by_title(user_access, own_title)
+    if own_id is None:
+        _ok("resolve alice note id after create", False, own)
+        return
+    status_ok, detail = _request("GET", f"{NOTES}/{own_id}", token=user_access)
+    ok_owner = status_ok == 200 and detail.get("title") == own_title
     _ok("GET /api/notes/{own_id} as owner → 200", ok_owner, (status_ok, detail))
 
 
@@ -425,11 +502,15 @@ def main() -> int:
         call_users_search(admin_access)
         call_users_query_param_filter(admin_access)
         call_users_json_logic_filter(admin_access)
+        call_users_json_logic_unknown_field(admin_access)
         call_users_query_param_ignores_unknown_field(admin_access)
         call_users_create_duplicate_email_409(admin_access)
+        call_users_patch_and_restore(admin_access)
 
     login_for_notes = call_login_email()
     user_access = login_for_notes.get("access_token", "")
+    if user_access:
+        call_change_password_and_restore(user_access)
     if user_access and admin_access:
         call_notes_create_duplicate_title_409(user_access)
         call_notes_idor_forbidden(user_access, admin_access)

@@ -24,11 +24,12 @@ class CreateModelMixin:
         if request.json is None:
             return HTTPResponse(status=HTTPStatus.HTTP_400_BAD_REQUEST)
         # validate input schema
-        sch_model_in: BaseModel = self._get_schema(request).model_validate(request.json)
+        sch_model_cls: BaseModel = self.get_schema(request)
+        sch_model_in = sch_model_cls.model_validate(request.json)
         # create orm model instance
         orm_model: TorModel = await self.perform_create(sch_model_in)
         # validate output schema
-        sch_model_out: BaseModel = self._get_schema(request, is_safe=True).model_validate(orm_model, from_attributes=True)
+        sch_model_out: BaseModel = sch_model_cls.model_validate(orm_model, from_attributes=True)
         # return response
         return JSONResponse(
             sch_model_out.model_dump(mode="json", by_alias=True),
@@ -49,7 +50,7 @@ class RetrieveModelMixin:
     async def retrieve(self, request: Request, pk, *args, **kwargs) -> JSONResponse:
         """Get an orm model instance."""
         orm_model: TorModel = await self.get_object(request, pk)
-        schema_out: BaseModel = self._get_schema(request).model_validate(orm_model)
+        schema_out: BaseModel = self.get_schema(request).model_validate(orm_model)
         return JSONResponse(schema_out.model_dump(mode="json", by_alias=True))
 
 
@@ -60,10 +61,14 @@ class UpdateModelMixin:
             return HTTPResponse(status=HTTPStatus.HTTP_400_BAD_REQUEST)
 
         partial: bool = kwargs.get("partial", False)
-        sch_model_in: BaseModel = self._get_schema(request, partial=partial).model_validate(request.json, strict=True, by_alias=True)
+
+        sch_model_cls: BaseModel = self.get_schema(request, partial=partial)
+        sch_model_in = sch_model_cls.model_validate(request.json, strict=True, by_alias=True)
+
         orm_model: TorModel = await self.get_object(request, pk)
+
         orm_model = await self.perform_update(sch_model_in, orm_model)
-        sch_model_out: BaseModel = self._get_schema(request, is_safe=True).model_validate(orm_model, from_attributes=True)
+        sch_model_out = sch_model_cls.model_validate(orm_model, from_attributes=True)
         return JSONResponse(sch_model_out.model_dump(mode="json", by_alias=True))
 
     async def perform_update(self, sch_model: BaseModel, orm_model: TorModel) -> TorModel:
@@ -102,7 +107,7 @@ class DestroyModelMixin:
 class ListModelMixin:
     async def list(self, request: Request, *args, **kwargs) -> JSONResponse:
         """Get a list orm model instance."""
-        sch_model: type[BaseModel] = self._get_schema(request)
+        sch_model: type[BaseModel] = self.get_schema(request)
         queryset: QuerySetType = self.filter_queryset(self.get_queryset())
         paginator: BasePagination = self.pagination_class.from_queryset(queryset, request)
         result = await paginator.paginate(sch_model=sch_model)
@@ -122,19 +127,11 @@ class GenericAPIView(HTTPMethodView):
         self.pagination_class = getattr(cls, "pagination_class", settings.PAGINATION_CLASS)
         super().__init__(*args, **kwargs)
 
-    def get_schema(self, request: Request, *args, is_safe=False, **kwargs) -> type[BaseModel] | None:
+    def get_schema(self, request: Request, *args, **kwargs) -> type[BaseModel] | None:
         """
-        Default implementation that returns the schema attribute
+        get pydantic model
         """
         return getattr(self, "schema", None)
-
-    def _get_schema(self, request: Request, *args, is_safe=False, **kwargs) -> type[BaseModel] | None:
-        """
-        get pydantic model,
-        params:
-            is_safe, default to be False
-        """
-        return self.get_schema(request, *args, is_safe=is_safe, **kwargs)
 
     def get_current_user(self, request: Request):
         """Retrieve the currently logged-in user"""

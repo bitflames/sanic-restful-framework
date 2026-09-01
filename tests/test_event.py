@@ -8,40 +8,41 @@ from pydantic import ValidationError
 from sanic.exceptions import Forbidden
 
 from srf.event.models import Event
-from srf.event.schema import EventSchemaReader, EventSchemaWriter
+from srf.event.schema import EventSchema
 from srf.event.viewset import EventViewSet
 from srf.permission.permission import IsRoleAdminUser
 
 
 class TestEventSchemas:
-    def test_writer_accepts_audit_payload(self):
-        sch = EventSchemaWriter.model_validate(
+    def test_schema_accepts_audit_payload(self):
+        sch = EventSchema.model_validate(
             {
                 "action": "user.update",
                 "obj_id": 7,
                 "obj_name": "User",
-                "req_source": "api",
+                "req_remote": "api",
                 "req_data": {"username": "alice"},
                 "res_data": {"ok": True},
             }
         )
         assert sch.action == "user.update"
         assert sch.obj_id == 7
+        assert sch.req_remote == "api"
         assert sch.req_data == {"username": "alice"}
 
-    def test_writer_rejects_oversized_action(self):
+    def test_schema_rejects_oversized_action(self):
         with pytest.raises(ValidationError):
-            EventSchemaWriter.model_validate({"action": "x" * 129})
+            EventSchema.model_validate({"action": "x" * 129})
 
-    def test_reader_builds_url(self):
-        sch = EventSchemaReader.model_validate(
+    def test_schema_builds_url(self):
+        sch = EventSchema.model_validate(
             {
                 "id": 3,
                 "user_id": 9,
                 "action": "user.update",
                 "obj_id": 7,
                 "obj_name": "User",
-                "req_source": "api",
+                "req_remote": "api",
                 "create_time": datetime(2026, 8, 14, 4, 0, tzinfo=timezone.utc),
             }
         )
@@ -50,14 +51,13 @@ class TestEventSchemas:
 
 
 class TestEventViewSet:
-    def test_get_schema_safe_vs_write(self):
+    def test_get_schema_is_event_schema(self):
         vs = EventViewSet()
         request = MagicMock()
         request.method = "GET"
-        assert vs.get_schema(request) is EventSchemaReader
+        assert vs.get_schema(request) is EventSchema
         request.method = "POST"
-        assert vs.get_schema(request) is EventSchemaWriter
-        assert vs.get_schema(request, is_safe=True) is EventSchemaReader
+        assert vs.get_schema(request) is EventSchema
 
     def test_queryset_uses_event_model(self):
         with patch.object(Event, "all", return_value="qs") as all_mock:
@@ -91,12 +91,12 @@ class TestEventViewSet:
         vs = EventViewSet()
         vs.request = MagicMock()
         vs.request.ctx.user = MagicMock(id=9)
-        sch = EventSchemaWriter.model_validate(
+        sch = EventSchema.model_validate(
             {
                 "action": "user.update",
                 "obj_id": 7,
                 "obj_name": "User",
-                "req_source": "api",
+                "req_remote": "api",
             }
         )
         with patch.object(Event, "create", new_callable=AsyncMock) as create_mock:

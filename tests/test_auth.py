@@ -16,7 +16,7 @@ from srf.auth.auth import (
     store_refresh_token,
 )
 from srf.auth.models import User
-from srf.auth.schema import ChangePasswordSchema, UserLoginSchema, UserSchemaUpdate, UserSchemaWriter
+from srf.auth.schema import ChangePasswordSchema, UserLoginSchema, UserSchemaReader, UserSchemaUpdate, UserSchemaWriter
 from srf.auth.viewset import UserViewSet, logout, setup_auth
 from srf.config import settings
 
@@ -425,6 +425,21 @@ class TestUserPerformUpdateAndChangePassword:
         with pytest.raises(BadRequest, match="Old password is incorrect"):
             await vs.change_password(request)
 
+
+class TestUserViewSetSchema:
+    def test_get_schema_follows_http_method(self):
+        vs = UserViewSet()
+        request = MagicMock()
+        request.method = "GET"
+        assert vs.get_schema(request) is UserSchemaReader
+        request.method = "POST"
+        assert vs.get_schema(request) is UserSchemaWriter
+        request.method = "PATCH"
+        assert vs.get_schema(request) is UserSchemaUpdate
+        request.method = "PUT"
+        assert vs.get_schema(request) is UserSchemaUpdate
+
+
 class TestBuildUserPayload:
     def test_build_user_payload(self):
         user = object.__new__(User)
@@ -441,4 +456,3 @@ class TestBuildUserPayload:
         object.__setattr__(user, "name", "bob")
         object.__setattr__(user, "role", None)
         assert build_user_payload(user) == {"user_id": 1, "username": "bob", "role": None}
-

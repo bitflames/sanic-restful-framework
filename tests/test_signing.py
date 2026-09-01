@@ -4,7 +4,6 @@ import pytest
 
 from srf.tools.signing import sign_state, unsign_state
 
-
 SECRET = "test-secret-key"
 
 

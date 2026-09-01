@@ -20,7 +20,7 @@ class Role(TorModel):
 class User(TorModel):
     id = fields.BigIntField(primary_key=True, generated=True)
     name = fields.CharField(max_length=64, null=False)
-    password = fields.CharField(max_length=128, null=True)
+    password = fields.CharField(max_length=128, null=False)
     role = fields.ForeignKeyField("models.Role", on_delete=fields.SET_DEFAULT)
     is_active = fields.BooleanField(default=True, null=False)
     email = fields.CharField(max_length=256, null=False, unique=True)
