@@ -13,6 +13,7 @@ from tortoise.queryset import QuerySet as QuerySetType
 
 from srf.config import settings
 from srf.exceptions import TargetObjectAlreadyExist
+from srf.filters import BaseFilter
 from srf.paginator import BasePagination
 from srf.permission.permission import BasePermission
 from srf.views.http_status import HTTPStatus
@@ -119,6 +120,7 @@ class GenericAPIView(HTTPMethodView):
     search_fields: ClassVar[list[str]]
     pagination_class: type[BasePagination]
     queryset: QuerySetType | None = None
+    filter_class: ClassVar[list[type[BaseFilter]]]
 
     def __init__(self, *args, **kwargs):
         cls = type(self)
@@ -172,7 +174,7 @@ class GenericAPIView(HTTPMethodView):
 
     async def get_object(self, request: Request, id: int):
         """Get an orm model instance."""
-        instance: TorModel = await self.get_queryset().get_or_none(id=id)
+        instance: TorModel | None = await self.get_queryset().get_or_none(id=id)
         if instance is None:
             raise NotFound(message=f"Object with id={id} not found")
 
@@ -203,7 +205,7 @@ class GenericAPIView(HTTPMethodView):
         return queryset
 
     @classmethod
-    def as_view(cls, actions=None):
+    def as_view(cls, actions: dict[str, str] | None = None):
         """
         Construct a view function for registering with Sanic routers.
         custom actions: {'get': 'list', 'post': 'create', ...}
@@ -247,15 +249,9 @@ class GenericAPIView(HTTPMethodView):
                     status=HTTPStatus.HTTP_404_NOT_FOUND,
                 )
             except ValidationError as e:
-                return JSONResponse(
-                    {"detail": str(e)},
-                    status=HTTPStatus.HTTP_422_UNPROCESSABLE_ENTITY,
-                )
+                return JSONResponse({"detail": str(e)}, status=HTTPStatus.HTTP_422_UNPROCESSABLE_ENTITY)
             except HTTPException as e:
-                return JSONResponse(
-                    {"detail": getattr(e, "message", "Error")},
-                    status=e.status_code,
-                )
+                return JSONResponse({"detail": getattr(e, "message", "Error")}, status=e.status_code)
 
         return view
 
