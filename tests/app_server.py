@@ -1,5 +1,5 @@
 """
-Local SRF server for manual API testing (sqlite + fakeredis).
+Local SRF server for manual API testing (SQLite in-memory + fakeredis).
 
   python tests/app_server.py
   python tests/api_call_tests.py
@@ -35,12 +35,12 @@ from srf.permission.permission import BasePermission, IsAuthenticated
 from srf.route import SanicRouter
 from srf.views import BaseViewSet, action
 from tests.app_models import SecretNote
+from tests.tortoise_config import TORTOISE_ORM
 
 HOST = "127.0.0.1"
 PORT = 8800
 JWT_SECRET = "local-srf-jwt-secret-key-32bytes!!"
 SECRET_KEY = "local-srf-secret-key-32-bytes!!!!"
-DB_URL = f"sqlite://{_ROOT / 'tests' / 'app_server.sqlite3'}"
 
 SEED_EMAIL = "alice@example.com"
 SEED_USERNAME = "alice"
@@ -187,12 +187,7 @@ def create_app() -> Sanic:
     )
     settings.set_app(app)
 
-    register_tortoise(
-        app,
-        db_url=DB_URL,
-        modules={"models": ["srf.auth.models", "srf.event.models", "tests.app_models"]},
-        generate_schemas=True,
-    )
+    register_tortoise(app, config=TORTOISE_ORM, generate_schemas=True)
     register_auth_urls(app, prefix="/api/auth")
 
     router = SanicRouter(Blueprint("api"), prefix="api")
@@ -227,8 +222,6 @@ def create_app() -> Sanic:
             defaults={
                 "name": username,
                 "role": role,
-                # User.password is NOT NULL; social_auth.github_login_callback
-                # currently omits this and fails the same way on first login.
                 "password": User.hash_password(secrets.token_urlsafe(32)),
             },
         )
@@ -247,11 +240,8 @@ def create_app() -> Sanic:
         await set_user_to_request_ctx(request)
 
     @app.before_server_start
-    async def setup(app_: Sanic):
-        from tortoise import Tortoise
-
-        await Tortoise.generate_schemas()
-        app_.ctx.redis = _REDIS
+    async def setup(_app: Sanic):
+        _app.ctx.redis = _REDIS
         await ensure_seed_data()
 
     return app
@@ -260,7 +250,7 @@ def create_app() -> Sanic:
 def main():
     app = create_app()
     print(f"SRF → http://{HOST}:{PORT}")
-    print(f"DB   {DB_URL}  (sqlite)")
+    print("DB   sqlite://:memory:")
     print("Redis fakeredis (in-memory)")
     print(f"Login POST /api/auth/login  {SEED_EMAIL} / {SEED_PASSWORD}")
     print(f"Admin  POST /api/auth/login  {ADMIN_EMAIL} / {ADMIN_PASSWORD}")

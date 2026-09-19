@@ -217,7 +217,7 @@ Main dependencies:
 
 - `sanic>=25.0.0` - Async web framework
 - `pydantic>=2.6.1` - Data validation
-- `tortoise-orm>=0.25.1` - ORM
+- `tortoise-orm>=1.1.8` - ORM
 - `sanic-jwt>=1.8.0` - JWT authentication
 
 See `pyproject.toml` for the complete dependency list.

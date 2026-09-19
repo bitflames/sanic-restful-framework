@@ -21,7 +21,7 @@ dependencies = [
     "redis>=7.1,<8",
     "sanic>=25.0.0,<26",
     "sanic_jwt>=1.8.0,<2",
-    "tortoise-orm==0.25.1",
+    "tortoise-orm>=1.1.8,<2",
 ]
 
 [project.optional-dependencies]

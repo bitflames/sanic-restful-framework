@@ -7,7 +7,6 @@ from tortoise.models import Model
 class SecretNote(Model):
     """Per-user note with a globally unique title (for 409 / IDOR scenarios)."""
 
-    id = fields.IntField(pk=True)
     owner = fields.ForeignKeyField(
         "models.User",
         related_name="secret_notes",

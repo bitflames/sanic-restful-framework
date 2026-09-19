@@ -9,7 +9,6 @@ from srf.exceptions import TargetObjectAlreadyExist
 
 
 class Role(TorModel):
-    id = fields.BigIntField(pk=True, generated=True)
     name = fields.CharField(max_length=256, null=False)
     description = fields.CharField(max_length=256, null=False)
 
@@ -18,7 +17,6 @@ class Role(TorModel):
 
 
 class User(TorModel):
-    id = fields.BigIntField(primary_key=True, generated=True)
     name = fields.CharField(max_length=64, null=False)
     password = fields.CharField(max_length=128, null=False)
     role = fields.ForeignKeyField("models.Role", on_delete=fields.SET_DEFAULT)
@@ -87,7 +85,6 @@ class User(TorModel):
 
 
 class UserRoles(TorModel):
-    id = fields.BigIntField(pk=True, generated=True)
     user = fields.ForeignKeyField("models.User", on_delete=fields.CASCADE)
     role = fields.ForeignKeyField("models.Role", on_delete=fields.CASCADE)
 
@@ -98,7 +95,6 @@ class UserRoles(TorModel):
 class RefreshToken(TorModel):
     """Persisted JWT refresh token (one active row per user; login replaces it)."""
 
-    id = fields.BigIntField(pk=True, generated=True)
     user = fields.ForeignKeyField("models.User", related_name="refresh_tokens", on_delete=fields.CASCADE, unique=True)
     token = fields.CharField(max_length=512, null=False)
     expires_at = fields.DatetimeField(null=False)
