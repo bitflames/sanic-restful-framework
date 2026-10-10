@@ -25,24 +25,21 @@ class CreateModelMixin:
         if request.json is None:
             return HTTPResponse(status=HTTPStatus.HTTP_400_BAD_REQUEST)
         # validate input schema
-        sch_model_cls: BaseModel = self.get_schema(request)
-        sch_model_in = sch_model_cls.model_validate(request.json)
+        sch_model_cls: type[BaseModel] = self.get_schema()
+        sch_model_in: BaseModel = sch_model_cls.model_validate(request.json, strict=True)
         # create orm model instance
         orm_model: TorModel = await self.perform_create(sch_model_in)
         # validate output schema
         sch_model_out: BaseModel = sch_model_cls.model_validate(orm_model, from_attributes=True)
         # return response
-        return JSONResponse(
-            sch_model_out.model_dump(mode="json", by_alias=True),
-            status=HTTPStatus.HTTP_201_CREATED,
-        )
+        return JSONResponse(sch_model_out.model_dump(mode="json"), status=HTTPStatus.HTTP_201_CREATED)
 
     async def perform_create(self, sch_model: BaseModel) -> TorModel:
         """
         sch_model: instance of BaseModel
         """
         try:
-            return await self.get_queryset().model.create(**sch_model.model_dump(exclude_unset=True))
+            return await self.get_queryset().model.create(**sch_model.model_dump(exclude_unset=True, exclude_none=True))
         except exceptions.IntegrityError:
             raise TargetObjectAlreadyExist(message="data conflict")
 
@@ -50,9 +47,9 @@ class CreateModelMixin:
 class RetrieveModelMixin:
     async def retrieve(self, request: Request, pk, *args, **kwargs) -> JSONResponse:
         """Get an orm model instance."""
-        orm_model: TorModel = await self.get_object(request, pk)
-        schema_out: BaseModel = self.get_schema(request).model_validate(orm_model)
-        return JSONResponse(schema_out.model_dump(mode="json", by_alias=True))
+        orm_model: TorModel = await self.get_object(pk)
+        schema_out: BaseModel = self.get_schema().model_validate(orm_model, from_attributes=True)
+        return JSONResponse(schema_out.model_dump(mode="json"))
 
 
 class UpdateModelMixin:
@@ -61,16 +58,14 @@ class UpdateModelMixin:
         if request.json is None:
             return HTTPResponse(status=HTTPStatus.HTTP_400_BAD_REQUEST)
 
-        partial: bool = kwargs.get("partial", False)
+        sch_model_cls: type[BaseModel] = self.get_schema()  # not distinguishing between full or partial updates
+        sch_model_in: BaseModel = sch_model_cls.model_validate(request.json, strict=True)
 
-        sch_model_cls: BaseModel = self.get_schema(request, partial=partial)
-        sch_model_in = sch_model_cls.model_validate(request.json, strict=True, by_alias=True)
-
-        orm_model: TorModel = await self.get_object(request, pk)
+        orm_model: TorModel = await self.get_object(pk)
 
         orm_model = await self.perform_update(sch_model_in, orm_model)
-        sch_model_out = sch_model_cls.model_validate(orm_model, from_attributes=True)
-        return JSONResponse(sch_model_out.model_dump(mode="json", by_alias=True))
+        sch_model_out: BaseModel = sch_model_cls.model_validate(orm_model, from_attributes=True)
+        return JSONResponse(sch_model_out.model_dump(mode="json"))
 
     async def perform_update(self, sch_model: BaseModel, orm_model: TorModel) -> TorModel:
         """
@@ -83,18 +78,11 @@ class UpdateModelMixin:
         await orm_model.save()
         return orm_model
 
-    async def partial_update(self, request: Request, pk: int, *args, **kwargs):
-        """
-        Partial update an orm model instance.
-        """
-        kwargs["partial"] = True
-        return await self.update(request, pk, *args, **kwargs)
-
 
 class DestroyModelMixin:
     async def destroy(self, request: Request, pk: int, *args, **kwargs) -> HTTPResponse:
         """Delete an orm model instance."""
-        orm_model: TorModel = await self.get_object(request, pk)
+        orm_model: TorModel = await self.get_object(pk)
         await self.perform_destroy(orm_model)
         return HTTPResponse(status=HTTPStatus.HTTP_204_NO_CONTENT)
 
@@ -108,11 +96,11 @@ class DestroyModelMixin:
 class ListModelMixin:
     async def list(self, request: Request, *args, **kwargs) -> JSONResponse:
         """Get a list orm model instance."""
-        sch_model: type[BaseModel] = self.get_schema(request)
+        sch_model: type[BaseModel] = self.get_schema()
         queryset: QuerySetType = self.filter_queryset(self.get_queryset())
         paginator: BasePagination = self.pagination_class.from_queryset(queryset, request)
         result = await paginator.paginate(sch_model=sch_model)
-        return JSONResponse(result.model_dump(mode="json", by_alias=True))
+        return JSONResponse(result.model_dump(mode="json"))
 
 
 class GenericAPIView(HTTPMethodView):
@@ -129,11 +117,11 @@ class GenericAPIView(HTTPMethodView):
         self.pagination_class = getattr(cls, "pagination_class", settings.PAGINATION_CLASS)
         super().__init__(*args, **kwargs)
 
-    def get_schema(self, request: Request, *args, **kwargs) -> type[BaseModel] | None:
+    def get_schema(self, *args, **kwargs) -> type[BaseModel]:
         """
         get pydantic model
         """
-        return getattr(self, "schema", None)
+        return self.schema
 
     def get_current_user(self, request: Request):
         """Retrieve the currently logged-in user"""
@@ -146,14 +134,14 @@ class GenericAPIView(HTTPMethodView):
 
         return None
 
-    async def check_object_permissions(self, request: Request, obj: TorModel):
+    async def check_object_permissions(self, obj: TorModel):
         """
         Check object-level permissions.
         Permission classes are used as callables on the class (no instantiation).
         Supports both sync and async has_object_permission().
         """
         for permission_class in self.permission_classes:
-            result = permission_class.has_object_permission(request, self, obj)
+            result = permission_class.has_object_permission(self.request, self, obj)
             if asyncio.iscoroutine(result):
                 result = await result
             if not result:
@@ -172,13 +160,13 @@ class GenericAPIView(HTTPMethodView):
             if not result:
                 raise Forbidden(message="Forbidden")
 
-    async def get_object(self, request: Request, id: int):
+    async def get_object(self, id: int):
         """Get an orm model instance."""
         instance: TorModel | None = await self.get_queryset().get_or_none(id=id)
         if instance is None:
             raise NotFound(message=f"Object with id={id} not found")
 
-        await self.check_object_permissions(request, instance)
+        await self.check_object_permissions(instance)
 
         return instance
 
@@ -222,23 +210,14 @@ class GenericAPIView(HTTPMethodView):
         action_map = {**default_actions, **actions}
 
         async def view(request, *args, **kwargs):
-            self = cls()
+            self = cls()  # a new instance for each request
             self.request = request
             method = request.method.lower()
-            handler_name = action_map.get(method)
-            if handler_name is None:
-                return JSONResponse(
-                    {"error": f"Method {request.method} not allowed"},
-                    status=HTTPStatus.HTTP_405_METHOD_NOT_ALLOWED,
-                )
-            handler = getattr(self, handler_name, None)
 
-            if not handler:
-                return JSONResponse(
-                    {"error": f"Method {request.method} not allowed"},
-                    status=HTTPStatus.HTTP_405_METHOD_NOT_ALLOWED,
-                )
+            if (handler_name := action_map.get(method)) is None or (handler := getattr(self, handler_name, None)) is None:
+                return JSONResponse({"error": f"Method {request.method} not allowed"}, status=HTTPStatus.HTTP_405_METHOD_NOT_ALLOWED)
 
+            self.action = handler_name
             await self.check_permissions(request)
 
             try:

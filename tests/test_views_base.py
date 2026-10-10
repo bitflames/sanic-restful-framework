@@ -46,8 +46,6 @@ class TestCreateModelMixin:
         sch_model = MagicMock(model_dump=MagicMock(return_value={"name": "x"}))
         schema_in = MagicMock()
         schema_in.model_validate.return_value = sch_model
-        schema_out = MagicMock()
-        schema_out.model_validate.return_value = MagicMock(model_dump=MagicMock(return_value={"id": 1, "name": "x"}))
         mixin.get_schema = MagicMock(return_value=schema_in)
         orm = MagicMock()
         mixin.perform_create = AsyncMock(return_value=orm)
@@ -55,9 +53,9 @@ class TestCreateModelMixin:
         request.json = {"name": "x"}
         response = await mixin.create(request)
         mixin.perform_create.assert_awaited_once_with(sch_model)
-        schema_in.model_validate.assert_any_call(request.json)
+        schema_in.model_validate.assert_any_call(request.json, strict=True)
         schema_in.model_validate.assert_any_call(orm, from_attributes=True)
-        mixin.get_schema.assert_called_once_with(request)
+        mixin.get_schema.assert_called_once_with()
         assert response.status == HTTPStatus.HTTP_201_CREATED
 
 
@@ -76,8 +74,8 @@ class TestRetrieveModelMixin:
         mixin.get_schema = MagicMock(return_value=schema_class)
         request = MagicMock()
         response = await mixin.retrieve(request, pk=1)
-        mixin.get_schema.assert_called_once_with(request)
-        schema_class.model_validate.assert_called_once()
+        mixin.get_schema.assert_called_once_with()
+        schema_class.model_validate.assert_called_once_with(mixin.get_object.return_value, from_attributes=True)
         assert response.body is not None
         assert response.status == 200
 
@@ -129,7 +127,7 @@ class TestUpdateModelMixin:
         orm_model.update_from_dict.assert_called_once_with({"title": "x"})
 
     @pytest.mark.asyncio
-    async def test_partial_update_passes_partial_true_to_get_schema(self):
+    async def test_update_validates_request_json_with_strict_true(self):
         mixin = UpdateModelMixin()
         schema_cls = MagicMock()
         sch_in = MagicMock()
@@ -143,18 +141,17 @@ class TestUpdateModelMixin:
         request = MagicMock()
         request.json = {"username": "bob"}
 
-        response = await mixin.partial_update(request, pk=1)
+        response = await mixin.update(request, pk=1)
         assert response.status == 200
-        mixin.get_schema.assert_called_once_with(request, partial=True)
+        mixin.get_schema.assert_called_once_with()
         schema_cls.model_validate.assert_any_call(
             {"username": "bob"},
             strict=True,
-            by_alias=True,
         )
         schema_cls.model_validate.assert_any_call(orm, from_attributes=True)
 
     @pytest.mark.asyncio
-    async def test_update_defaults_partial_false(self):
+    async def test_update_uses_schema_and_perform_update(self):
         mixin = UpdateModelMixin()
         schema_cls = MagicMock()
         sch_in = MagicMock()
@@ -168,8 +165,11 @@ class TestUpdateModelMixin:
         request = MagicMock()
         request.json = {"username": "bob"}
 
-        await mixin.update(request, pk=1)
-        mixin.get_schema.assert_called_once_with(request, partial=False)
+        response = await mixin.update(request, pk=1)
+        mixin.get_schema.assert_called_once_with()
+        mixin.get_object.assert_awaited_once_with(1)
+        mixin.perform_update.assert_awaited_once_with(sch_in, orm)
+        assert response.status == 200
 
 
 class TestDestroyModelMixin:
@@ -376,10 +376,11 @@ class TestBaseViewSet:
         perm_cls.has_object_permission = MagicMock(return_value=False)
         view.permission_classes = [perm_cls]
         request = MagicMock()
+        view.request = request
         from sanic.exceptions import Forbidden
 
         with pytest.raises(Forbidden):
-            await view.check_object_permissions(request, MagicMock())
+            await view.check_object_permissions(MagicMock())
 
     @pytest.mark.asyncio
     async def test_check_object_permissions_async(self):
@@ -388,7 +389,8 @@ class TestBaseViewSet:
         perm_cls.has_object_permission = AsyncMock(return_value=True)
         view.permission_classes = [perm_cls]
         request = MagicMock()
-        await view.check_object_permissions(request, MagicMock())
+        view.request = request
+        await view.check_object_permissions(MagicMock())
 
     def test_get_queryset_returns_queryset_attribute(self):
         qs = object()
@@ -414,12 +416,13 @@ class TestBaseViewSet:
         view.get_queryset = MagicMock(return_value=qs)
         view.check_object_permissions = AsyncMock()
         request = MagicMock()
+        view.request = request
 
-        result = await view.get_object(request, 1)
+        result = await view.get_object(1)
 
         view.get_queryset.assert_called_once_with()
         qs.get_or_none.assert_awaited_once_with(id=1)
-        view.check_object_permissions.assert_awaited_once_with(request, instance)
+        view.check_object_permissions.assert_awaited_once_with(instance)
         assert result is instance
 
     @pytest.mark.asyncio
@@ -428,11 +431,11 @@ class TestBaseViewSet:
         qs = MagicMock()
         qs.get_or_none = AsyncMock(return_value=None)
         view.get_queryset = MagicMock(return_value=qs)
-        request = MagicMock()
+        view.request = MagicMock()
         from sanic.exceptions import NotFound
 
         with pytest.raises(NotFound):
-            await view.get_object(request, 99)
+            await view.get_object(99)
 
     @pytest.mark.asyncio
     async def test_as_view_method_not_allowed(self):

@@ -205,30 +205,14 @@ class OrderingFactory(BaseFilter):
         return {}
 
     def filter_queryset(self, request, queryset: QuerySet):
-        sort_value = request.args.get("sort")
-        if not sort_value:
-            return queryset
-
-        allowed_fields = self._filter_params
         order_by_fields = []
-
-        # Parse multiple sorting fields, and support '-' to indicate reverse order
-        for raw_field in unquote(sort_value).split(","):
-            raw_field = raw_field.strip()
-            if not raw_field:
+        for raw in unquote(request.args.get("sort") or "").split(","):
+            raw = raw.strip()
+            if not raw:
                 continue
+            desc = raw.startswith("-")
+            mapped = self._filter_params.get(raw[1:] if desc else raw)
+            if mapped:
+                order_by_fields.append(f"-{mapped}" if desc else mapped)
 
-            desc = raw_field.startswith("-")
-            field_name = raw_field[1:] if desc else raw_field
-
-            # Verify that it is in the allowed field
-            if field_name in allowed_fields:
-                mapped_field = allowed_fields[field_name]
-                if desc:
-                    order_by_fields.append(f"-{mapped_field}")
-                else:
-                    order_by_fields.append(mapped_field)
-
-        if order_by_fields:
-            return queryset.order_by(*order_by_fields)
-        return queryset
+        return queryset.order_by(*order_by_fields) if order_by_fields else queryset
