@@ -69,10 +69,10 @@ SOCIAL_CONFIG = {
     "github": {
         "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
         "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
-        "REDIRECT_URI": os.getenv("GITHUB_REDIRECT_URI"),
         "AUTHORIZE_URL": os.getenv("AUTHORIZE_URL", "https://github.com/login/oauth/authorize"),
+        "REDIRECT_URI": os.getenv("GITHUB_REDIRECT_URI"),
         "ACCESS_TOKEN_URL": os.getenv("ACCESS_TOKEN_URL", "https://github.com/login/oauth/access_token"),
-        "OAUTHCALLBACK": os.getenv("OAUTHCALLBACK"),
+        "OAUTH_SUCCESS_REDIRECT_URI": os.getenv("OAUTH_SUCCESS_REDIRECT_URI"),
         "GITHUB_USER": "https://api.github.com/user",
         "GITHUB_USER_EMAIL": "https://api.github.com/user/emails",
     }

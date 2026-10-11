@@ -131,17 +131,14 @@ class TestLoginByCode:
 
         mock_user = MagicMock()
         mock_user.id = 7
-        mock_user.name = "alice"
+        mock_user.username = "alice"
         mock_user.email = "alice@example.com"
         mock_user.is_active = True
-        mock_user.is_staff = False
         mock_user.is_superuser = False
         mock_user.last_login = None
         mock_user.create_time = None
         mock_user.update_time = None
-        mock_role = MagicMock()
-        mock_role.name = "user"
-        mock_user.role = mock_role
+        mock_user.roles = []
         mock_user.save = AsyncMock()
 
         auth_instance = MagicMock()
@@ -157,7 +154,7 @@ class TestLoginByCode:
                 return_value=MagicMock(model_dump=MagicMock(return_value={"id": 7, "username": "alice"})),
             ),
         ):
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=mock_user)
+            UserMock.filter.return_value.prefetch_related.return_value.first = AsyncMock(return_value=mock_user)
             response = await social_auth.github_login_by_code(request)
 
         assert response.status == 200

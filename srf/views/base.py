@@ -202,7 +202,7 @@ class GenericAPIView(HTTPMethodView):
             "get": "list",
             "post": "create",
             "put": "update",
-            "patch": "partial_update",
+            "patch": "update",
             "delete": "destroy",
         }
 

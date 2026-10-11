@@ -18,6 +18,19 @@ os.environ.setdefault("JWT_SECRET", "test-jwt-secret-for-pytest-32bytes!!")
 
 
 @pytest.fixture
+async def db():
+    """Fresh in-memory Tortoise DB per test, schema generated from TORTOISE_ORM."""
+    from tortoise import Tortoise
+
+    from tests.tortoise_config import TORTOISE_ORM
+
+    await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
+    yield
+    await Tortoise.close_connections()
+
+
+@pytest.fixture
 def mock_request():
     """Minimal Sanic request-like object for unit tests."""
     from unittest.mock import MagicMock

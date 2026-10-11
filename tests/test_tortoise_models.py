@@ -5,7 +5,7 @@ import warnings
 import pytest
 from tortoise import fields
 
-from srf.auth.models import RefreshToken, Role, User, UserRoles
+from srf.auth.models import RefreshToken, Role, User
 from srf.event.models import Event
 from tests.app_models import SecretNote
 from tests.tortoise_config import TORTOISE_ORM
@@ -13,7 +13,7 @@ from tests.tortoise_config import TORTOISE_ORM
 
 @pytest.mark.parametrize(
     "model",
-    [Role, User, UserRoles, RefreshToken, Event, SecretNote],
+    [Role, User, RefreshToken, Event, SecretNote],
 )
 def test_default_integer_primary_key(model):
     assert model._meta.pk_attr == "id"

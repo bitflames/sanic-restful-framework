@@ -4,7 +4,9 @@ from pydantic import ValidationError
 from sanic.exceptions import BadRequest, ServerError, Unauthorized
 from sanic.request import Request
 from sanic_jwt.authentication import Authentication
+from tortoise.exceptions import NoValuesFetched
 from tortoise.expressions import Q
+from tortoise.timezone import now
 
 from srf.config import settings
 
@@ -14,37 +16,45 @@ from .schema import UserLoginSchema, UserSchemaReader, utc_now
 LOGIN_FAILED_MESSAGE = "Unable to log in with provided credentials."
 
 
-def build_user_payload(user: User) -> dict:
-    """JWT payload dict for sanic-jwt (login / refresh / me / token issue)."""
+async def build_user_payload(user: User) -> dict:
+    """JWT payload dict for sanic-jwt (login / refresh / me / token issue).
+
+    Roles come from the prefetch cache when already fetched (zero queries);
+    otherwise fall back to one lazy query.
+    """
+    try:
+        roles = [role.name for role in user.roles]
+    except NoValuesFetched:
+        roles = [role.name for role in await user.roles.all()]
     return {
         "user_id": user.id,
-        "username": user.name,
-        "role": user.role.name if user.role else None,
+        "username": user.username,
+        "roles": roles,
     }
 
 
 async def update_user_last_login(user: User) -> None:
     """Record successful login time without rewriting unrelated columns."""
-    user.last_login = utc_now()
+    user.last_login = now()
     await user.save(update_fields=["last_login"])
 
 
 async def authenticate(request: Request, *args, **kwargs) -> dict:
-    """Validate credentials and return JWT payload (user_id, username, role). Used by sanic_jwt."""
+    """Validate credentials and return JWT payload (user_id, username, roles). Used by sanic_jwt."""
     if request.json is None:
         raise BadRequest("Request body is required")
     try:
-        sch_user = UserLoginSchema.model_validate(request.json, by_alias=True)  # TODO, form login
+        sch_user = UserLoginSchema.model_validate(request.json)
     except (ValidationError, TypeError, ValueError):
         raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
     if sch_user.email:
-        query = Q(email=sch_user.email)
+        query = Q(email=sch_user.email.lower())
         if sch_user.username:
-            query |= Q(name=sch_user.username)
+            query |= Q(username=sch_user.username)
     else:
-        query = Q(name=sch_user.username)
-    user = await User.filter(query).select_related("role").first()
+        query = Q(username=sch_user.username)
+    user = await User.filter(query).prefetch_related("roles").first()
     if user is None or not check_active(user):
         raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
@@ -52,7 +62,7 @@ async def authenticate(request: Request, *args, **kwargs) -> dict:
         raise Unauthorized(LOGIN_FAILED_MESSAGE)
 
     await update_user_last_login(user)
-    return build_user_payload(user)
+    return await build_user_payload(user)
 
 
 async def retrieve_user(request, payload, *args, **kwargs) -> dict | None:
@@ -70,14 +80,14 @@ async def retrieve_user(request, payload, *args, **kwargs) -> dict | None:
     ctx = getattr(request, "ctx", None) if request is not None else None
     ctx_user = getattr(ctx, "user", None) if ctx is not None else None
     if ctx_user is not None and getattr(ctx_user, "id", None) == user_id and check_active(ctx_user):
-        return build_user_payload(ctx_user)
+        return await build_user_payload(ctx_user)
 
-    user = await User.filter(id=user_id).select_related("role").first()
+    user = await User.filter(id=user_id).prefetch_related("roles").first()
     if user is None or not check_active(user):
         return None
     if ctx is not None:
         ctx.user = user
-    return build_user_payload(user)
+    return await build_user_payload(user)
 
 
 def check_active(user: User):
@@ -90,12 +100,9 @@ async def gen_user_access_token(request: Request, user_db: User) -> dict:
     if auth is None:
         raise ServerError("JWT is not configured; call register_auth_urls() first")
 
-    user_payload = build_user_payload(user_db)
+    user_payload = await build_user_payload(user_db)
     access_token = await auth.generate_access_token(user=user_payload)
-    data = UserSchemaReader.model_validate(user_db, from_attributes=True).model_dump(
-        by_alias=True,
-        mode="json",
-    )
+    data = UserSchemaReader.model_validate(user_db, from_attributes=True).model_dump(mode="json")
     data["access_token"] = access_token
     if auth.config.refresh_token_enabled():
         data["refresh_token"] = await auth.generate_refresh_token(request, user_payload)

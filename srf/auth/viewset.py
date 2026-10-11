@@ -81,7 +81,7 @@ async def logout(request: Request):
 async def register(request: Request):
     """Register a new user after verifying email code; return user data and access token."""
     if not request.json:
-        raise BadRequest("Request body is required")
+        raise BadRequest("JSON request body is required.")
     sch_email_verification = EmailCodeVerifySchema.model_validate(request.json, extra="ignore")
 
     # Fetch and validate verification code from Redis
@@ -89,14 +89,14 @@ async def register(request: Request):
     email_cache_key = f"{settings.EMAIL_CODE_REDIS}_{sch_email_verification.email}"
     stored_code = await redis.get(email_cache_key)
 
-    # Verify code and delete it， whther code is None or incorrect
+    # Verify the code, then delete it whether it was missing or incorrect.
     if stored_code is None or (stored_code.decode() if isinstance(stored_code, bytes) else str(stored_code)) != sch_email_verification.confirmations:
         await redis.delete(email_cache_key)
-        return HTTPResponse("The verification code is incorrect or timeout, please retry!", status=HTTPStatus.HTTP_400_BAD_REQUEST)
+        return HTTPResponse("The verification code is invalid or has expired.", status=HTTPStatus.HTTP_400_BAD_REQUEST)
     await redis.delete(email_cache_key)
 
     # Validate schema; unwrap SecretStr here, create_user only accepts plaintext str.
-    sch_user_in = UserSchemaWriter.model_validate(request.json, by_alias=True, extra="ignore")
+    sch_user_in = UserSchemaWriter.model_validate(request.json, extra="ignore")
     user_data = sch_user_in.model_dump(
         exclude_unset=True,
         exclude_none=True,
@@ -117,7 +117,7 @@ async def verify_email(request: Request):
 async def send_email_with_redis_code(request: Request):
     """Send verification code to email and store in cache. TODO: validate with Schema."""
     if not request.json:
-        raise BadRequest("Request body is required")
+        raise BadRequest("JSON request body is required.")
     email = EmailValidator.model_validate(request.json, extra="ignore").email
     code = generate_code(5)
     email_cache_key = f"{settings.EMAIL_CODE_REDIS}_{email}"
@@ -125,7 +125,7 @@ async def send_email_with_redis_code(request: Request):
     # Check cache
     redis: Redis = request.app.ctx.redis
     if await redis.get(email_cache_key) is not None:
-        return HTTPResponse("Email has been sent, please check your email", status=HTTPStatus.HTTP_429_TOO_MANY_REQUESTS)
+        return HTTPResponse("Verification email already sent. Please check your email.", status=HTTPStatus.HTTP_429_TOO_MANY_REQUESTS)
     await redis.set(email_cache_key, code, ex=settings.USER_REGISTER_EMAIL_VERIFY_CODE_TTL, nx=True)
 
     # Send verification code to email in background
@@ -138,22 +138,14 @@ async def send_email_with_redis_code(request: Request):
     # asyncio.create_task(_send_and_cleanup(email, code))  # no need to use asyncio, await is enough
 
     if await _send_and_cleanup(email, code):
-        return HTTPResponse("Email has been sent, please check your email")
-    return HTTPResponse("Email send failed, please try again", status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR)
+        return HTTPResponse("Verification email sent. Please check your email.")
+    return HTTPResponse("Failed to send verification email. Please try again later.", status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UserViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated,)
-    search_fields: ClassVar[list[str]] = [
-        "name",
-        "is_active",
-        "id",
-    ]
-    filter_fields: ClassVar[dict[str, str]] = {
-        "id": "id",
-        "name": "name",
-        "is_active": "is_active",
-    }
+    search_fields: ClassVar[list[str]] = ["username", "email"]
+    filter_fields: ClassVar[list[str]] = search_fields
 
     @property
     def queryset(self) -> QuerySet:
@@ -168,19 +160,19 @@ class UserViewSet(BaseViewSet):
 
     @action(detail=False, url_name="self", url_path="self")
     async def get_self(self, request: Request):
-        user_json = self.get_schema(request).model_validate(request.ctx.user).model_dump(mode="json", by_alias=True)
+        user_json = self.get_schema(request).model_validate(request.ctx.user).model_dump(mode="json")
         return JSONResponse(user_json)
 
     @action(detail=False, methods=["post"], url_name="change-password", url_path="change-password")
     async def change_password(self, request: Request):
         """Change password for the authenticated user (SHA-256 + bcrypt)."""
         if not request.json:
-            raise BadRequest("Request body is required")
-        sch = ChangePasswordSchema.model_validate(request.json, by_alias=True)
+            raise BadRequest("JSON request body is required.")
+        sch = ChangePasswordSchema.model_validate(request.json)
         user: models.User = request.ctx.user
         old_password = unwrap_secret(sch.old_password)
         if not old_password or not user.verify_password(old_password):
-            raise BadRequest("Old password is incorrect")
+            raise BadRequest("The old password is incorrect.")
         new_password = unwrap_secret(sch.password)
         assert new_password is not None  # validated by ChangePasswordSchema
         user.password = models.User.hash_password(new_password)

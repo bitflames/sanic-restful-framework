@@ -118,7 +118,7 @@ class TestSendEmailWithRedisCode:
         from srf.auth.viewset import send_email_with_redis_code
 
         request = _make_request(json_body=None)
-        with pytest.raises(BadRequest, match="Request body is required"):
+        with pytest.raises(BadRequest, match="JSON request body is required."):
             await send_email_with_redis_code(request)
 
     @pytest.mark.asyncio
@@ -186,7 +186,7 @@ class TestRegisterEmailCode:
         from srf.auth.viewset import register
 
         request = _make_request(json_body=None)
-        with pytest.raises(BadRequest, match="Request body is required"):
+        with pytest.raises(BadRequest, match="JSON request body is required."):
             await register(request)
 
     @pytest.mark.asyncio
@@ -230,17 +230,14 @@ class TestRegisterEmailCode:
 
         mock_user = MagicMock()
         mock_user.id = 1
-        mock_user.name = "alice"
+        mock_user.username = "alice"
         mock_user.email = "u@example.com"
         mock_user.is_active = True
-        mock_user.is_staff = False
         mock_user.is_superuser = False
         mock_user.last_login = None
         mock_user.create_time = MagicMock()
         mock_user.update_time = MagicMock()
-        mock_role = MagicMock()
-        mock_role.name = "user"
-        mock_user.role = mock_role
+        mock_user.roles = []
         mock_user.save = AsyncMock()
 
         auth_inst = MagicMock()
@@ -276,4 +273,4 @@ class TestRegisterEmailCode:
         auth_inst.generate_access_token.assert_awaited_once()
         auth_inst.generate_refresh_token.assert_awaited_once()
         refresh_user = auth_inst.generate_refresh_token.await_args.args[1]
-        assert refresh_user == {"user_id": 1, "username": "alice", "role": "user"}
+        assert refresh_user == {"user_id": 1, "username": "alice", "roles": []}

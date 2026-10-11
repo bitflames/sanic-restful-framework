@@ -10,6 +10,8 @@ from pydantic import (
     Field,
     SecretStr,
     computed_field,
+    field_serializer,
+    field_validator,
     model_validator,
 )
 
@@ -60,7 +62,13 @@ class SchemaBaseTime(BaseModel):
     create_time: datetime.datetime = Field(default_factory=utc_now, alias="created_date")
     update_time: datetime.datetime = Field(default_factory=utc_now, alias="updated_date")
 
-    model_config = ConfigDict(json_encoders={datetime.datetime: lambda v: (v.strftime(settings.DATETIME_FORMAT) if v else None)})
+    # populate_by_name lets aliased fields validate from their field names too —
+    # ORM objects only expose create_time/update_time, not the aliases.
+    model_config = ConfigDict(populate_by_name=True)
+
+    @field_serializer("create_time", "update_time", when_used="json")
+    def _format_datetime(self, v: datetime.datetime | None) -> str | None:
+        return v.strftime(settings.DATETIME_FORMAT) if v else None
 
 
 # Reusable type: SecretStr masks repr/logs; AfterValidator enforces strength → ValidationError
@@ -69,18 +77,15 @@ StrongPassword = Annotated[SecretStr, AfterValidator(validate_secret)]
 
 class UserSchemaWriter(SchemaBaseTime):
     id: int | None = Field(None, frozen=True)
-    name: str = Field(..., alias="username")
-    email: EmailStr | None = None
+    username: str
+    email: EmailStr
     is_active: bool = True
-    is_staff: bool = False
     is_superuser: bool = False
     password: StrongPassword = Field(..., alias="password1", exclude=True)
     password_confirm: StrongPassword = Field(..., alias="password2", exclude=True)
-    role_name: str = Field(default="user")
+    roles: list[str] | None = Field(None)
 
-    model_config = ConfigDict(
-        from_attributes=True, populate_by_name=True, ser_json_alias=True
-    )  # Both name and alias are allowed to be assigned. The output of ser_json_alias must use alias
+    model_config = ConfigDict(from_attributes=True)
 
     @model_validator(mode="after")
     def check_passwords(self) -> "UserSchemaWriter":
@@ -96,13 +101,12 @@ class UserSchemaUpdate(SchemaBaseTime):
     """Profile update payload — no password fields (use change-password action)."""
 
     id: int | None = Field(None, frozen=True)
-    name: str | None = Field(None, alias="username")
+    username: str | None = None
     email: EmailStr | None = None
     is_active: bool | None = None
-    is_staff: bool | None = None
     is_superuser: bool | None = None
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True, ser_json_alias=True)
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ChangePasswordSchema(BaseModel):
@@ -118,21 +122,44 @@ class ChangePasswordSchema(BaseModel):
         return self
 
 
+class RoleSchemaReader(BaseModel):
+    id: int = Field(..., frozen=True)
+    name: str
+    description: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class UserSchemaReader(SchemaBaseTime):
     id: int = Field(..., frozen=True)
-    name: str = Field(..., alias="username")
+    username: str = Field(...)
     email: EmailStr | None = None
     is_active: bool = True
-    is_staff: bool = False
     is_superuser: bool = False
     last_login: datetime.datetime | None = None
+    roles: list[RoleSchemaReader] | None = None
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True, ser_json_alias=True)
-    # Both name and alias are allowed to be assigned. The output of ser_json_alias must use alias
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("roles", mode="before")
+    @classmethod
+    def ignore_unfetched_roles(cls, v: object) -> object:
+        """Serialize roles only when already fetched.
+
+        Lists pass through. Tortoise 1.x M2M relations are lazy relation objects:
+        iterating one before fetch_related/prefetch_related raises NoValuesFetched,
+        so an unfetched relation becomes None instead of failing validation.
+        """
+        if v is None or isinstance(v, (list, tuple)):
+            return v
+        try:
+            return list(v)
+        except Exception:  # noqa: BLE001
+            return None
 
     @computed_field()
     def url(self) -> str:
-        return f"/users/{self.id}"
+        return f"/user/{self.id}"
 
 
 class UserLoginSchema(BaseModel):

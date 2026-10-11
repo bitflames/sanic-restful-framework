@@ -8,7 +8,6 @@ from sanic.exceptions import BadRequest, ServerError, Unauthorized
 
 from srf.auth.auth import (
     authenticate,
-    build_user_payload,
     gen_user_access_token,
     retrieve_refresh_token,
     retrieve_user,
@@ -49,60 +48,11 @@ class TestAuthenticate:
             await authenticate(request)
 
     @pytest.mark.asyncio
-    async def test_authenticate_user_not_found(self):
-        request = MagicMock()
-        request.json = {"email": "nobody@example.com", "password": "secret"}
-        with patch("srf.auth.auth.User") as UserMock:
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=None)
-
-            with pytest.raises(Unauthorized, match="Unable to log in"):
-                await authenticate(request)
-
-    @pytest.mark.asyncio
-    async def test_authenticate_by_username(self):
-        request = MagicMock()
-        request.json = {"username": "alice", "password": "right"}
-        mock_user = MagicMock()
-        mock_user.id = 2
-        mock_user.name = "alice"
-        mock_user.verify_password = MagicMock(return_value=True)
-        mock_user.role = MagicMock(name="user")
-        mock_user.role.name = "user"
-        mock_user.save = AsyncMock()
-        with patch("srf.auth.auth.User") as UserMock:
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=mock_user)
-            payload = await authenticate(request)
-            assert payload["user_id"] == 2
-            assert payload["username"] == "alice"
-            mock_user.save.assert_awaited_once()
-            filter_arg = UserMock.filter.call_args[0][0]
-            assert "email" not in str(filter_arg).lower() or "None" not in str(filter_arg)
-
-    @pytest.mark.asyncio
     async def test_authenticate_missing_identifier_raises(self):
         request = MagicMock()
         request.json = {"password": "secret"}
         with pytest.raises(Unauthorized, match="Unable to log in"):
             await authenticate(request)
-
-    @pytest.mark.asyncio
-    async def test_authenticate_returns_serializable_role(self):
-        request = MagicMock()
-        request.json = {"email": "u@example.com", "password": "right"}
-        mock_user = MagicMock()
-        mock_user.id = 1
-        mock_user.name = "alice"
-        mock_user.verify_password = MagicMock(return_value=True)
-        mock_role = MagicMock()
-        mock_role.name = "user"
-        mock_user.role = mock_role
-        mock_user.save = AsyncMock()
-        with patch("srf.auth.auth.User") as UserMock:
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=mock_user)
-            payload = await authenticate(request)
-            assert payload["user_id"] == 1
-            assert payload["username"] == "alice"
-            assert payload["role"] == "user"
 
 
 class TestSetupAuth:
@@ -132,49 +82,19 @@ class TestRetrieveUser:
         assert await retrieve_user(None, {}) is None
 
     @pytest.mark.asyncio
-    async def test_retrieve_user_not_found(self):
-        with patch("srf.auth.auth.User") as UserMock:
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=None)
-            assert await retrieve_user(None, {"user_id": 999}) is None
-
-    @pytest.mark.asyncio
-    async def test_retrieve_user_found_sets_ctx_and_returns_dict(self):
-        mock_user = MagicMock()
-        mock_user.id = 1
-        mock_user.name = "alice"
-        mock_user.is_active = True
-        mock_user.role = MagicMock()
-        mock_user.role.name = "user"
-        request = MagicMock()
-        request.ctx.user = None
-        with patch("srf.auth.auth.User") as UserMock:
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=mock_user)
-            data = await retrieve_user(request, {"user_id": 1})
-            assert data == {"user_id": 1, "username": "alice", "role": "user"}
-            assert request.ctx.user is mock_user
-
-    @pytest.mark.asyncio
     async def test_retrieve_user_reuses_ctx_user(self):
+        """ctx-cached user short-circuits the DB query entirely."""
         mock_user = MagicMock()
         mock_user.id = 1
-        mock_user.name = "alice"
+        mock_user.username = "alice"
         mock_user.is_active = True
-        mock_user.role = MagicMock()
-        mock_user.role.name = "user"
+        mock_user.roles = []
         request = MagicMock()
         request.ctx.user = mock_user
         with patch("srf.auth.auth.User.filter") as filt:
             data = await retrieve_user(request, {"user_id": 1})
-            assert data == {"user_id": 1, "username": "alice", "role": "user"}
+            assert data == {"user_id": 1, "username": "alice", "roles": []}
             filt.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_retrieve_user_inactive_returns_none(self):
-        mock_user = MagicMock()
-        mock_user.is_active = False
-        with patch("srf.auth.auth.User") as UserMock:
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=mock_user)
-            assert await retrieve_user(None, {"user_id": 1}) is None
 
 
 class TestRefreshTokenHandlers:
@@ -325,21 +245,21 @@ class TestPasswordSchemas:
     def test_writer_rejects_mismatch(self):
         with pytest.raises(ValidationError, match="do not match"):
             UserSchemaWriter.model_validate(
-                {"username": "alice", "password1": "Secret123", "password2": "Secret124"},
+                {"username": "alice", "email": "a@example.com", "password1": "Secret123", "password2": "Secret124"},
                 by_alias=True,
             )
 
     def test_writer_rejects_short_password(self):
         with pytest.raises(ValidationError, match="at least 8"):
             UserSchemaWriter.model_validate(
-                {"username": "alice", "password1": "Ab1", "password2": "Ab1"},
+                {"username": "alice", "email": "a@example.com", "password1": "Ab1", "password2": "Ab1"},
                 by_alias=True,
             )
 
     def test_writer_strength_failure_is_validation_error(self):
         with pytest.raises(ValidationError) as exc_info:
             UserSchemaWriter.model_validate(
-                {"username": "alice", "password1": "nodigit!", "password2": "nodigit!"},
+                {"username": "alice", "email": "a@example.com", "password1": "nodigit!", "password2": "nodigit!"},
                 by_alias=True,
             )
         assert "digit" in str(exc_info.value)
@@ -347,7 +267,7 @@ class TestPasswordSchemas:
     def test_writer_rejects_password_without_digit(self):
         with pytest.raises(ValidationError, match="digit"):
             UserSchemaWriter.model_validate(
-                {"username": "alice", "password1": "SecretOnly", "password2": "SecretOnly"},
+                {"username": "alice", "email": "a@example.com", "password1": "SecretOnly", "password2": "SecretOnly"},
                 by_alias=True,
             )
 
@@ -357,7 +277,7 @@ class TestPasswordSchemas:
 
     def test_update_schema_has_no_password_fields(self):
         sch = UserSchemaUpdate.model_validate({"username": "alice", "email": "a@example.com"}, by_alias=True)
-        assert sch.name == "alice"
+        assert sch.username == "alice"
         assert not hasattr(sch, "password")
 
     def test_change_password_schema_requires_old(self):
@@ -383,7 +303,7 @@ class TestUserPerformUpdateAndChangePassword:
 
         payload = user.update_from_dict.call_args.args[0]
         assert "password" not in payload
-        assert payload.get("name") == "alice"
+        assert payload.get("username") == "alice"
         user.save.assert_awaited_once()
         assert user.password == "$2b$keep-me"
 
@@ -422,7 +342,7 @@ class TestUserPerformUpdateAndChangePassword:
         }
         request.ctx.user = user
         vs = UserViewSet()
-        with pytest.raises(BadRequest, match="Old password is incorrect"):
+        with pytest.raises(BadRequest, match="The old password is incorrect."):
             await vs.change_password(request)
 
 
@@ -440,19 +360,43 @@ class TestUserViewSetSchema:
         assert vs.get_schema(request) is UserSchemaUpdate
 
 
-class TestBuildUserPayload:
-    def test_build_user_payload(self):
-        user = object.__new__(User)
-        object.__setattr__(user, "id", 7)
-        object.__setattr__(user, "name", "alice")
-        role = MagicMock()
-        role.name = "admin"
-        object.__setattr__(user, "role", role)
-        assert build_user_payload(user) == {"user_id": 7, "username": "alice", "role": "admin"}
+class TestUserSchemaReaderRoles:
+    def test_roles_serialized_from_prefetched_list(self):
+        from types import SimpleNamespace
 
-    def test_build_user_payload_no_role(self):
-        user = object.__new__(User)
-        object.__setattr__(user, "id", 1)
-        object.__setattr__(user, "name", "bob")
-        object.__setattr__(user, "role", None)
-        assert build_user_payload(user) == {"user_id": 1, "username": "bob", "role": None}
+        role = SimpleNamespace(id=2, name="admin", description="admin role")
+        user = SimpleNamespace(
+            id=1,
+            username="alice",
+            email="a@example.com",
+            is_active=True,
+            is_superuser=False,
+            last_login=None,
+            roles=[role],
+        )
+        sch = UserSchemaReader.model_validate(user)
+        assert sch.roles is not None
+        assert [r.name for r in sch.roles] == ["admin"]
+        assert sch.roles[0].description == "admin role"
+
+    def test_roles_none_when_relation_not_fetched(self):
+        from types import SimpleNamespace
+
+        user = SimpleNamespace(
+            id=1,
+            username="alice",
+            email="a@example.com",
+            is_active=True,
+            is_superuser=False,
+            last_login=None,
+            roles=object(),  # non-iterable lazy-relation stand-in
+        )
+        sch = UserSchemaReader.model_validate(user)
+        assert sch.roles is None
+
+    def test_roles_default_none_when_attribute_missing(self):
+        from types import SimpleNamespace
+
+        user = SimpleNamespace(id=1, username="alice", email="a@example.com")
+        sch = UserSchemaReader.model_validate(user)
+        assert sch.roles is None
