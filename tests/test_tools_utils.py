@@ -1,7 +1,5 @@
 """Unit tests for srf.tools.utils."""
 
-
-
 from srf.tools.utils import camel_to_snake, generate_code
 
 

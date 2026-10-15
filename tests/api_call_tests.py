@@ -108,11 +108,23 @@ def call_registration_styles(token: str | None = None) -> None:
         return
 
     status, data = _request("GET", f"{BASE}/api/public/router-widgets/1", token=token)
-    ok = status == 200 and isinstance(data, dict) and data.get("source") == "router" and data.get("action") == "retrieve" and str(data.get("pk")) == "1"
+    ok = (
+        status == 200
+        and isinstance(data, dict)
+        and data.get("source") == "router"
+        and data.get("action") == "retrieve"
+        and str(data.get("pk")) == "1"
+    )
     _ok("GET /api/public/router-widgets/1 via SanicRouter → 200 retrieve", ok, (status, data))
 
     status, data = _request("GET", f"{BASE}/api/public/manual-widgets/1", token=token)
-    ok = status == 200 and isinstance(data, dict) and data.get("source") == "add_route" and data.get("action") == "retrieve" and str(data.get("pk")) == "1"
+    ok = (
+        status == 200
+        and isinstance(data, dict)
+        and data.get("source") == "add_route"
+        and data.get("action") == "retrieve"
+        and str(data.get("pk")) == "1"
+    )
     _ok("GET /api/public/manual-widgets/1 via app.add_route → 200 retrieve", ok, (status, data))
 
 
