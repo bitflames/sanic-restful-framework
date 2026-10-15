@@ -14,9 +14,8 @@ class EmailValidator(BaseModel):
     email: EmailStr
 
 
-class EmailCodeVerifySchema(BaseModel):
+class EmailCodeVerifySchema(EmailValidator):
     confirmations: str = Field(..., pattern=r"^\d{5}$")
-    email: EmailStr
     # expire_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(minutes=10))
 
 
@@ -32,7 +31,7 @@ def send_email(to_email, subject="", content="") -> bool:
     # Sender's mailbox configuration (needs to be modified to your mailbox information)
     from_email = EmailConfig.from_email
     smtp_server = EmailConfig.smtp_server  # SMTP server address
-    smtp_port = int(EmailConfig.smtp_port)  # e.g. 587 or 465
+    smtp_port = EmailConfig.smtp_port  # e.g. 587 or 465
     password = EmailConfig.password
 
     msg = MIMEMultipart()
@@ -44,6 +43,7 @@ def send_email(to_email, subject="", content="") -> bool:
     # Connect to the SMTP server and send mail
     server = None
     try:
+        smtp_port = int(smtp_port)
         if smtp_port == 465:
             # SSL connect
             server = smtplib.SMTP_SSL(smtp_server, smtp_port)
@@ -63,10 +63,6 @@ def send_email(to_email, subject="", content="") -> bool:
                 server.quit()
             except Exception:  # noqa: BLE001
                 logger.warning("Failed to cleanly quit SMTP server connection", exc_info=True)
-
-
-# async def send_email(to_email: str, subject: str = "", content: str = "") -> bool:
-#     return await asyncio.to_thread(_send_email, to_email, subject, content)
 
 
 async def send_verify_code(to_email, verify_code) -> bool:

@@ -9,17 +9,13 @@ from pydantic import (
     EmailStr,
     Field,
     SecretStr,
-    computed_field,
     field_serializer,
     field_validator,
     model_validator,
 )
+from tortoise.timezone import now as tortoise_timezone_now
 
 from srf.config import settings
-
-
-def utc_now() -> datetime.datetime:
-    return datetime.datetime.now(datetime.UTC)
 
 
 def unwrap_secret(value: SecretStr | str | None) -> str | None:
@@ -58,55 +54,48 @@ def _require_matching_passwords(password: SecretStr, password_confirm: SecretStr
         raise ValueError("password1 and password2 do not match")
 
 
-class SchemaBaseTime(BaseModel):
-    create_time: datetime.datetime = Field(default_factory=utc_now, alias="created_date")
-    update_time: datetime.datetime = Field(default_factory=utc_now, alias="updated_date")
+class RoleSchemaReader(BaseModel):
+    id: int = Field(..., frozen=True)
+    name: str = Field(..., min_length=1, max_length=255)
+    description: str | None = Field(None)
 
-    # populate_by_name lets aliased fields validate from their field names too —
-    # ORM objects only expose create_time/update_time, not the aliases.
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(from_attributes=True)
 
-    @field_serializer("create_time", "update_time", when_used="json")
-    def _format_datetime(self, v: datetime.datetime | None) -> str | None:
-        return v.strftime(settings.DATETIME_FORMAT) if v else None
+
+class SchemaBaseUser(BaseModel):
+    username: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr | None = Field(None, format="email")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserSchemaUpdate(BaseModel):
+    """Profile update payload — no password fields (use change-password action)."""
+
+    username: str | None = Field(None, min_length=1, max_length=255)
+    email: EmailStr | None = Field(None, format="email")
+
+    @model_validator(mode="after")
+    def check_email(self) -> "UserSchemaUpdate":
+        if self.email is not None:
+            self.email = self.email.lower()
+        return self
 
 
 # Reusable type: SecretStr masks repr/logs; AfterValidator enforces strength → ValidationError
 StrongPassword = Annotated[SecretStr, AfterValidator(validate_secret)]
 
 
-class UserSchemaWriter(SchemaBaseTime):
-    id: int | None = Field(None, frozen=True)
-    username: str
-    email: EmailStr
-    is_active: bool = True
-    is_superuser: bool = False
+class UserSchemaWriter(SchemaBaseUser):
     password: StrongPassword = Field(..., alias="password1", exclude=True)
     password_confirm: StrongPassword = Field(..., alias="password2", exclude=True)
-    roles: list[str] | None = Field(None)
-
-    model_config = ConfigDict(from_attributes=True)
 
     @model_validator(mode="after")
     def check_passwords(self) -> "UserSchemaWriter":
-        if self.id is not None:
-            return self  # if orm instance, skip password check
         if self.password is None or self.password_confirm is None:
             raise ValueError("password1 and password2 are required")
         _require_matching_passwords(self.password, self.password_confirm)
         return self
-
-
-class UserSchemaUpdate(SchemaBaseTime):
-    """Profile update payload — no password fields (use change-password action)."""
-
-    id: int | None = Field(None, frozen=True)
-    username: str | None = None
-    email: EmailStr | None = None
-    is_active: bool | None = None
-    is_superuser: bool | None = None
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 class ChangePasswordSchema(BaseModel):
@@ -114,7 +103,7 @@ class ChangePasswordSchema(BaseModel):
     password: StrongPassword = Field(..., alias="password1")
     password_confirm: StrongPassword = Field(..., alias="password2")
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     @model_validator(mode="after")
     def check_passwords(self) -> "ChangePasswordSchema":
@@ -122,24 +111,20 @@ class ChangePasswordSchema(BaseModel):
         return self
 
 
-class RoleSchemaReader(BaseModel):
+class UserSchemaReader(SchemaBaseUser):
     id: int = Field(..., frozen=True)
-    name: str
-    description: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class UserSchemaReader(SchemaBaseTime):
-    id: int = Field(..., frozen=True)
-    username: str = Field(...)
-    email: EmailStr | None = None
     is_active: bool = True
     is_superuser: bool = False
     last_login: datetime.datetime | None = None
     roles: list[RoleSchemaReader] | None = None
+    create_time: datetime.datetime = Field(default_factory=tortoise_timezone_now)
+    update_time: datetime.datetime = Field(default_factory=tortoise_timezone_now)
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    @field_serializer("create_time", "update_time", when_used="json")
+    def _format_datetime(self, v: datetime.datetime | None) -> str | None:
+        return v.strftime(settings.DATETIME_FORMAT) if v else None
 
     @field_validator("roles", mode="before")
     @classmethod
@@ -156,10 +141,6 @@ class UserSchemaReader(SchemaBaseTime):
             return list(v)
         except Exception:  # noqa: BLE001
             return None
-
-    @computed_field()
-    def url(self) -> str:
-        return f"/user/{self.id}"
 
 
 class UserLoginSchema(BaseModel):

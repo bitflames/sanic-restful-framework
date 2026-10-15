@@ -6,12 +6,12 @@ from sanic.request import Request
 from sanic_jwt.authentication import Authentication
 from tortoise.exceptions import NoValuesFetched
 from tortoise.expressions import Q
-from tortoise.timezone import now
+from tortoise.timezone import now as tortoise_timezone_now
 
 from srf.config import settings
 
 from .models import RefreshToken, User
-from .schema import UserLoginSchema, UserSchemaReader, utc_now
+from .schema import UserLoginSchema, UserSchemaReader
 
 LOGIN_FAILED_MESSAGE = "Unable to log in with provided credentials."
 
@@ -35,7 +35,7 @@ async def build_user_payload(user: User) -> dict:
 
 async def update_user_last_login(user: User) -> None:
     """Record successful login time without rewriting unrelated columns."""
-    user.last_login = now()
+    user.last_login = tortoise_timezone_now()
     await user.save(update_fields=["last_login"])
 
 
@@ -82,8 +82,8 @@ async def retrieve_user(request, payload, *args, **kwargs) -> dict | None:
     if ctx_user is not None and getattr(ctx_user, "id", None) == user_id and check_active(ctx_user):
         return await build_user_payload(ctx_user)
 
-    user = await User.filter(id=user_id).prefetch_related("roles").first()
-    if user is None or not check_active(user):
+    user = await User.filter(id=user_id, is_active=True).prefetch_related("roles").first()
+    if user is None:
         return None
     if ctx is not None:
         ctx.user = user
@@ -118,7 +118,7 @@ def _refresh_ttl() -> timedelta:
 
 async def store_refresh_token(user_id, refresh_token, request):
     """Persist refresh token in DB; upsert the single row for this user."""
-    expires_at = utc_now() + _refresh_ttl()
+    expires_at = tortoise_timezone_now() + _refresh_ttl()
     await RefreshToken.update_or_create(
         user_id=user_id,
         defaults={"token": refresh_token, "expires_at": expires_at},
@@ -127,7 +127,7 @@ async def store_refresh_token(user_id, refresh_token, request):
 
 async def retrieve_refresh_token(request, user_id):
     """Return the active (non-expired) refresh token for user, or None."""
-    row = await RefreshToken.filter(user_id=user_id, expires_at__gt=utc_now()).first()
+    row = await RefreshToken.filter(user_id=user_id, expires_at__gt=tortoise_timezone_now()).first()
     return row.token if row else None
 
 

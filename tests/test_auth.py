@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import jwt
 import pytest
 from pydantic import ValidationError
 from sanic.exceptions import BadRequest, ServerError, Unauthorized
@@ -14,7 +15,7 @@ from srf.auth.auth import (
     revoke_refresh_token,
     store_refresh_token,
 )
-from srf.auth.models import User
+from srf.auth.models import RefreshToken, User
 from srf.auth.schema import ChangePasswordSchema, UserLoginSchema, UserSchemaReader, UserSchemaUpdate, UserSchemaWriter
 from srf.auth.viewset import UserViewSet, logout, setup_auth
 from srf.config import settings
@@ -166,13 +167,26 @@ class TestRefreshTokenHandlers:
         assert user_arg["user_id"] == 1
 
 
+class _LogoutConfig:
+    def __contains__(self, item: str) -> bool:
+        return False
+
+
+def _logout_auth(token: str, secret: str = "secret"):
+    auth = MagicMock()
+    auth.config = _LogoutConfig()
+    auth._get_token = MagicMock(return_value=token)
+    auth._get_secret = AsyncMock(return_value=secret)
+    auth._get_algorithm = MagicMock(return_value="HS256")
+    return auth
+
+
 class TestLogout:
     @pytest.mark.asyncio
-    async def test_logout_revokes_refresh_token(self):
-        auth = MagicMock()
-        auth.extract_payload = AsyncMock(return_value={"user_id": 5})
+    async def test_logout_revokes_refresh_token_when_access_token_expired(self):
+        token = jwt.encode({"user_id": 5, "exp": 1}, "secret", algorithm="HS256")
         request = MagicMock()
-        request.app.ctx.auth = auth
+        request.app.ctx.auth = _logout_auth(token)
 
         with patch("srf.auth.viewset.revoke_refresh_token", new_callable=AsyncMock) as rev:
             response = await logout(request)
@@ -180,18 +194,34 @@ class TestLogout:
             rev.assert_awaited_once_with(request, 5)
 
     @pytest.mark.asyncio
+    async def test_logout_invalid_signature_does_not_revoke(self):
+        token = jwt.encode({"user_id": 5, "exp": 1}, "other-secret", algorithm="HS256")
+        request = MagicMock()
+        request.app.ctx.auth = _logout_auth(token)
+
+        with patch("srf.auth.viewset.revoke_refresh_token", new_callable=AsyncMock) as rev:
+            response = await logout(request)
+            assert response.status == 200
+            rev.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_logout_without_token_still_ok(self):
-        auth = MagicMock()
-        auth.extract_payload = AsyncMock(side_effect=Exception("no token"))
+        from sanic_jwt.exceptions import MissingAuthorizationHeader
+
+        auth = _logout_auth("unused")
+        auth._get_token = MagicMock(side_effect=MissingAuthorizationHeader())
         request = MagicMock()
         request.app.ctx.auth = auth
 
-        response = await logout(request)
-        assert response.status == 200
+        with patch("srf.auth.viewset.revoke_refresh_token", new_callable=AsyncMock) as rev:
+            response = await logout(request)
+            assert response.status == 200
+            rev.assert_not_awaited()
 
 
 class TestNonAuthEndpoints:
     def test_public_endpoints_use_full_paths(self):
+        assert "/api/auth/logout" in settings.NON_AUTH_ENDPOINTS
         assert "/api/auth/refresh" in settings.NON_AUTH_ENDPOINTS
         assert "/api/auth/send-verification-email" in settings.NON_AUTH_ENDPOINTS
         assert "refresh" not in settings.NON_AUTH_ENDPOINTS
@@ -308,11 +338,9 @@ class TestUserPerformUpdateAndChangePassword:
         assert user.password == "$2b$keep-me"
 
     @pytest.mark.asyncio
-    async def test_change_password_action(self):
-        old_hash = User.hash_password("password123")
-        user = object.__new__(User)
-        user.password = old_hash
-        user.save = AsyncMock()
+    async def test_change_password_action(self, db):
+        """Real-DB run: change_password persists the new hash and clears refresh tokens."""
+        user = await User.create_user({"username": "alice", "email": "alice@example.com", "password": "password123"})
 
         request = MagicMock()
         request.json = {
@@ -325,10 +353,11 @@ class TestUserPerformUpdateAndChangePassword:
         vs = UserViewSet()
         response = await vs.change_password(request)
         assert response.status == 200
-        assert user.password != old_hash
-        assert user.password.startswith("$2")
-        assert user.verify_password("Secret123") is True
-        user.save.assert_awaited_once()
+
+        refreshed = await User.get(pk=user.id)
+        assert refreshed.verify_password("Secret123") is True
+        assert refreshed.verify_password("password123") is False
+        assert await RefreshToken.filter(user=user).count() == 0
 
     @pytest.mark.asyncio
     async def test_change_password_rejects_wrong_old(self):
@@ -347,17 +376,18 @@ class TestUserPerformUpdateAndChangePassword:
 
 
 class TestUserViewSetSchema:
-    def test_get_schema_follows_http_method(self):
+    def test_get_schema_follows_action(self):
         vs = UserViewSet()
-        request = MagicMock()
-        request.method = "GET"
-        assert vs.get_schema(request) is UserSchemaReader
-        request.method = "POST"
-        assert vs.get_schema(request) is UserSchemaWriter
-        request.method = "PATCH"
-        assert vs.get_schema(request) is UserSchemaUpdate
-        request.method = "PUT"
-        assert vs.get_schema(request) is UserSchemaUpdate
+        vs.request = MagicMock()
+        for action, expected in [
+            ("list", UserSchemaReader),
+            ("retrieve", UserSchemaReader),
+            ("get_self", UserSchemaReader),
+            ("create", UserSchemaWriter),
+            ("update", UserSchemaUpdate),
+        ]:
+            vs.action = action
+            assert vs.get_schema() is expected
 
 
 class TestUserSchemaReaderRoles:

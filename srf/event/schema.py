@@ -1,7 +1,7 @@
 import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EventSchema(BaseModel):
@@ -18,7 +18,3 @@ class EventSchema(BaseModel):
     create_time: datetime.datetime | None = Field(None, frozen=True)
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, ser_json_alias=True)
-
-    @computed_field()
-    def url(self) -> str:
-        return f"/events/{self.id}"

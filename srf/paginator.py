@@ -3,7 +3,9 @@ from math import ceil
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, TypeAdapter, field_validator
+from sanic.exceptions import BadRequest
 from sanic.request import Request
+from tortoise.exceptions import ValidationError
 from tortoise.queryset import QuerySet
 
 T = TypeVar("T")
@@ -122,8 +124,11 @@ class PageNumberPagination(BasePagination):
 
     async def paginate(self, sch_model: type[BaseModel] | None = None) -> PaginationResult:
         offset = (self.page - 1) * self.page_size
-        total_count = await self.queryset.count()
-        items = await self.queryset.offset(offset).limit(self.page_size)
+        try:
+            total_count = await self.queryset.count()
+            items = await self.queryset.offset(offset).limit(self.page_size)
+        except (ValidationError, ValueError) as e:
+            raise BadRequest(message=str(e))
         if sch_model is not None:
             items = self.serialize_list(sch_model, list(items))
         else:

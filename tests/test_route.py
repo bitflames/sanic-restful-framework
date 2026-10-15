@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 from sanic import Blueprint, Sanic
 
 from srf.route import SanicRouter
-from srf.views.base import BaseViewSet
+from srf.views.base import BaseViewSet, CreateAndReadOnlyModelViewSet, ReadOnlyModelViewSet
 from srf.views.decorators import action
 
 
@@ -18,6 +18,12 @@ class DummyViewSet(BaseViewSet):
 def _route_names(app: Sanic) -> set[str]:
     """Sanic 25 names look like '{app}.{blueprint}.{route}'."""
     return {route.name for route in app.router.routes}
+
+
+def _methods_for(app: Sanic, route_name: str) -> set[str]:
+    matches = [route.methods for route in app.router.routes if route.name.endswith(route_name)]
+    assert len(matches) == 1
+    return set(matches[0])
 
 
 class TestSanicRouter:
@@ -44,34 +50,50 @@ class TestSanicRouter:
         # Detail URI is built as base_uri + /<pk:int>; just ensure register completes
         assert r.prefix == "/api"
 
-    def test_detail_route_only_overrides_get_retrieve(self):
-        """Detail registration passes get→retrieve; put/patch/delete come from defaults."""
-        captured = {}
+    def test_register_passes_only_implemented_actions(self):
+        captured = []
 
         class CapturingViewSet(DummyViewSet):
             @classmethod
             def as_view(cls, actions=None):
-                captured["actions"] = actions
+                captured.append(actions)
                 return super().as_view(actions=actions)
 
         bp = Blueprint("test_bp_patch")
         r = SanicRouter(bp=bp, prefix="api")
         r.register("items", CapturingViewSet, name="items")
-        assert captured["actions"] == {"get": "retrieve"}
+        assert captured == [
+            {"get": "list", "post": "create"},
+            {"get": "retrieve", "put": "update", "patch": "update", "delete": "destroy"},
+        ]
 
-        # Merge behavior used inside as_view
-        default_actions = {
-            "get": "list",
-            "post": "create",
-            "put": "update",
-            "patch": "partial_update",
-            "delete": "destroy",
-        }
-        merged = {**default_actions, **captured["actions"]}
-        assert merged["get"] == "retrieve"
-        assert merged["put"] == "update"
-        assert merged["patch"] == "partial_update"
-        assert merged["delete"] == "destroy"
+    def test_readonly_viewset_registers_get_only(self):
+        class ItemsViewSet(ReadOnlyModelViewSet):
+            @property
+            def queryset(self):
+                return MagicMock()
+
+        app = Sanic("test-readonly-routes")
+        bp = Blueprint("api")
+        SanicRouter(bp=bp, prefix="api").register("items", ItemsViewSet, name="items")
+        app.blueprint(bp)
+
+        assert _methods_for(app, "items-list") == {"GET"}
+        assert _methods_for(app, "items-detail") == {"GET"}
+
+    def test_create_and_readonly_viewset_registers_post_on_collection_only(self):
+        class ItemsViewSet(CreateAndReadOnlyModelViewSet):
+            @property
+            def queryset(self):
+                return MagicMock()
+
+        app = Sanic("test-create-readonly-routes")
+        bp = Blueprint("api")
+        SanicRouter(bp=bp, prefix="api").register("items", ItemsViewSet, name="items")
+        app.blueprint(bp)
+
+        assert _methods_for(app, "items-list") == {"GET", "POST"}
+        assert _methods_for(app, "items-detail") == {"GET"}
 
     def test_get_blueprint_returns_bp(self):
         r = SanicRouter(prefix="api")

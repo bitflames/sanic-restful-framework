@@ -26,9 +26,9 @@ def test_default_integer_primary_key(model):
 def test_models_import_without_pk_deprecation():
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
-        from srf.auth import models as auth_models  # noqa: F401
-        from srf.event import models as event_models  # noqa: F401
-        from tests import app_models  # noqa: F401
+        from srf.auth import models as auth_models
+        from srf.event import models as event_models
+        from tests import app_models
 
         assert auth_models.User is User
         assert event_models.Event is Event

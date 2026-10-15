@@ -13,8 +13,8 @@ class TestSignState:
         assert unsign_state(signed, SECRET, max_age=600, current_time=1_700_000_100) == "abc123"
 
     def test_unicode_state(self):
-        signed = sign_state("状态值", SECRET, issued_at=1_700_000_000)
-        assert unsign_state(signed, SECRET, max_age=600, current_time=1_700_000_000) == "状态值"
+        signed = sign_state("status value", SECRET, issued_at=1_700_000_000)
+        assert unsign_state(signed, SECRET, max_age=600, current_time=1_700_000_000) == "status value"
 
     def test_empty_state_raises(self):
         with pytest.raises(ValueError, match="state must not be empty"):

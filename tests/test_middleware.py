@@ -34,7 +34,7 @@ def public_endpoints_via_app():
         if hasattr(settings, "app"):
             delattr(settings, "app")
     else:
-        object.__setattr__(settings, "app", previous)
+        object.__setattr__(settings, "app", previous_app)
 
 
 class TestIsPublicEndpoint:

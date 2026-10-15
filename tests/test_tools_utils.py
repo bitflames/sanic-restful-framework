@@ -1,8 +1,6 @@
 """Unit tests for srf.tools.utils."""
 
-import re
 
-import pytest
 
 from srf.tools.utils import camel_to_snake, generate_code
 

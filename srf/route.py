@@ -2,35 +2,46 @@ import inspect
 
 from sanic import Blueprint
 
-from srf.views.base import BaseViewSet
+from srf.views.base import GenericAPIView
+
+COLLECTION_ACTIONS = {"get": "list", "post": "create"}
+DETAIL_ACTIONS = {"get": "retrieve", "put": "update", "patch": "update", "delete": "destroy"}
+
+
+def implemented_actions(view_cls: type[GenericAPIView], mapping: dict[str, str]) -> dict[str, str]:
+    """Keep method→action pairs the view class actually defines."""
+    return {method: action for method, action in mapping.items() if callable(getattr(view_cls, action, None))}
 
 
 class SanicRouter:
+
     def __init__(self, bp: Blueprint = None, prefix: str = ""):
         self.prefix = f"/{prefix.strip('/')}" if prefix else ""
         self.bp = bp or Blueprint(self.prefix.strip("/") or "api")
 
-    def register(self, path: str, view_cls: type[BaseViewSet], name: str | None = None) -> None:
+    def register(self, path: str, view_cls: type[GenericAPIView], name: str | None = None) -> None:
         name = name or path
         path = path.strip("/")
         base_uri = f"{self.prefix}/{path}"
 
-        # List and create: collection route (no pk)
-        self.bp.add_route(
-            view_cls.as_view(actions={"get": "list", "post": "create"}),
-            base_uri,
-            methods=["GET", "POST"],
-            name=f"{name}-list",
-        )
+        # HTTP method → view action. patch stays on update until partial_update exists.
+        collection = implemented_actions(view_cls, COLLECTION_ACTIONS)
+        if collection:
+            self.bp.add_route(
+                view_cls.as_view(actions=collection),
+                base_uri,
+                methods=[method.upper() for method in collection],
+                name=f"{name}-list",
+            )
 
-        # Retrieve, update, destroy: detail route (with pk)
-        detail_uri = f"{base_uri}/<pk:int>"
-        self.bp.add_route(
-            view_cls.as_view(actions={"get": "retrieve"}),
-            detail_uri,
-            methods=["GET", "PUT", "PATCH", "DELETE"],
-            name=f"{name}-detail",
-        )
+        detail = implemented_actions(view_cls, DETAIL_ACTIONS)
+        if detail:
+            self.bp.add_route(
+                view_cls.as_view(actions=detail),
+                f"{base_uri}/<pk>",
+                methods=[method.upper() for method in detail],
+                name=f"{name}-detail",
+            )
 
         # decorator route: custom @action methods use the same as_view() so permission/exception handling are unified
         for func_name, func in inspect.getmembers(view_cls, predicate=inspect.isfunction):
@@ -51,7 +62,7 @@ class SanicRouter:
                         [
                             self.prefix.lstrip("/"),
                             path.rstrip("/"),
-                            "<pk:int>",
+                            "<pk>",
                             extra_info["url_path"].lstrip("/"),
                         ]
                     )
