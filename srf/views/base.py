@@ -2,17 +2,17 @@ import asyncio
 from collections.abc import Iterable
 from typing import ClassVar
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError as PydanticValidationError
 from sanic import Request
-from sanic.exceptions import Forbidden, HTTPException, NotFound
+from sanic.exceptions import Forbidden, MethodNotAllowed, NotFound
 from sanic.response import HTTPResponse, JSONResponse
 from sanic.views import HTTPMethodView
-from tortoise import exceptions
+from tortoise.exceptions import IntegrityError, ValidationError as TortoiseValidationError
 from tortoise.models import Model as TorModel
 from tortoise.queryset import QuerySet as QuerySetType
 
 from srf.config import settings
-from srf.exceptions import TargetObjectAlreadyExist
+from srf.exceptions import PydanticValidationException, TargetObjectAlreadyExist
 from srf.filters import BaseFilter
 from srf.paginator import BasePagination
 from srf.permission.permission import BasePermission
@@ -40,7 +40,7 @@ class CreateModelMixin:
         """
         try:
             return await self.get_queryset().model.create(**sch_model.model_dump(exclude_unset=True, exclude_none=True))
-        except exceptions.IntegrityError:
+        except IntegrityError:
             raise TargetObjectAlreadyExist(message="data conflict")
 
 
@@ -53,7 +53,7 @@ class RetrieveModelMixin:
 
 
 class UpdateModelMixin:
-    async def update(self, request: Request, pk: int, *args, **kwargs) -> JSONResponse:
+    async def update(self, request: Request, pk, *args, **kwargs) -> JSONResponse:
         """Update an orm model instance."""
         if request.json is None:
             return HTTPResponse(status=HTTPStatus.HTTP_400_BAD_REQUEST)
@@ -80,7 +80,7 @@ class UpdateModelMixin:
 
 
 class DestroyModelMixin:
-    async def destroy(self, request: Request, pk: int, *args, **kwargs) -> HTTPResponse:
+    async def destroy(self, request: Request, pk, *args, **kwargs) -> HTTPResponse:
         """Delete an orm model instance."""
         orm_model: TorModel = await self.get_object(pk)
         await self.perform_destroy(orm_model)
@@ -109,6 +109,7 @@ class GenericAPIView(HTTPMethodView):
     pagination_class: type[BasePagination]
     queryset: QuerySetType | None = None
     filter_class: ClassVar[list[type[BaseFilter]]]
+    schema: ClassVar[type[BaseModel] | None] = None
 
     def __init__(self, *args, **kwargs):
         cls = type(self)
@@ -117,11 +118,19 @@ class GenericAPIView(HTTPMethodView):
         self.pagination_class = getattr(cls, "pagination_class", settings.PAGINATION_CLASS)
         super().__init__(*args, **kwargs)
 
-    def get_schema(self, *args, **kwargs) -> type[BaseModel]:
+    def get_schema(self) -> type[BaseModel]:
         """
-        get pydantic model
+        Return the Pydantic model class for this view action.
+
+        Override this method (or set class attribute ``schema``) like DRF's ``get_serializer_class`` /
+        ``serializer_class``. Uses ``self.action`` and ``self.request`` set by ``as_view`` — do not pass
+        ``request`` as a parameter.
         """
-        return self.schema
+        schema_cls: BaseModel = getattr(type(self), "schema", None)
+        assert schema_cls is not None, (
+            f"'{self.__class__.__name__}' should either include a `schema` attribute, " "or override the `get_schema` method."
+        )
+        return schema_cls
 
     def get_current_user(self, request: Request):
         """Retrieve the currently logged-in user"""
@@ -160,11 +169,28 @@ class GenericAPIView(HTTPMethodView):
             if not result:
                 raise Forbidden(message="Forbidden")
 
-    async def get_object(self, id: int):
+    def normalize_pk(self, pk, model: type[TorModel] | None = None):
+        """
+        Coerce the route parameter pk to the model's pk type before it reaches a query.
+
+        Sanic always hands ``<pk>`` over as str. Querying with the raw str only  works by implicit conversion,
+        and a non-integer pk against an int field raises ValueError deep inside Tortoise (a 500).
+        Convert up front: a pk that cannot be parsed can never match a row, so respond 404.
+        """
+        if model is None:
+            model = self.get_queryset().model
+        try:
+            return model._meta.pk.to_db_value(pk, None)
+        except (ValueError, TypeError, TortoiseValidationError) as e:
+            raise NotFound(message=f"Object with pk={pk} not found") from e
+
+    async def get_object(self, pk):
         """Get an orm model instance."""
-        instance: TorModel | None = await self.get_queryset().get_or_none(id=id)
+        queryset = self.get_queryset()
+        pk = self.normalize_pk(pk, queryset.model)
+        instance: TorModel | None = await queryset.get_or_none(pk=pk)
         if instance is None:
-            raise NotFound(message=f"Object with id={id} not found")
+            raise NotFound(message=f"Object with pk={pk} not found")
 
         await self.check_object_permissions(instance)
 
@@ -195,42 +221,30 @@ class GenericAPIView(HTTPMethodView):
     @classmethod
     def as_view(cls, actions: dict[str, str] | None = None):
         """
-        Construct a view function for registering with Sanic routers.
-        custom actions: {'get': 'list', 'post': 'create', ...}
-        """
-        default_actions = {
-            "get": "list",
-            "post": "create",
-            "put": "update",
-            "patch": "update",
-            "delete": "destroy",
-        }
+        Construct a view function for registering with Sanic.
 
-        actions = actions or {}
-        action_map = {**default_actions, **actions}
+        ``actions`` maps an HTTP method to a view method, for example `{"get": "list"}`` or ``{"get": "retrieve"}``.
+        Callers pass this map explicitly: ``SanicRouter.register`` builds it,
+        and ``add_route`` callers pass it themselves. Sanic's default route method is GET; that does not choose ``list`` versus ``retrieve``.
+        """
+        if not actions:
+            raise TypeError("The actions argument must be provided when calling as_view() on a ViewSet. " "For example as_view({'get': 'list'}).")
 
         async def view(request, *args, **kwargs):
             self = cls()  # a new instance for each request
             self.request = request
             method = request.method.lower()
 
-            if (handler_name := action_map.get(method)) is None or (handler := getattr(self, handler_name, None)) is None:
-                return JSONResponse({"error": f"Method {request.method} not allowed"}, status=HTTPStatus.HTTP_405_METHOD_NOT_ALLOWED)
+            if (handler_name := actions.get(method)) is None or (handler := getattr(self, handler_name, None)) is None:
+                raise MethodNotAllowed(message=f"Method {request.method} not allowed", method=request.method)
 
             self.action = handler_name
             await self.check_permissions(request)
 
             try:
                 return await handler(request, *args, **kwargs)
-            except exceptions.DoesNotExist:
-                return HTTPResponse(
-                    "Please ensure that the resource you are accessing exists and that you have permission to access it",
-                    status=HTTPStatus.HTTP_404_NOT_FOUND,
-                )
-            except ValidationError as e:
-                return JSONResponse({"detail": str(e)}, status=HTTPStatus.HTTP_422_UNPROCESSABLE_ENTITY)
-            except HTTPException as e:
-                return JSONResponse({"detail": getattr(e, "message", "Error")}, status=e.status_code)
+            except (PydanticValidationError, TortoiseValidationError) as e:
+                raise PydanticValidationException(message=str(e))
 
         return view
 

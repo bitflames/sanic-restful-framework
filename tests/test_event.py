@@ -1,6 +1,7 @@
 """Unit tests for srf.event."""
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,7 +11,7 @@ from sanic.exceptions import Forbidden
 from srf.event.models import Event
 from srf.event.schema import EventSchema
 from srf.event.viewset import EventViewSet
-from srf.permission.permission import IsRoleAdminUser
+from srf.permission.permission import SuperuserOnly
 
 
 class TestEventSchemas:
@@ -34,7 +35,7 @@ class TestEventSchemas:
         with pytest.raises(ValidationError):
             EventSchema.model_validate({"action": "x" * 129})
 
-    def test_schema_builds_url(self):
+    def test_schema_accepts_full_payload(self):
         sch = EventSchema.model_validate(
             {
                 "id": 3,
@@ -46,44 +47,49 @@ class TestEventSchemas:
                 "create_time": datetime(2026, 8, 14, 4, 0, tzinfo=timezone.utc),
             }
         )
-        assert sch.url == "/events/3"
+        assert sch.id == 3
         assert sch.user_id == 9
+        assert sch.create_time == datetime(2026, 8, 14, 4, 0, tzinfo=timezone.utc)
 
 
 class TestEventViewSet:
     def test_get_schema_is_event_schema(self):
         vs = EventViewSet()
-        request = MagicMock()
-        request.method = "GET"
-        assert vs.get_schema(request) is EventSchema
-        request.method = "POST"
-        assert vs.get_schema(request) is EventSchema
+        vs.request = MagicMock()
+        vs.action = "retrieve"
+        assert vs.get_schema() is EventSchema
+        vs.action = "create"
+        assert vs.get_schema() is EventSchema
+
+    def _superuser_view(self):
+        vs = EventViewSet()
+        vs.request = MagicMock()
+        vs.request.ctx.user = SimpleNamespace(is_superuser=True)
+        return vs
 
     def test_queryset_uses_event_model(self):
         with patch.object(Event, "all", return_value="qs") as all_mock:
-            assert EventViewSet().queryset == "qs"
+            assert self._superuser_view().queryset == "qs"
             all_mock.assert_called_once()
 
-    def test_permission_is_admin(self):
-        assert EventViewSet.permission_classes == (IsRoleAdminUser,)
+    def test_permission_is_superuser_only(self):
+        assert EventViewSet.permission_classes == (SuperuserOnly,)
 
     def test_search_and_filter_fields_match_model(self):
         assert "action" in EventViewSet.search_fields
         assert "obj_name" in EventViewSet.search_fields
-        assert EventViewSet.filter_fields["user_id"] == "user_id"
-        assert EventViewSet.filter_fields["obj_id"] == "obj_id"
+        assert "user_id" in EventViewSet.filter_fields
+        assert "obj_id" in EventViewSet.filter_fields
 
     @pytest.mark.asyncio
-    async def test_check_permissions_requires_admin_role(self):
+    async def test_check_permissions_requires_superuser(self):
         vs = EventViewSet()
         request = MagicMock()
-        request.ctx.user = MagicMock()
-        request.ctx.user.role = MagicMock()
-        request.ctx.user.role.name = "user"
+        request.ctx.user = SimpleNamespace(is_superuser=False)
         with pytest.raises(Forbidden):
             await vs.check_permissions(request)
 
-        request.ctx.user.role.name = "admin"
+        request.ctx.user = SimpleNamespace(is_superuser=True)
         await vs.check_permissions(request)
 
     @pytest.mark.asyncio

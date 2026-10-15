@@ -35,10 +35,12 @@ class ViewWithOrderingDict:
 
 
 class TestSearchFilter:
-    def test__filter_params(self):
+    def test_reads_search_query_param(self):
         view = ViewWithSearchFields()
         f = SearchFilter(view)
-        assert f._filter_params == "search"
+        request = MagicMock()
+        request.args.get.side_effect = lambda key, default=None: "foo" if key == "search" else default
+        assert f.get_search_terms(request) == ["foo"]
 
     def test_get_search_terms_empty(self):
         view = ViewWithSearchFields()
@@ -78,10 +80,15 @@ class TestSearchFilter:
 
 
 class TestJsonLogicFilter:
-    def test__filter_params_returns_filter(self):
+    def test_reads_filter_query_param(self):
         view = ViewWithFilterFields()
         f = JsonLogicFilter(view)
-        assert f._filter_params == "filter"
+        request = MagicMock()
+        request.args.get.side_effect = lambda key, default=None: "{}" if key == "filter" else default
+        qs = MagicMock()
+        result = f.filter_queryset(request, qs)
+        assert result is qs
+        qs.filter.assert_not_called()
 
     def test_filter_fields_set_in_init(self):
         view = ViewWithFilterFields()
@@ -173,7 +180,9 @@ class TestOrderingFactory:
         view = ViewWithOrderingFields()
         f = OrderingFactory(view)
         request = MagicMock()
-        request.args.get.return_value = None
+        # Real Sanic returns "" here (missing param, bare `?ordering`, and `?ordering=` all yield ""),
+        # so the mock must mirror that instead of returning None.
+        request.args.get.return_value = ""
         qs = MagicMock()
         result = f.filter_queryset(request, qs)
         assert result is qs

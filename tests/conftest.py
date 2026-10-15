@@ -42,3 +42,15 @@ def mock_request():
     req.headers = {}
     req.path = "/api/items/"
     return req
+
+
+def pytest_collection_modifyitems(items):
+    """Run the real-server tests (tests/test_app_server.py) last.
+
+    sanic_testing's ReusableClient leaves the process in a state that makes a
+    later SanicTestClient server startup hang, so every other test module must
+    complete first.
+    """
+    server_items = [item for item in items if item.path.name == "test_app_server.py"]
+    if server_items:
+        items[:] = [item for item in items if item not in server_items] + server_items

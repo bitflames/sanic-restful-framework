@@ -1,16 +1,21 @@
 from typing import ClassVar
 
+import jwt
+from jwt.exceptions import InvalidTokenError
 from redis.asyncio import Redis
 from sanic import Request, Sanic
-from sanic.constants import SAFE_HTTP_METHODS
-from sanic.exceptions import BadRequest, ServerError
+from sanic.exceptions import BadRequest, Forbidden, ServerError
 from sanic.response import HTTPResponse, JSONResponse
 from sanic_jwt import Initialize
 from sanic_jwt.authentication import Authentication
+from sanic_jwt.exceptions import MissingAuthorizationCookie, MissingAuthorizationHeader, MissingAuthorizationQueryArg
+from tortoise.exceptions import IntegrityError
 from tortoise.queryset import QuerySet
+from tortoise.transactions import in_transaction
 
 from srf.auth import models, schema
 from srf.config import settings
+from srf.exceptions import TargetObjectAlreadyExist
 from srf.permission.permission import IsAuthenticated
 from srf.tools.email import EmailCodeVerifySchema, EmailValidator, send_verify_code
 from srf.tools.utils import generate_code
@@ -26,7 +31,7 @@ from .auth import (
     store_refresh_token,
     update_user_last_login,
 )
-from .schema import ChangePasswordSchema, UserSchemaWriter, unwrap_secret
+from .models import RefreshToken
 
 
 def setup_auth(app: Sanic, *args, **kwargs) -> Initialize:
@@ -63,18 +68,35 @@ def setup_auth(app: Sanic, *args, **kwargs) -> Initialize:
     )
 
 
+def _decode_access_token(auth: Authentication, token: str, secret) -> dict:
+    """Verify the access-token signature and ignore expiry so logout can still revoke refresh."""
+    kwargs = {}
+    if "claim_aud" in auth.config:
+        kwargs["audience"] = auth.config.claim_aud()
+    if "claim_iss" in auth.config:
+        kwargs["issuer"] = auth.config.claim_iss()
+    return jwt.decode(
+        token,
+        secret,
+        algorithms=[auth._get_algorithm()],
+        options={"verify_signature": True, "verify_exp": False},
+        **kwargs,
+    )
+
+
 async def logout(request: Request):
     auth: Authentication | None = getattr(request.app.ctx, "auth", None)
     if auth is None:
         raise ServerError("JWT is not configured; call register_auth_urls() first")
     try:
-        payload = await auth.extract_payload(request, verify=False)
-    except Exception:  # noqa: BLE001
+        token = auth._get_token(request)
+        secret = await auth._get_secret(token)
+        payload = _decode_access_token(auth, token, secret)
+    except (InvalidTokenError, MissingAuthorizationHeader, MissingAuthorizationCookie, MissingAuthorizationQueryArg):
         return HTTPResponse(status=HTTPStatus.HTTP_200_OK)
-    if isinstance(payload, dict):
-        user_id = payload.get("user_id")
-        if user_id is not None:
-            await revoke_refresh_token(request, user_id)
+    user_id = payload.get("user_id")
+    if user_id is not None:
+        await revoke_refresh_token(request, user_id)
     return HTTPResponse(status=HTTPStatus.HTTP_200_OK)
 
 
@@ -86,7 +108,7 @@ async def register(request: Request):
 
     # Fetch and validate verification code from Redis
     redis: Redis = request.app.ctx.redis
-    email_cache_key = f"{settings.EMAIL_CODE_REDIS}_{sch_email_verification.email}"
+    email_cache_key = f"{settings.EMAIL_CODE_REDIS}_{sch_email_verification.email.lower()}"
     stored_code = await redis.get(email_cache_key)
 
     # Verify the code, then delete it whether it was missing or incorrect.
@@ -96,13 +118,13 @@ async def register(request: Request):
     await redis.delete(email_cache_key)
 
     # Validate schema; unwrap SecretStr here, create_user only accepts plaintext str.
-    sch_user_in = UserSchemaWriter.model_validate(request.json, extra="ignore")
+    sch_user_in = schema.UserSchemaWriter.model_validate(request.json, extra="ignore")
     user_data = sch_user_in.model_dump(
         exclude_unset=True,
         exclude_none=True,
         exclude={"password", "password_confirm"},
     )
-    user_data["password"] = unwrap_secret(sch_user_in.password)
+    user_data["password"] = schema.unwrap_secret(sch_user_in.password)
     user_db = await models.User.create_user(user_data)
     await update_user_last_login(user_db)
     user_return_data = await gen_user_access_token(request, user_db)
@@ -119,14 +141,16 @@ async def send_email_with_redis_code(request: Request):
     if not request.json:
         raise BadRequest("JSON request body is required.")
     email = EmailValidator.model_validate(request.json, extra="ignore").email
-    code = generate_code(5)
-    email_cache_key = f"{settings.EMAIL_CODE_REDIS}_{email}"
+    email_cache_key = f"{settings.EMAIL_CODE_REDIS}_{email.lower()}"
 
     # Check cache
     redis: Redis = request.app.ctx.redis
     if await redis.get(email_cache_key) is not None:
         return HTTPResponse("Verification email already sent. Please check your email.", status=HTTPStatus.HTTP_429_TOO_MANY_REQUESTS)
-    await redis.set(email_cache_key, code, ex=settings.USER_REGISTER_EMAIL_VERIFY_CODE_TTL, nx=True)
+    code = generate_code(5)
+    created = await redis.set(email_cache_key, code, ex=settings.USER_REGISTER_EMAIL_VERIFY_CODE_TTL, nx=True)
+    if not created:
+        return HTTPResponse("Verification email already sent. Please check your email.", status=HTTPStatus.HTTP_429_TOO_MANY_REQUESTS)
 
     # Send verification code to email in background
     async def _send_and_cleanup(email, code):
@@ -146,21 +170,34 @@ class UserViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated,)
     search_fields: ClassVar[list[str]] = ["username", "email"]
     filter_fields: ClassVar[list[str]] = search_fields
+    ordering_fields: ClassVar[list[str]] = ["id", "username", "is_active", "create_time", "update_time"]
+
+    async def get_object(self, pk):
+        """Get user object by ID. Only superuser can get other user's information."""
+        pk = self.normalize_pk(pk)
+        if self.request.ctx.user.is_superuser:
+            return await super().get_object(pk)
+        if pk != self.request.ctx.user.id:
+            raise Forbidden(message="Forbidden")
+        return self.request.ctx.user
 
     @property
     def queryset(self) -> QuerySet:
-        return models.User.all()
+        return models.User.filter(id=self.request.ctx.user.id) if not self.request.ctx.user.is_superuser else models.User.all()
 
-    def get_schema(self, request: Request, *args, **kwargs):
-        if request.method.lower() in SAFE_HTTP_METHODS:
+    def get_schema(self):
+        action = getattr(self, "action", None)
+        if action in ("list", "retrieve", "get_self"):
             return schema.UserSchemaReader
-        if request.method.upper() in ("PUT", "PATCH"):
+        if action == "create":
+            return schema.UserSchemaWriter
+        if action == "update":
             return schema.UserSchemaUpdate
-        return schema.UserSchemaWriter
+        return schema.UserSchemaReader
 
     @action(detail=False, url_name="self", url_path="self")
     async def get_self(self, request: Request):
-        user_json = self.get_schema(request).model_validate(request.ctx.user).model_dump(mode="json")
+        user_json = self.get_schema().model_validate(request.ctx.user).model_dump(mode="json")
         return JSONResponse(user_json)
 
     @action(detail=False, methods=["post"], url_name="change-password", url_path="change-password")
@@ -168,23 +205,62 @@ class UserViewSet(BaseViewSet):
         """Change password for the authenticated user (SHA-256 + bcrypt)."""
         if not request.json:
             raise BadRequest("JSON request body is required.")
-        sch = ChangePasswordSchema.model_validate(request.json)
+        sch = schema.ChangePasswordSchema.model_validate(request.json)
         user: models.User = request.ctx.user
-        old_password = unwrap_secret(sch.old_password)
+        old_password = schema.unwrap_secret(sch.old_password)
         if not old_password or not user.verify_password(old_password):
             raise BadRequest("The old password is incorrect.")
-        new_password = unwrap_secret(sch.password)
+        new_password = schema.unwrap_secret(sch.password)
         assert new_password is not None  # validated by ChangePasswordSchema
         user.password = models.User.hash_password(new_password)
-        await user.save()
+
+        # update and delete refresh token in a transaction
+        async with in_transaction() as conn:
+            await user.save(using_db=conn)
+            await RefreshToken.filter(user=user).using_db(conn).delete()
         return HTTPResponse(status=HTTPStatus.HTTP_200_OK)
 
-    async def perform_create(self, sch_model: UserSchemaWriter):
-        """Create ORM user from Pydantic schema. TODO: verify email availability."""
-        data = sch_model.model_dump(
+    async def create(self, request: Request, *args, **kwargs) -> HTTPResponse:
+        """Create a user by superuser. The write schema validates input; the read schema serializes the new row."""
+        if request.json is None:
+            return HTTPResponse(status=HTTPStatus.HTTP_400_BAD_REQUEST)
+        if not self.request.ctx.user.is_superuser:
+            raise Forbidden(message="Forbidden")
+        sch_model_in = schema.UserSchemaWriter.model_validate(request.json, strict=True)
+        orm_model = await self.perform_create(sch_model_in)
+        sch_model_out = schema.UserSchemaReader.model_validate(orm_model, from_attributes=True)
+        return JSONResponse(sch_model_out.model_dump(mode="json"), status=HTTPStatus.HTTP_201_CREATED)
+
+    async def perform_create(self, sch_model: schema.UserSchemaWriter):
+        """Create ORM user from Pydantic schema. TODO: verify email availability.
+        Only superuser can create user.  # TODO , is_superuser, is_active, roles
+        """
+        if not self.request.ctx.user.is_superuser:
+            raise Forbidden(message="Forbidden")
+        user_data = sch_model.model_dump(
             exclude_unset=True,
             exclude_none=True,
-            exclude={"password", "password_confirm"},
+            exclude={"password", "password_confirm", "is_superuser", "is_active"},
         )
-        data["password"] = unwrap_secret(sch_model.password)
-        return await models.User.create_user(data)
+        user_data["password"] = schema.unwrap_secret(sch_model.password)
+        return await models.User.create_user(user_data)
+
+    async def update(self, request: Request, pk, *args, **kwargs) -> JSONResponse:
+        """Update a user. The update schema validates input; the read schema serializes the row."""
+        if request.json is None:
+            return HTTPResponse(status=HTTPStatus.HTTP_400_BAD_REQUEST)
+        sch_model_in = schema.UserSchemaUpdate.model_validate(request.json, strict=True)
+        orm_model = await self.get_object(pk)
+        orm_model = await self.perform_update(sch_model_in, orm_model)
+        sch_model_out = schema.UserSchemaReader.model_validate(orm_model, from_attributes=True)
+        return JSONResponse(sch_model_out.model_dump(mode="json"))
+
+    async def perform_update(self, sch_model: schema.UserSchemaUpdate, orm_model: models.User) -> models.User:
+        """
+        sch_model: instance of BaseModel
+        orm_model: instance of TorModel
+        """
+        try:
+            return await super().perform_update(sch_model, orm_model)
+        except IntegrityError:
+            raise TargetObjectAlreadyExist(message="data conflict")

@@ -33,7 +33,7 @@ from srf.exceptions import TargetObjectAlreadyExist
 from srf.middleware.authmiddleware import set_user_to_request_ctx
 from srf.permission.permission import BasePermission, IsAuthenticated
 from srf.route import SanicRouter
-from srf.views import BaseViewSet, action
+from srf.views import BaseViewSet, GenericAPIView, action
 from tests.app_models import SecretNote
 from tests.tortoise_config import TORTOISE_ORM
 
@@ -107,6 +107,33 @@ class SecretNoteViewSet(BaseViewSet):
             raise TargetObjectAlreadyExist(message="data conflict")
 
 
+class RouterWidgetViewSet(GenericAPIView):
+    """Registered with SanicRouter. list and retrieve only, so the detail route is GET."""
+
+    async def list(self, request):
+        return json({"source": "router", "action": self.action})
+
+    async def retrieve(self, request, pk):
+        return json({"source": "router", "action": self.action, "pk": pk})
+
+
+class CustomActionViewSet(GenericAPIView):
+    """as_view action name is not limited to list/retrieve."""
+
+    async def qwe(self, request):
+        return json({"action": self.action, "handler": "qwe"})
+
+
+class ManualWidgetViewSet(GenericAPIView):
+    """Registered with Blueprint.add_route and app.add_route, without SanicRouter."""
+
+    async def list(self, request):
+        return json({"source": "add_route", "action": self.action})
+
+    async def retrieve(self, request, pk):
+        return json({"source": "add_route", "action": self.action, "pk": pk})
+
+
 class ProfileViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated,)
 
@@ -114,7 +141,7 @@ class ProfileViewSet(BaseViewSet):
     def queryset(self):
         return User.all()
 
-    def get_schema(self, request, *args, is_safe=False, **kwargs):
+    def get_schema(self):
         from srf.auth.schema import UserSchemaReader
 
         return UserSchemaReader
@@ -126,10 +153,35 @@ class ProfileViewSet(BaseViewSet):
             {
                 "ok": True,
                 "user_id": user.id,
-                "username": user.name,
+                "username": user.username,
                 "email": user.email,
             }
         )
+
+
+async def _upsert_user(*, username: str, email: str, password: str, role: Role, is_superuser: bool = False) -> User:
+    """create_user always forces is_superuser=False; the harness sets the flag afterwards."""
+    user = await User.filter(email=email).first()
+    if user is None:
+        user = await User.create_user(
+            {
+                "username": username,
+                "email": email,
+                "password": password,
+                "roles": [role.name],
+            }
+        )
+    else:
+        user.username = username
+        user.password = User.hash_password(password)
+        user.is_active = True
+        await user.save()
+        await user.roles.clear()
+        await user.roles.add(role)
+    if user.is_superuser != is_superuser:
+        user.is_superuser = is_superuser
+        await user.save(update_fields=["is_superuser"])
+    return user
 
 
 async def ensure_seed_data() -> User:
@@ -138,41 +190,14 @@ async def ensure_seed_data() -> User:
         defaults={"description": "default user role"},
     )
     admin_role, _ = await Role.get_or_create(name=ADMIN_ROLE, defaults={"description": "admin role"})
-
-    user = await User.filter(email=SEED_EMAIL).first()
-    if user is None:
-        user = await User.create_user(
-            {
-                "name": SEED_USERNAME,
-                "email": SEED_EMAIL,
-                "password": SEED_PASSWORD,
-                "role_name": SEED_ROLE,
-                "is_active": True,
-            }
-        )
-    else:
-        user.password = User.hash_password(SEED_PASSWORD)
-        user.is_active = True
-        user.role = role
-        await user.save()
-
-    admin = await User.filter(email=ADMIN_EMAIL).first()
-    if admin is None:
-        await User.create_user(
-            {
-                "name": ADMIN_USERNAME,
-                "email": ADMIN_EMAIL,
-                "password": ADMIN_PASSWORD,
-                "role_name": ADMIN_ROLE,
-                "is_active": True,
-            }
-        )
-    else:
-        admin.password = User.hash_password(ADMIN_PASSWORD)
-        admin.is_active = True
-        admin.role = admin_role
-        await admin.save()
-
+    user = await _upsert_user(username=SEED_USERNAME, email=SEED_EMAIL, password=SEED_PASSWORD, role=role)
+    await _upsert_user(
+        username=ADMIN_USERNAME,
+        email=ADMIN_EMAIL,
+        password=ADMIN_PASSWORD,
+        role=admin_role,
+        is_superuser=True,
+    )
     return user
 
 
@@ -182,6 +207,9 @@ def create_app() -> Sanic:
     app.config.SECRET_KEY = SECRET_KEY
     app.config.NON_AUTH_ENDPOINTS = tuple(settings.NON_AUTH_ENDPOINTS) + (
         "/api/public/hello",
+        "/api/public/router-widgets",
+        "/api/public/manual-widgets",
+        "/api/public/qwe",
         "/health",
         "/api/auth/test/social-provision",
     )
@@ -195,7 +223,28 @@ def create_app() -> Sanic:
     router.register("profile", ProfileViewSet, name="profile")
     router.register("events", EventViewSet, name="events")
     router.register("notes", SecretNoteViewSet, name="notes")
-    app.blueprint(router.get_blueprint())
+    router.register("public/router-widgets", RouterWidgetViewSet, name="router-widgets")
+
+    api = router.get_blueprint()
+    # Collection route: pass the action map explicitly. methods limits the verbs Sanic accepts.
+    api.add_route(
+        ManualWidgetViewSet.as_view({"get": "list"}),
+        "/api/public/manual-widgets",
+        methods=["GET"],
+        name="manual-widgets-list",
+    )
+    app.blueprint(api)
+    # Detail route on the app. Omitting methods uses Sanic's default, GET.
+    app.add_route(
+        ManualWidgetViewSet.as_view({"get": "retrieve"}),
+        "/api/public/manual-widgets/<pk>",
+        name="manual-widgets-detail",
+    )
+    app.add_route(
+        CustomActionViewSet.as_view({"get": "qwe"}),
+        "/api/public/qwe",
+        name="custom-qwe",
+    )
 
     @app.get("/health")
     async def health(_request):
@@ -217,19 +266,17 @@ def create_app() -> Sanic:
         role = await Role.filter(name=SEED_ROLE).first()
         if role is None:
             raise ServerError("default role is not configured")
-        user_db, created = await User.get_or_create(
-            email=email,
-            defaults={
-                "name": username,
-                "role": role,
-                "password": User.hash_password(secrets.token_urlsafe(32)),
-            },
-        )
-        user_db = await User.filter(id=user_db.id).select_related("role").first()
+        user_db = await User.filter(email=email.lower()).first()
+        created = user_db is None
         if user_db is None:
-            raise ServerError("user provisioning failed")
-        if user_db.role_id and not isinstance(getattr(user_db, "role", None), Role):
-            user_db.role = await Role.get(id=user_db.role_id)
+            user_db = await User.create_user(
+                {
+                    "username": username,
+                    "email": email,
+                    "password": secrets.token_urlsafe(32),
+                    "roles": [role.name],
+                }
+            )
         await update_user_last_login(user_db)
         payload = await gen_user_access_token(request, user_db)
         payload["created"] = created
@@ -239,8 +286,12 @@ def create_app() -> Sanic:
     async def auth_middleware(request):
         await set_user_to_request_ctx(request)
 
-    @app.before_server_start
+    @app.after_server_start
     async def setup(_app: Sanic):
+        # sanic-testing starts a worker whose :memory: database is empty until schemas are generated here.
+        from tortoise import Tortoise
+
+        await Tortoise.generate_schemas()
         _app.ctx.redis = _REDIS
         await ensure_seed_data()
 

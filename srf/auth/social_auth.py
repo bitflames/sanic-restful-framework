@@ -9,15 +9,15 @@ import aiohttp
 from sanic import Request
 from sanic.exceptions import BadRequest, NotFound
 from sanic.log import error_logger
-from sanic.response import JSONResponse
-from sanic.response import redirect as RedirectResponse
+from sanic.response import JSONResponse, redirect as RedirectResponse
 
 from srf.config import settings
+from srf.exceptions import TargetObjectAlreadyExist
 from srf.tools.signing import sign_state, unsign_state
 from srf.views.http_status import HTTPStatus
 
 from . import models
-from .auth import gen_user_access_token, update_user_last_login
+from .auth import check_active, gen_user_access_token, update_user_last_login
 
 DEFAULT_EXCHANGE_CODE_TTL = 300
 DEFAULT_EXCHANGE_CODE_PREFIX = "social-login"
@@ -261,6 +261,8 @@ async def github_login_callback(request: Request):
             )
         # Redirect with a temporary code so the JWT is never exposed in a URL.
         one_time_code = await _store_exchange_code(request, user_db.id)
+    except TargetObjectAlreadyExist:
+        raise
     except Exception:  # noqa: BLE001 - log and sanitize 500 response
         error_logger.exception("GitHub OAuth failed: provider=github stage=user-provisioning email=%s", _mask_email(primary_email))
         return JSONResponse({"error": "Could not complete social login"}, status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -287,8 +289,8 @@ async def github_login_by_code(request: Request):
         raise NotFound("Invalid authorization code") from None
 
     user_db = await models.User.filter(pk=user_id).prefetch_related("roles").first()
-    if user_db is None:
-        raise NotFound("User not found")
+    if user_db is None or not check_active(user_db):
+        raise NotFound("User not found or inactive")
 
     await update_user_last_login(user_db)
     user_return_data = await gen_user_access_token(request, user_db)

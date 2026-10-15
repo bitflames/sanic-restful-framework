@@ -111,6 +111,8 @@ class User(AbstractUser, PasswordMixin):
             user_info["password"] = cls.hash_password(raw_password)
         else:
             user_info["password"] = None
+        user_info["is_superuser"] = False
+        user_info["is_active"] = True
 
         async with in_transaction() as conn:
             existing = await cls.filter(Q(username=user_info["username"]) | Q(email=user_info["email"])).using_db(conn).first()

@@ -4,7 +4,6 @@ import operator
 from abc import ABC
 from collections.abc import Callable
 from typing import Any, ClassVar
-from urllib.parse import unquote
 
 from sanic import Request
 from sanic.exceptions import BadRequest
@@ -28,7 +27,8 @@ def visualize_q(q: Q, indent=0):
 
 class BaseFilter(ABC):
     # Name of the attribute on the view that lists allowed fields.
-    cls_fields: str
+    # Default None so a subclass missing it fails fast (TypeError) at class-definition time.
+    cls_fields: str | None = None
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -155,10 +155,6 @@ class QueryParamFilter(BaseFilter):
         _filter_keys = self.filter_fields.keys()
         if self.filter_fields:
             for key in request.args:
-                if key in ("ordering",):
-                    continue
-                if not any(key.startswith(field) for field in _filter_keys):
-                    continue
                 if key not in self.filter_fields:
                     continue
                 values = request.args.getlist(key)
@@ -176,8 +172,7 @@ class OrderingFactory(BaseFilter):
 
     def filter_queryset(self, request, queryset: QuerySet):
         order_by_fields = []
-        for raw in unquote(request.args.get("sort") or "").split(","):
-            raw = raw.strip()
+        for raw in request.args.get("ordering", "").strip().split(","):
             if not raw:
                 continue
             desc = raw.startswith("-")

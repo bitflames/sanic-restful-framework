@@ -1,13 +1,14 @@
 """Unit tests for srf.permission.permission."""
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from srf.permission.permission import (
     AllowAny,
     BasePermission,
     IsAuthenticated,
-    IsRoleAdminUser,
-    IsSafeMethodOnly,
+    SafeMethodOnly,
+    SuperuserOnly,
 )
 
 
@@ -49,59 +50,50 @@ class TestIsAuthenticated:
         assert IsAuthenticated.has_permission(request, None) is False
 
 
-class TestIsRoleAdminUser:
+class TestSuperuserOnly:
     def test_no_user_denied(self):
         request = MagicMock()
-        request.ctx = MagicMock()
-        request.ctx.user = None
-        assert IsRoleAdminUser.has_permission(request, None) is False
+        request.ctx = SimpleNamespace()
+        assert not SuperuserOnly.has_permission(request, None)
 
-    def test_no_role_denied(self):
+    def test_user_none_denied(self):
         request = MagicMock()
-        request.ctx = MagicMock()
-        request.ctx.user = MagicMock()
-        request.ctx.user.role = None
-        assert IsRoleAdminUser.has_permission(request, None) is False
+        request.ctx = SimpleNamespace(user=None)
+        assert not SuperuserOnly.has_permission(request, None)
 
-    def test_role_not_admin_denied(self):
+    def test_non_superuser_denied(self):
         request = MagicMock()
-        request.ctx = MagicMock()
-        request.ctx.user = MagicMock()
-        request.ctx.user.role = MagicMock()
-        request.ctx.user.role.name = "user"
-        assert IsRoleAdminUser.has_permission(request, None) is False
+        request.ctx = SimpleNamespace(user=SimpleNamespace(is_superuser=False))
+        assert not SuperuserOnly.has_permission(request, None)
 
-    def test_role_admin_allowed(self):
+    def test_superuser_allowed(self):
         request = MagicMock()
-        request.ctx = MagicMock()
-        request.ctx.user = MagicMock()
-        request.ctx.user.role = MagicMock()
-        request.ctx.user.role.name = "admin"
-        assert IsRoleAdminUser.has_permission(request, None) is True
+        request.ctx = SimpleNamespace(user=SimpleNamespace(is_superuser=True))
+        assert SuperuserOnly.has_permission(request, None) is True
 
 
-class TestIsSafeMethodOnly:
+class TestSafeMethodOnly:
     def test_get_allowed(self):
         request = MagicMock()
         request.method = "GET"
-        assert IsSafeMethodOnly.has_permission(request, None) is True
+        assert SafeMethodOnly.has_permission(request, None) is True
 
     def test_options_allowed(self):
         request = MagicMock()
         request.method = "OPTIONS"
-        assert IsSafeMethodOnly.has_permission(request, None) is True
+        assert SafeMethodOnly.has_permission(request, None) is True
 
     def test_post_denied(self):
         request = MagicMock()
         request.method = "POST"
-        assert IsSafeMethodOnly.has_permission(request, None) is False
+        assert SafeMethodOnly.has_permission(request, None) is False
 
     def test_put_denied(self):
         request = MagicMock()
         request.method = "PUT"
-        assert IsSafeMethodOnly.has_permission(request, None) is False
+        assert SafeMethodOnly.has_permission(request, None) is False
 
     def test_delete_denied(self):
         request = MagicMock()
         request.method = "DELETE"
-        assert IsSafeMethodOnly.has_permission(request, None) is False
+        assert SafeMethodOnly.has_permission(request, None) is False

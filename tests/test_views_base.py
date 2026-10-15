@@ -413,15 +413,17 @@ class TestBaseViewSet:
         instance = MagicMock()
         qs = MagicMock()
         qs.get_or_none = AsyncMock(return_value=instance)
+        # pk normalization reads the model's pk field; teach the mock to coerce str -> int.
+        qs.model._meta.pk.to_db_value = MagicMock(side_effect=lambda value, instance=None: int(value))
         view.get_queryset = MagicMock(return_value=qs)
         view.check_object_permissions = AsyncMock()
         request = MagicMock()
         view.request = request
 
-        result = await view.get_object(1)
+        result = await view.get_object("1")
 
         view.get_queryset.assert_called_once_with()
-        qs.get_or_none.assert_awaited_once_with(id=1)
+        qs.get_or_none.assert_awaited_once_with(pk=1)
         view.check_object_permissions.assert_awaited_once_with(instance)
         assert result is instance
 
@@ -437,13 +439,19 @@ class TestBaseViewSet:
         with pytest.raises(NotFound):
             await view.get_object(99)
 
+    def test_as_view_requires_actions(self):
+        with pytest.raises(TypeError):
+            MinimalViewSet.as_view()
+
     @pytest.mark.asyncio
-    async def test_as_view_method_not_allowed(self):
-        view_fn = MinimalViewSet.as_view()
+    async def test_as_view_uses_only_passed_actions(self):
+        from sanic.exceptions import MethodNotAllowed
+
+        view_fn = MinimalViewSet.as_view(actions={"get": "list"})
         request = MagicMock()
-        request.method = "OPTIONS"
-        response = await view_fn(request)
-        assert response.status == HTTPStatus.HTTP_405_METHOD_NOT_ALLOWED
+        request.method = "POST"
+        with pytest.raises(MethodNotAllowed):
+            await view_fn(request)
 
     @pytest.mark.asyncio
     async def test_as_view_validation_error_returns_422(self):
@@ -456,8 +464,11 @@ class TestBaseViewSet:
         view_fn = View.as_view(actions={"get": "list"})
         request = MagicMock()
         request.method = "GET"
-        response = await view_fn(request)
-        assert response.status == HTTPStatus.HTTP_422_UNPROCESSABLE_ENTITY
+        from srf.exceptions import PydanticValidationException
+
+        with pytest.raises(PydanticValidationException) as caught:
+            await view_fn(request)
+        assert caught.value.status_code == HTTPStatus.HTTP_422_UNPROCESSABLE_ENTITY
 
     @pytest.mark.asyncio
     async def test_as_view_http_exception_returns_status(self):
@@ -470,8 +481,9 @@ class TestBaseViewSet:
         view_fn = View.as_view(actions={"get": "list"})
         request = MagicMock()
         request.method = "GET"
-        response = await view_fn(request)
-        assert response.status == 403
+        with pytest.raises(Forbidden) as caught:
+            await view_fn(request)
+        assert caught.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_as_view_does_not_exist_returns_404(self):
@@ -484,5 +496,5 @@ class TestBaseViewSet:
         view_fn = View.as_view(actions={"get": "retrieve"})
         request = MagicMock()
         request.method = "GET"
-        response = await view_fn(request, pk=1)
-        assert response.status == HTTPStatus.HTTP_404_NOT_FOUND
+        with pytest.raises(DoesNotExist):
+            await view_fn(request, pk=1)

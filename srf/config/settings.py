@@ -83,6 +83,7 @@ SOCIAL_CONFIG = {
 NON_AUTH_ENDPOINTS = [
     "/api/auth/register",
     "/api/auth/login",
+    "/api/auth/logout",
     "/api/auth/refresh",
     "/api/auth/send-verification-email",
     "/api/auth/social/github/login",

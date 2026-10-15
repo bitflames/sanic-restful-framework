@@ -22,8 +22,8 @@ A RESTful API framework based on [Sanic](https://sanic.dev/), providing a Django
 
 - Python >= 3.11
 - Sanic >= 25.0.0
-- Tortoise ORM >= 0.20.0
-- Pydantic >= 2.6.0
+- Tortoise ORM >= 1.1.8
+- Pydantic >= 2.6.1
 
 ## Installation
 
@@ -48,7 +48,7 @@ To get started with SRF, follow these steps:
 
 2. **Create Pydantic schemas** for data validation and serialization. Define separate schemas for reading (output) and writing (input) operations.
 
-3. **Create a ViewSet** by inheriting from `BaseViewSet`. Configure the model, search fields, and filter fields. Implement the `queryset` property to return your model's queryset, and optionally override `get_schema()` to return different schemas based on the request method.
+3. **Create a ViewSet** by inheriting from `BaseViewSet`. Configure the model, search fields, and filter fields. Implement the `queryset` property to return your model's queryset, and optionally override `get_schema()` to return different schemas based on the current action.
 
 4. **Register routes** using `SanicRouter`. Create a router instance with an optional prefix, register your ViewSet with a path, and add the router's blueprint to your Sanic application.
 
@@ -60,11 +60,11 @@ To get started with SRF, follow these steps:
 
 `BaseViewSet` provides standard CRUD operations:
 
-- `list()` - GET /resource/ - Retrieve a list of resources
-- `create()` - POST /resource/ - Create a new resource
-- `retrieve()` - GET /resource/<id>/ - Retrieve a single resource
-- `update()` - PUT/PATCH /resource/<id>/ - Update a resource
-- `destroy()` - DELETE /resource/<id>/ - Delete a resource
+- `list()` - GET /resource - Retrieve a list of resources
+- `create()` - POST /resource - Create a new resource
+- `retrieve()` - GET /resource/<id> - Retrieve a single resource
+- `update()` - PUT/PATCH /resource/<id> - Update a resource
+- `destroy()` - DELETE /resource/<id> - Delete a resource
 
 ```python
 from srf.views import BaseViewSet
@@ -73,7 +73,7 @@ from .models import Project
 from .schema import ProjectSchemaReader
 
 class ProjectViewSet(BaseViewSet):
-    def get_schema(self, request, *args, is_safe=False, **kwargs):
+    def get_schema(self):
         return ProjectSchemaReader
 
     @property
@@ -94,14 +94,14 @@ from sanic.response import JSONResponse
 class ProjectViewSet(BaseViewSet):
     @action(detail=False, url_path="featured", methods=["get"])
     async def list_featured(self, request):
-        projects = await self.queryset.filter(is_featured=True)
-        schema = self._get_schema(request, is_safe=True)
-        data = [schema.model_validate(p).model_dump(by_alias=True) for p in await projects]
+        projects = self.queryset.filter(is_featured=True)
+        schema = self.get_schema()
+        data = [schema.model_validate(p, from_attributes=True).model_dump(by_alias=True) for p in await projects]
         return JSONResponse(data)
 
     @action(detail=True, url_path="archive", methods=["post"])
     async def archive(self, request, pk):
-        project = await self.get_object(request, pk)
+        project = await self.get_object(pk)
         project.is_archived = True
         await project.save()
         return JSONResponse({"status": "archived"})
@@ -114,26 +114,26 @@ The framework includes multiple built-in filters:
 #### 1. Search Filter (SearchFilter)
 
 ```python
-# GET /projects/?search=api
+# GET /projects?search=api
 # Searches for "api" in fields specified by search_fields
 ```
 
 #### 2. JSON Logic Filter (JsonLogicFilter)
 
 ```python
-# GET /projects/?filter={"and":[{"==":[{"var":"is_active"},true]},{"like":[{"var":"name"},"api"]}]}
+# GET /projects?filter={"and":[{"==":[{"var":"is_active"},true]},{"like":[{"var":"name"},"api"]}]}
 ```
 
 #### 3. Query Parameter Filter (QueryParamFilter)
 
 ```python
-# GET /projects/?name=myproject&is_active=true
+# GET /projects?name=myproject&is_active=true
 ```
 
 #### 4. Ordering Filter (OrderingFactory)
 
 ```python
-# GET /projects/?sort=name,-created_date
+# GET /projects?ordering=name,-created_date
 # Orders by name ascending, created_date descending
 ```
 
@@ -142,7 +142,7 @@ The framework includes multiple built-in filters:
 Pagination automatically reads `page` and `page_size` from query parameters:
 
 ```python
-# GET /projects/?page=1&page_size=20
+# GET /projects?page=1&page_size=20
 ```
 
 Response format:
@@ -171,27 +171,29 @@ app.middleware("request")(set_user_to_request_ctx)
 #### Permission Classes
 
 ```python
-from srf.permission.permission import IsAuthenticated, IsRoleAdminUser, IsSafeMethodOnly
+from srf.permission.permission import IsAuthenticated, SafeMethodOnly, SuperuserOnly
 
 class ProjectViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated,)  # Requires authentication
     # or
-    permission_classes = (IsRoleAdminUser,)  # Requires admin role
+    permission_classes = (SuperuserOnly,)  # Requires a superuser
     # or read-only: allow GET/HEAD/OPTIONS only
-    permission_classes = (IsSafeMethodOnly,)
+    permission_classes = (SafeMethodOnly,)
 ```
 
 ### Health Checks
 
-The framework provides health check routes:
+The framework provides a health check view that runs a configurable list of checks:
 
 ```python
-from srf.health.route import bp as health_bp
+from srf.health.checks import RedisCheck, SQLiteCheck
+from srf.health.viewset import health_check
 
-app.blueprint(health_bp)
+app.config.HEALTH_CHECK_LIST = [RedisCheck, SQLiteCheck]  # required
+app.add_route(health_check, "/health", methods=["GET"])
 ```
 
-Access `GET /health/` to check the status of various services. Register check classes (e.g. `RedisCheck`, `SQLiteCheck`) and attach dependencies (e.g. `app.ctx.redis`, `app.ctx.sqlite`) so the health blueprint can instantiate them.
+Each check is a class that is instantiated with the Sanic `app` and exposes the required clients — e.g. the Redis check uses `app.ctx.redis` and the SQLite check uses `app.ctx.sqlite`. Attach those clients to `app.ctx` before startup. Access `GET /health` to check the status of the registered services.
 
 ## Configuration
 
@@ -202,7 +204,7 @@ from srf.config import settings
 from srf.config.settings import DEFAULT_FILTERS
 
 app.config.JWT_SECRET = "your-secret-key"  # required for JWT / register_auth_urls
-app.config.NON_AUTH_ENDPOINTS = ("register", "login", "send-verification-email", "health", "callback", "login_by_code")
+app.config.NON_AUTH_ENDPOINTS = ("/api/auth/register", "/api/auth/login", "/api/auth/refresh")  # full request paths
 app.config.DEFAULT_FILTERS = DEFAULT_FILTERS
 app.config.EMAIL_CODE_REDIS = "EMAIL_CODE"
 app.config.REQUEST_LIMITERS = []
@@ -225,6 +227,18 @@ See `pyproject.toml` for the complete dependency list.
 ## Development
 
 ### Install Development Dependencies
+
+Development dependencies (pytest, black, isort, ruff, ...) are optional and are **not** installed by default:
+
+```bash
+# Production/runtime dependencies only (default)
+uv sync
+
+# Everything needed for local development
+uv sync --extra dev
+```
+
+Or with pip:
 
 ```bash
 pip install -e ".[dev]"
