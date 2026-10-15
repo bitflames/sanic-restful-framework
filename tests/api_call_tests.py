@@ -20,6 +20,10 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+import jwt
+
+from .app_server import JWT_SECRET
+
 BASE = "http://127.0.0.1:8800"
 AUTH = f"{BASE}/api/auth"
 EVENTS = f"{BASE}/api/events"
@@ -208,9 +212,6 @@ def call_logout_without_token() -> None:
 
 def call_logout_expired_access_revokes_refresh(user_id: int, refresh: str) -> None:
     """Expired access token still identifies the user and deletes the refresh row."""
-    import jwt
-
-    from tests.app_server import JWT_SECRET
 
     expired = jwt.encode({"user_id": user_id, "exp": 1}, JWT_SECRET, algorithm="HS256")
     status, _ = _request("POST", f"{AUTH}/logout", token=expired)
