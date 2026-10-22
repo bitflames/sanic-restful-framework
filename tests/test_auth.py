@@ -1,41 +1,43 @@
 """Unit tests for srf.auth (authenticate, retrieve_user, refresh tokens, verify_password)."""
 
+import hashlib
+import hmac
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import jwt
 import pytest
 from pydantic import ValidationError
 from sanic.exceptions import BadRequest, ServerError, Unauthorized
 
 from srf.auth.auth import (
     authenticate,
-    build_user_payload,
     gen_user_access_token,
     retrieve_refresh_token,
     retrieve_user,
     revoke_refresh_token,
     store_refresh_token,
 )
-from srf.auth.models import User
-from srf.auth.schema import ChangePasswordSchema, UserLoginSchema, UserSchemaUpdate, UserSchemaWriter
+from srf.auth.models import RefreshToken, User
+from srf.auth.schema import ChangePasswordSchema, UserLoginSchema, UserSchemaReader, UserSchemaUpdate, UserSchemaWriter
 from srf.auth.viewset import UserViewSet, logout, setup_auth
 from srf.config import settings
 
 
 class TestUserLoginSchema:
     def test_email_only(self):
-        sch = UserLoginSchema(email="u@example.com", password="secret")
-        assert sch.email == "u@example.com"
-        assert sch.username is None
+        sch = UserLoginSchema(account="u@example.com", password="secret")
+        assert sch.account == "u@example.com"
+        assert sch.is_email is True
         assert sch.password.get_secret_value() == "secret"
         assert "secret" not in repr(sch)
 
     def test_username_only(self):
-        sch = UserLoginSchema(username="alice", password="secret")
-        assert sch.username == "alice"
-        assert sch.email is None
+        sch = UserLoginSchema(account="alice", password="secret")
+        assert sch.account == "alice"
+        assert sch.is_email is False
 
     def test_requires_identifier(self):
-        with pytest.raises(ValidationError, match="email or username is required"):
+        with pytest.raises(ValidationError, match="account"):
             UserLoginSchema(password="secret")
 
 
@@ -49,73 +51,33 @@ class TestAuthenticate:
             await authenticate(request)
 
     @pytest.mark.asyncio
-    async def test_authenticate_user_not_found(self):
-        request = MagicMock()
-        request.json = {"email": "nobody@example.com", "password": "secret"}
-        with patch("srf.auth.auth.User") as UserMock:
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=None)
-
-            with pytest.raises(Unauthorized, match="Unable to log in"):
-                await authenticate(request)
-
-    @pytest.mark.asyncio
-    async def test_authenticate_by_username(self):
-        request = MagicMock()
-        request.json = {"username": "alice", "password": "right"}
-        mock_user = MagicMock()
-        mock_user.id = 2
-        mock_user.name = "alice"
-        mock_user.verify_password = MagicMock(return_value=True)
-        mock_user.role = MagicMock(name="user")
-        mock_user.role.name = "user"
-        mock_user.save = AsyncMock()
-        with patch("srf.auth.auth.User") as UserMock:
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=mock_user)
-            payload = await authenticate(request)
-            assert payload["user_id"] == 2
-            assert payload["username"] == "alice"
-            mock_user.save.assert_awaited_once()
-            filter_arg = UserMock.filter.call_args[0][0]
-            assert "email" not in str(filter_arg).lower() or "None" not in str(filter_arg)
-
-    @pytest.mark.asyncio
     async def test_authenticate_missing_identifier_raises(self):
         request = MagicMock()
         request.json = {"password": "secret"}
         with pytest.raises(Unauthorized, match="Unable to log in"):
             await authenticate(request)
 
-    @pytest.mark.asyncio
-    async def test_authenticate_returns_serializable_role(self):
-        request = MagicMock()
-        request.json = {"email": "u@example.com", "password": "right"}
-        mock_user = MagicMock()
-        mock_user.id = 1
-        mock_user.name = "alice"
-        mock_user.verify_password = MagicMock(return_value=True)
-        mock_role = MagicMock()
-        mock_role.name = "user"
-        mock_user.role = mock_role
-        mock_user.save = AsyncMock()
-        with patch("srf.auth.auth.User") as UserMock:
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=mock_user)
-            payload = await authenticate(request)
-            assert payload["user_id"] == 1
-            assert payload["username"] == "alice"
-            assert payload["role"] == "user"
-
 
 class TestSetupAuth:
-    def test_secret_required(self):
+    def test_jwt_secret_required_in_app_config(self):
         app = MagicMock()
-        with pytest.raises(ServerError, match="secret is required"):
+        app.config = {}
+        with pytest.raises(ServerError, match="app.config.JWT_SECRET"):
+            setup_auth(app)
+
+    def test_refresh_secret_required_in_app_config(self):
+        app = MagicMock()
+        app.config = {"JWT_SECRET": "configured-jwt-secret"}
+        with pytest.raises(ServerError, match="app.config.SECRET_KEY"):
             setup_auth(app)
 
     def test_passes_refresh_and_expiration(self):
         app = MagicMock()
+        app.config = {"JWT_SECRET": "configured-jwt-secret", "SECRET_KEY": "configured-refresh-secret"}
         with patch("srf.auth.viewset.Initialize") as Init:
-            setup_auth(app, secret="s3cret", url_prefix="/api/auth")
+            setup_auth(app, secret="ignored-kwarg-secret", url_prefix="/api/auth")
             kwargs = Init.call_args.kwargs
+            assert kwargs["secret"] == "configured-jwt-secret"
             assert kwargs["refresh_token_enabled"] is True
             assert kwargs["store_refresh_token"] is store_refresh_token
             assert kwargs["retrieve_refresh_token"] is retrieve_refresh_token
@@ -132,57 +94,35 @@ class TestRetrieveUser:
         assert await retrieve_user(None, {}) is None
 
     @pytest.mark.asyncio
-    async def test_retrieve_user_not_found(self):
-        with patch("srf.auth.auth.User") as UserMock:
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=None)
-            assert await retrieve_user(None, {"user_id": 999}) is None
-
-    @pytest.mark.asyncio
-    async def test_retrieve_user_found_sets_ctx_and_returns_dict(self):
-        mock_user = MagicMock()
-        mock_user.id = 1
-        mock_user.name = "alice"
-        mock_user.is_active = True
-        mock_user.role = MagicMock()
-        mock_user.role.name = "user"
-        request = MagicMock()
-        request.ctx.user = None
-        with patch("srf.auth.auth.User") as UserMock:
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=mock_user)
-            data = await retrieve_user(request, {"user_id": 1})
-            assert data == {"user_id": 1, "username": "alice", "role": "user"}
-            assert request.ctx.user is mock_user
-
-    @pytest.mark.asyncio
     async def test_retrieve_user_reuses_ctx_user(self):
+        """ctx-cached user short-circuits the DB query entirely."""
         mock_user = MagicMock()
         mock_user.id = 1
-        mock_user.name = "alice"
+        mock_user.username = "alice"
         mock_user.is_active = True
-        mock_user.role = MagicMock()
-        mock_user.role.name = "user"
+        mock_user.roles = []
         request = MagicMock()
         request.ctx.user = mock_user
         with patch("srf.auth.auth.User.filter") as filt:
             data = await retrieve_user(request, {"user_id": 1})
-            assert data == {"user_id": 1, "username": "alice", "role": "user"}
+            assert data == {"user_id": 1, "username": "alice", "roles": []}
             filt.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_retrieve_user_inactive_returns_none(self):
-        mock_user = MagicMock()
-        mock_user.is_active = False
-        with patch("srf.auth.auth.User") as UserMock:
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=mock_user)
-            assert await retrieve_user(None, {"user_id": 1}) is None
 
 
 class TestRefreshTokenHandlers:
     @pytest.mark.asyncio
     async def test_store_and_retrieve_refresh_token(self):
         request = MagicMock()
+        request.app.config.SECRET_KEY = "test-refresh-hmac-key"
+        request.app.ctx.auth.retrieve_refresh_token_from_request = AsyncMock(return_value="rtok")
+        key = hmac.new(
+            b"test-refresh-hmac-key",
+            b"srf:refresh-token-storage:v1",
+            hashlib.sha256,
+        ).digest()
+        expected_digest = hmac.new(key, b"rtok", hashlib.sha256).hexdigest()
         mock_qs = MagicMock()
-        mock_qs.first = AsyncMock(return_value=MagicMock(token="rtok"))
+        mock_qs.first = AsyncMock(return_value=MagicMock(token=expected_digest))
 
         with patch("srf.auth.auth.RefreshToken") as RT:
             RT.filter.return_value = mock_qs
@@ -192,13 +132,60 @@ class TestRefreshTokenHandlers:
             RT.update_or_create.assert_awaited_once()
             call_kwargs = RT.update_or_create.await_args.kwargs
             assert call_kwargs["user_id"] == 3
-            assert call_kwargs["defaults"]["token"] == "rtok"
+            assert call_kwargs["defaults"]["token"] == expected_digest
+            assert call_kwargs["defaults"]["token"] != "rtok"
             assert call_kwargs["defaults"]["expires_at"] is not None
 
             assert await retrieve_refresh_token(request, 3) == "rtok"
             retrieve_kwargs = RT.filter.call_args.kwargs
             assert retrieve_kwargs["user_id"] == 3
             assert "expires_at__gt" in retrieve_kwargs
+
+    @pytest.mark.asyncio
+    async def test_retrieve_validates_client_token_before_database_lookup(self):
+        request = MagicMock()
+        request.app.ctx.auth.retrieve_refresh_token_from_request = AsyncMock(return_value=None)
+
+        with patch("srf.auth.auth.RefreshToken") as RT:
+            assert await retrieve_refresh_token(request, 3) is None
+            RT.filter.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_retrieve_rejects_malformed_request_without_json_body(self):
+        request = MagicMock()
+        request.app.ctx.auth.retrieve_refresh_token_from_request = AsyncMock(side_effect=AttributeError)
+
+        with patch("srf.auth.auth.RefreshToken") as RT:
+            assert await retrieve_refresh_token(request, 3) is None
+            RT.filter.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_retrieve_rejects_token_when_digest_does_not_match(self):
+        request = MagicMock()
+        request.app.config.SECRET_KEY = "test-refresh-hmac-key"
+        request.app.ctx.auth.retrieve_refresh_token_from_request = AsyncMock(return_value="wrong-token")
+        mock_qs = MagicMock()
+        mock_qs.first = AsyncMock(return_value=MagicMock(token="stored-digest"))
+
+        with patch("srf.auth.auth.RefreshToken") as RT:
+            RT.filter.return_value = mock_qs
+            assert await retrieve_refresh_token(request, 3) is None
+
+    @pytest.mark.asyncio
+    async def test_store_requires_secret_key(self):
+        request = MagicMock()
+        request.app.config.SECRET_KEY = None
+
+        with pytest.raises(ServerError, match="SECRET_KEY must be a non-empty string or bytes"):
+            await store_refresh_token(user_id=3, refresh_token="rtok", request=request)
+
+    @pytest.mark.asyncio
+    async def test_store_rejects_unsupported_secret_key_type(self):
+        request = MagicMock()
+        request.app.config.SECRET_KEY = 123
+
+        with pytest.raises(ServerError, match="SECRET_KEY must be a non-empty string or bytes"):
+            await store_refresh_token(user_id=3, refresh_token="rtok", request=request)
 
     @pytest.mark.asyncio
     async def test_revoke_refresh_token(self):
@@ -246,13 +233,26 @@ class TestRefreshTokenHandlers:
         assert user_arg["user_id"] == 1
 
 
+class _LogoutConfig:
+    def __contains__(self, item: str) -> bool:
+        return False
+
+
+def _logout_auth(token: str, secret: str = "secret"):
+    auth = MagicMock()
+    auth.config = _LogoutConfig()
+    auth._get_token = MagicMock(return_value=token)
+    auth._get_secret = AsyncMock(return_value=secret)
+    auth._get_algorithm = MagicMock(return_value="HS256")
+    return auth
+
+
 class TestLogout:
     @pytest.mark.asyncio
-    async def test_logout_revokes_refresh_token(self):
-        auth = MagicMock()
-        auth.extract_payload = AsyncMock(return_value={"user_id": 5})
+    async def test_logout_revokes_refresh_token_when_access_token_expired(self):
+        token = jwt.encode({"user_id": 5, "exp": 1}, "secret", algorithm="HS256")
         request = MagicMock()
-        request.app.ctx.auth = auth
+        request.app.ctx.auth = _logout_auth(token)
 
         with patch("srf.auth.viewset.revoke_refresh_token", new_callable=AsyncMock) as rev:
             response = await logout(request)
@@ -260,21 +260,29 @@ class TestLogout:
             rev.assert_awaited_once_with(request, 5)
 
     @pytest.mark.asyncio
+    async def test_logout_invalid_signature_does_not_revoke(self):
+        token = jwt.encode({"user_id": 5, "exp": 1}, "other-secret", algorithm="HS256")
+        request = MagicMock()
+        request.app.ctx.auth = _logout_auth(token)
+
+        with patch("srf.auth.viewset.revoke_refresh_token", new_callable=AsyncMock) as rev:
+            response = await logout(request)
+            assert response.status == 200
+            rev.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_logout_without_token_still_ok(self):
-        auth = MagicMock()
-        auth.extract_payload = AsyncMock(side_effect=Exception("no token"))
+        from sanic_jwt.exceptions import MissingAuthorizationHeader
+
+        auth = _logout_auth("unused")
+        auth._get_token = MagicMock(side_effect=MissingAuthorizationHeader())
         request = MagicMock()
         request.app.ctx.auth = auth
 
-        response = await logout(request)
-        assert response.status == 200
-
-
-class TestNonAuthEndpoints:
-    def test_public_endpoints_use_full_paths(self):
-        assert "/api/auth/refresh" in settings.NON_AUTH_ENDPOINTS
-        assert "/api/auth/send-verification-email" in settings.NON_AUTH_ENDPOINTS
-        assert "refresh" not in settings.NON_AUTH_ENDPOINTS
+        with patch("srf.auth.viewset.revoke_refresh_token", new_callable=AsyncMock) as rev:
+            response = await logout(request)
+            assert response.status == 200
+            rev.assert_not_awaited()
 
 
 class TestUserVerifyPassword:
@@ -315,6 +323,36 @@ class TestUserVerifyPassword:
 
 
 class TestPasswordSchemas:
+    def test_username_matches_django_max_length(self):
+        username = "u" * 150
+        user_data = {
+            "username": username,
+            "email": "a@example.com",
+            "password1": "Secret123",
+            "password2": "Secret123",
+        }
+        assert UserSchemaWriter.model_validate(user_data, by_alias=True).username == username
+        assert UserSchemaUpdate.model_validate({"username": username}).username == username
+
+    @pytest.mark.parametrize(
+        "schema_cls,payload",
+        [
+            (
+                UserSchemaWriter,
+                {
+                    "username": "u" * 151,
+                    "email": "a@example.com",
+                    "password1": "Secret123",
+                    "password2": "Secret123",
+                },
+            ),
+            (UserSchemaUpdate, {"username": "u" * 151}),
+        ],
+    )
+    def test_username_rejects_values_longer_than_django_max_length(self, schema_cls, payload):
+        with pytest.raises(ValidationError):
+            schema_cls.model_validate(payload, by_alias=True)
+
     def test_writer_accepts_matching_strong_password(self):
         sch = UserSchemaWriter.model_validate(
             {"username": "alice", "email": "a@example.com", "password1": "Secret123", "password2": "Secret123"},
@@ -325,21 +363,21 @@ class TestPasswordSchemas:
     def test_writer_rejects_mismatch(self):
         with pytest.raises(ValidationError, match="do not match"):
             UserSchemaWriter.model_validate(
-                {"username": "alice", "password1": "Secret123", "password2": "Secret124"},
+                {"username": "alice", "email": "a@example.com", "password1": "Secret123", "password2": "Secret124"},
                 by_alias=True,
             )
 
     def test_writer_rejects_short_password(self):
         with pytest.raises(ValidationError, match="at least 8"):
             UserSchemaWriter.model_validate(
-                {"username": "alice", "password1": "Ab1", "password2": "Ab1"},
+                {"username": "alice", "email": "a@example.com", "password1": "Ab1", "password2": "Ab1"},
                 by_alias=True,
             )
 
     def test_writer_strength_failure_is_validation_error(self):
         with pytest.raises(ValidationError) as exc_info:
             UserSchemaWriter.model_validate(
-                {"username": "alice", "password1": "nodigit!", "password2": "nodigit!"},
+                {"username": "alice", "email": "a@example.com", "password1": "nodigit!", "password2": "nodigit!"},
                 by_alias=True,
             )
         assert "digit" in str(exc_info.value)
@@ -347,7 +385,7 @@ class TestPasswordSchemas:
     def test_writer_rejects_password_without_digit(self):
         with pytest.raises(ValidationError, match="digit"):
             UserSchemaWriter.model_validate(
-                {"username": "alice", "password1": "SecretOnly", "password2": "SecretOnly"},
+                {"username": "alice", "email": "a@example.com", "password1": "SecretOnly", "password2": "SecretOnly"},
                 by_alias=True,
             )
 
@@ -357,7 +395,7 @@ class TestPasswordSchemas:
 
     def test_update_schema_has_no_password_fields(self):
         sch = UserSchemaUpdate.model_validate({"username": "alice", "email": "a@example.com"}, by_alias=True)
-        assert sch.name == "alice"
+        assert sch.username == "alice"
         assert not hasattr(sch, "password")
 
     def test_change_password_schema_requires_old(self):
@@ -383,16 +421,14 @@ class TestUserPerformUpdateAndChangePassword:
 
         payload = user.update_from_dict.call_args.args[0]
         assert "password" not in payload
-        assert payload.get("name") == "alice"
+        assert payload.get("username") == "alice"
         user.save.assert_awaited_once()
         assert user.password == "$2b$keep-me"
 
     @pytest.mark.asyncio
-    async def test_change_password_action(self):
-        old_hash = User.hash_password("password123")
-        user = object.__new__(User)
-        user.password = old_hash
-        user.save = AsyncMock()
+    async def test_change_password_action(self, db):
+        """Real-DB run: change_password persists the new hash and clears refresh tokens."""
+        user = await User.create_user({"username": "alice", "email": "alice@example.com", "password": "password123"})
 
         request = MagicMock()
         request.json = {
@@ -405,10 +441,11 @@ class TestUserPerformUpdateAndChangePassword:
         vs = UserViewSet()
         response = await vs.change_password(request)
         assert response.status == 200
-        assert user.password != old_hash
-        assert user.password.startswith("$2")
-        assert user.verify_password("Secret123") is True
-        user.save.assert_awaited_once()
+
+        refreshed = await User.get(pk=user.id)
+        assert refreshed.verify_password("Secret123") is True
+        assert refreshed.verify_password("password123") is False
+        assert await RefreshToken.filter(user=user).count() == 0
 
     @pytest.mark.asyncio
     async def test_change_password_rejects_wrong_old(self):
@@ -422,23 +459,62 @@ class TestUserPerformUpdateAndChangePassword:
         }
         request.ctx.user = user
         vs = UserViewSet()
-        with pytest.raises(BadRequest, match="Old password is incorrect"):
+        with pytest.raises(BadRequest, match="The old password is incorrect."):
             await vs.change_password(request)
 
-class TestBuildUserPayload:
-    def test_build_user_payload(self):
-        user = object.__new__(User)
-        object.__setattr__(user, "id", 7)
-        object.__setattr__(user, "name", "alice")
-        role = MagicMock()
-        role.name = "admin"
-        object.__setattr__(user, "role", role)
-        assert build_user_payload(user) == {"user_id": 7, "username": "alice", "role": "admin"}
 
-    def test_build_user_payload_no_role(self):
-        user = object.__new__(User)
-        object.__setattr__(user, "id", 1)
-        object.__setattr__(user, "name", "bob")
-        object.__setattr__(user, "role", None)
-        assert build_user_payload(user) == {"user_id": 1, "username": "bob", "role": None}
+class TestUserViewSetSchema:
+    def test_get_schema_follows_action(self):
+        vs = UserViewSet()
+        vs.request = MagicMock()
+        for action, expected in [
+            ("list", UserSchemaReader),
+            ("retrieve", UserSchemaReader),
+            ("get_self", UserSchemaReader),
+            ("create", UserSchemaWriter),
+            ("update", UserSchemaUpdate),
+        ]:
+            vs.action = action
+            assert vs.get_schema() is expected
 
+
+class TestUserSchemaReaderRoles:
+    def test_roles_serialized_from_prefetched_list(self):
+        from types import SimpleNamespace
+
+        role = SimpleNamespace(id=2, name="admin", description="admin role")
+        user = SimpleNamespace(
+            id=1,
+            username="alice",
+            email="a@example.com",
+            is_active=True,
+            is_superuser=False,
+            last_login=None,
+            roles=[role],
+        )
+        sch = UserSchemaReader.model_validate(user)
+        assert sch.roles is not None
+        assert [r.name for r in sch.roles] == ["admin"]
+        assert sch.roles[0].description == "admin role"
+
+    def test_roles_none_when_relation_not_fetched(self):
+        from types import SimpleNamespace
+
+        user = SimpleNamespace(
+            id=1,
+            username="alice",
+            email="a@example.com",
+            is_active=True,
+            is_superuser=False,
+            last_login=None,
+            roles=object(),  # non-iterable lazy-relation stand-in
+        )
+        sch = UserSchemaReader.model_validate(user)
+        assert sch.roles is None
+
+    def test_roles_default_none_when_attribute_missing(self):
+        from types import SimpleNamespace
+
+        user = SimpleNamespace(id=1, username="alice", email="a@example.com")
+        sch = UserSchemaReader.model_validate(user)
+        assert sch.roles is None

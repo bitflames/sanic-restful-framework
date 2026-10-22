@@ -1,9 +1,10 @@
 """Unit tests for srf.filters.filter."""
 
 import json
-import pytest
-from unittest.mock import MagicMock
+from typing import ClassVar
+from unittest.mock import MagicMock, patch
 
+import pytest
 from sanic.exceptions import BadRequest
 
 from srf.filters.filter import (
@@ -15,11 +16,23 @@ from srf.filters.filter import (
 
 
 class ViewWithSearchFields:
-    search_fields = ["name", "email"]
+    search_fields: ClassVar[list[str] | dict[str, str]] = ["name", "email"]
+
+
+class ViewWithSearchDict:
+    search_fields: ClassVar[list[str] | dict[str, str]] = {"display_name": "name"}
 
 
 class ViewWithFilterFields:
-    filter_fields = {"id": "id", "name": "name", "is_active": "is_active"}
+    filter_fields: ClassVar[list[str] | dict[str, str]] = {"id": "id", "name": "name", "is_active": "is_active"}
+
+
+class ViewWithFilterList:
+    filter_fields: ClassVar[list[str] | dict[str, str]] = ["id", "name", "is_active"]
+
+
+class ViewWithFilterAlias:
+    filter_fields: ClassVar[list[str] | dict[str, str]] = {"display_name": "name"}
 
 
 class ViewWithoutFilterFields:
@@ -27,18 +40,20 @@ class ViewWithoutFilterFields:
 
 
 class ViewWithOrderingFields:
-    ordering_fields = ["name", "created_date"]
+    ordering_fields: ClassVar[list[str] | dict[str, str]] = ["name", "created_date"]
 
 
 class ViewWithOrderingDict:
-    ordering_fields = {"name": "name", "created_date": "created_date"}
+    ordering_fields: ClassVar[list[str] | dict[str, str]] = {"created": "created_date", "name": "name"}
 
 
 class TestSearchFilter:
-    def test__filter_params(self):
+    def test_reads_search_query_param(self):
         view = ViewWithSearchFields()
         f = SearchFilter(view)
-        assert f._filter_params == "search"
+        request = MagicMock()
+        request.args.get.side_effect = lambda key, default=None: "foo" if key == "search" else default
+        assert f.get_search_terms(request) == ["foo"]
 
     def test_get_search_terms_empty(self):
         view = ViewWithSearchFields()
@@ -76,17 +91,42 @@ class TestSearchFilter:
         assert result is filtered_qs
         qs.filter.assert_called_once()
 
+    def test_filter_queryset_accepts_dict_mapping(self):
+        f = SearchFilter(ViewWithSearchDict())
+        request = MagicMock()
+        request.args.get.return_value = "alice"
+        qs = MagicMock()
+        with patch("srf.filters.filter.Q", return_value=object()) as q_mock:
+            f.filter_queryset(request, qs)
+        q_mock.assert_called_once_with(name__icontains="alice")
+        qs.filter.assert_called_once()
+
 
 class TestJsonLogicFilter:
-    def test__filter_params_returns_filter(self):
+    def test_reads_filter_query_param(self):
         view = ViewWithFilterFields()
         f = JsonLogicFilter(view)
-        assert f._filter_params == "filter"
+        request = MagicMock()
+        request.args.get.side_effect = lambda key, default=None: "{}" if key == "filter" else default
+        qs = MagicMock()
+        result = f.filter_queryset(request, qs)
+        assert result is qs
+        qs.filter.assert_not_called()
 
     def test_filter_fields_set_in_init(self):
         view = ViewWithFilterFields()
         f = JsonLogicFilter(view)
         assert f.filter_fields == view.filter_fields
+
+    def test_filter_fields_list_maps_names_to_themselves(self):
+        f = JsonLogicFilter(ViewWithFilterList())
+        request = MagicMock()
+        request.args.get.return_value = json.dumps({"==": [{"var": "name"}, "alice"]})
+        qs = MagicMock()
+
+        f.filter_queryset(request, qs)
+
+        qs.filter.assert_called_once()
 
     def test_filter_queryset_no_param_returns_unchanged(self):
         view = ViewWithFilterFields()
@@ -140,6 +180,30 @@ class TestJsonLogicFilter:
 
 
 class TestQueryParamFilter:
+    def test_filter_fields_list_maps_names_to_themselves(self):
+        f = QueryParamFilter(ViewWithFilterList())
+        request = MagicMock()
+        request.args = MagicMock()
+        request.args.__iter__ = MagicMock(return_value=iter(["name"]))
+        request.args.getlist.return_value = ["alice"]
+        qs = MagicMock()
+
+        f.filter_queryset(request, qs)
+
+        qs.filter.assert_called_once_with(name="alice")
+
+    def test_filter_fields_dict_maps_query_alias(self):
+        f = QueryParamFilter(ViewWithFilterAlias())
+        request = MagicMock()
+        request.args = MagicMock()
+        request.args.__iter__ = MagicMock(return_value=iter(["display_name"]))
+        request.args.getlist.return_value = ["alice"]
+        qs = MagicMock()
+
+        f.filter_queryset(request, qs)
+
+        qs.filter.assert_called_once_with(name="alice")
+
     def test_filter_queryset_empty_args_returns_filtered_with_empty_kwargs(self):
         view = ViewWithFilterFields()
         f = QueryParamFilter(view)
@@ -173,7 +237,9 @@ class TestOrderingFactory:
         view = ViewWithOrderingFields()
         f = OrderingFactory(view)
         request = MagicMock()
-        request.args.get.return_value = None
+        # Real Sanic returns "" here (missing param, bare `?ordering`, and `?ordering=` all yield ""),
+        # so the mock must mirror that instead of returning None.
+        request.args.get.return_value = ""
         qs = MagicMock()
         result = f.filter_queryset(request, qs)
         assert result is qs
@@ -199,4 +265,15 @@ class TestOrderingFactory:
         ordered_qs = MagicMock()
         qs.order_by.return_value = ordered_qs
         result = f.filter_queryset(request, qs)
+        assert result is ordered_qs
         qs.order_by.assert_called_once_with("-name")
+
+    def test_filter_queryset_maps_dict_alias(self):
+        f = OrderingFactory(ViewWithOrderingDict())
+        request = MagicMock()
+        request.args.get.return_value = "-created"
+        qs = MagicMock()
+
+        f.filter_queryset(request, qs)
+
+        qs.order_by.assert_called_once_with("-created_date")

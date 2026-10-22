@@ -1,98 +1,51 @@
 # Configuration
 
-SRF uses `srf.config.settings` (a `LazySettings`) to read configuration. The lookup order is:
+SRF reads configuration through `srf.config.settings` (`LazySettings`). The lookup order is:
 
-1. `app.config` bound most recently through `settings.set_app(app)`
-2. Uppercase default values in the `srf.config.settings` module
+1. The `app.config` most recently bound via `settings.set_app(app)`
+2. The uppercase defaults defined in the `srf.config.settings` module
 
 ## Initialization
 
-`SECRET_KEY` / `JWT_SECRET` are **no longer** required when importing SRF. When enabling JWT authentication, set it in Sanic configuration and pass it to `setup_auth(..., secret=...)`:
+Set this up in your Sanic configuration:
 
 ```python
 from sanic import Sanic
 from srf.config import settings
 
 app = Sanic("MyApp")
-app.config.JWT_SECRET = "Read from a secure environment variable"
-app.config.NON_AUTH_ENDPOINTS = ("login", "health")
 settings.set_app(app)
 ```
 
-`LazySettings` is a process-level singleton. When multiple apps share a process, the latter `set_app()` will affect all code reading configuration through `settings`.
+`LazySettings` is a process-level singleton. When multiple applications share a single process, a later
+`set_app()` call affects all code that reads configuration through `settings`.
 
-## Default Configuration
+## Default configuration
 
-### Core & JWT
+The following options are defined in `srf/config/settings.py`; the source code is authoritative.
 
-| Name | Default Value | Current Usage |
-|---|---|---|
-| `JWT_SECRET` | None (must be set by app) | JWT signing, authentication middleware, OAuth state fallback key |
-| `JWT_ACCESS_TOKEN_EXPIRES` | `timedelta(hours=24)` | Only defined; `setup_auth()` currently does not automatically read |
+### Pagination / Filtering / Permissions
 
-To control the expiration settings of `sanic-jwt`, directly pass the parameters supported by the library to `setup_auth()`, do not assume `JWT_ACCESS_TOKEN_EXPIRES` will take effect automatically.
+Defaults used when a ViewSet does not declare the corresponding class attributes.
 
-### Authentication Exemptions
+| Option | Default | Description |
+| --- | --- | --- |
+| `PAGINATION_CLASS` | `PageNumberPagination` | Default pagination class |
+| `DEFAULT_FILTERS` | `[SearchFilter, QueryParamFilter, OrderingFactory]` | Default filter chain |
+| `DEFAULT_PERMISSION_CLASSES` | `(AllowAny,)` | Default permission classes |
 
-`NON_AUTH_ENDPOINTS` is a set of **last segments** of URLs:
+### Serialization and caching
 
-```python
-NON_AUTH_ENDPOINTS = (
-    "register",
-    "login",
-    "send-verification-email",
-    "health",
-    ...
-)
-```
+| Option | Default | Description |
+| --- | --- | --- |
+| `BASE_DIR` | `os.getcwd()` | Project root directory (process working directory) |
+| `CACHE_ROOT` | `BASE_DIR/.diskcache` | Cache directory |
+| `DATETIME_FORMAT` | `"%Y-%m-%d %H:%M:%S"` | Datetime string template |
+| `JSON_ENCODER` | `custom_dumps` | JSON serialization function (handles `datetime` / `Exception`); must be wired into Sanic by the application |
 
-It does not support full paths or prefix rules. For example, `"products"` will match both `/api/products` and `/admin/products`.
+### Health checks and rate limiting
 
-### Filters
-
-```python
-from srf.filters.filter import (
-    JsonLogicFilter,
-    OrderingFactory,
-    QueryParamFilter,
-    SearchFilter,
-)
-
-DEFAULT_FILTERS = [
-    SearchFilter,
-    JsonLogicFilter,
-    QueryParamFilter,
-    OrderingFactory,
-]
-```
-
-Each `GenericAPIView` / `BaseViewSet` instance initializes with `settings.DEFAULT_FILTERS` if no `filter_class` is declared on the class.
-
-### Permissions
-
-```python
-from srf.permission.permission import AllowAny
-
-DEFAULT_PERMISSION_CLASSES = (AllowAny,)
-```
-
-If a ViewSet does not declare `permission_classes`, `settings.DEFAULT_PERMISSION_CLASSES` is used; a class-level declaration takes precedence.
-
-### Pagination
-
-`PAGINATION_CLASS = PageNumberPagination` is defined, but the built-in `list()` currently does not read it, instead directly using `PageNumberPagination`. There is currently no global `PAGE_SIZE` or `MAX_PAGE_SIZE` configuration; the default values are in the pagination class.
-
-### Rate Limiting
-
-```python
-REQUEST_LIMITERS = []  # No rate limiting by default; list of limiter instances set by app
-```
-
-`throttle_rate()` reads `app.config.REQUEST_LIMITERS` (treated as `[]` if missing).
-
-### Health Check
-
-`HEALTH_CHECK_LIST` defaults to an empty list. The health check route actually reads `app.config.HEALTH_CHECK_LIST`:
+The health check route actually reads `app.config.HEALTH_CHECK_LIST`:
 
 ```python
 from srf.health.checks import RedisCheck
@@ -101,72 +54,67 @@ app.config.HEALTH_CHECK_LIST = [RedisCheck]
 app.ctx.redis = redis_client
 ```
 
-### JSON Encoding
-
-`DATETIME_FORMAT` defaults to `"%Y-%m-%d %H:%M:%S"`.
-`JSON_ENCODER` points to `custom_dumps()`, which can serialize `datetime` and exception objects.
-Whether to use this encoder depends on how the app integrates with Sanic configuration; SRF will not automatically install it.
+| Option | Default | Description |
+| --- | --- | --- |
+| `HEALTH_CHECK_LIST` | `[]` | List of health check classes |
+| `REQUEST_LIMITERS` | `[]` | List of rate limiters; `throttle_rate()` reads from `app.config.REQUEST_LIMITERS` |
+| `THROTTLE_REDIS_PREFIX` | `"throttle"` | Redis key prefix for rate limiting (`RedisStorage`) |
 
 ### Email
 
-`srf.tools.email.send_email()` directly reads `srf.config.settings.EmailConfig`:
+`srf.tools.email.send_email()` reads `srf.config.settings.EmailConfig` directly.
+Each attribute is read from environment variables at module import time, so changing `app.config`
+afterwards does not alter the email configuration.
 
-| Attribute | Environment Variable |
-|---|---|
-| `from_email` | `FROM_EMAIL` |
-| `smtp_server` | `SMTP_SERVER` |
-| `smtp_port` | `SMTP_PORT` |
-| `password` | `PASSWORD` |
+| Attribute | Environment variable | Description |
+| --- | --- | --- |
+| `EmailConfig.from_email` | `FROM_EMAIL` | Sender address |
+| `EmailConfig.smtp_server` | `SMTP_SERVER` | SMTP server |
+| `EmailConfig.smtp_port` | `SMTP_PORT` | SMTP port |
+| `EmailConfig.password` | `PASSWORD` | Email password / authorization code |
 
-These values are read when the module is imported; subsequent modifications to `app.config` will not change the email configuration.
-Port judgment uses `int(smtp_port) == 465` to choose SSL.
+### Social login
 
-### GitHub OAuth
+See [Social Login](usage/core/social-login.md) for a GitHub OAuth tutorial.
 
-```python
-SOCIAL_CONFIG = {
-    "github": {
-        "CLIENT_ID": ...,
-        "CLIENT_SECRET": ...,
-        "REDIRECT_URI": ...,
-        ...
-    }
-}
+| Option | Default | Description |
+| --- | --- | --- |
+| `SOCIAL_CONFIG` | GitHub OAuth configuration dict | Fields are read from environment variables such as `GITHUB_CLIENT_ID` |
+| `SOCIAL_LOGIN_COOKIE_KEY` | `"oauth_state"` | Cookie name for the OAuth state |
+| `SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE` | `600` | State cookie lifetime (seconds) |
 
-```
+### Registration verification codes and passwords
 
-The default values come from corresponding uppercase environment variables. You can override them entirely via `app.config.SOCIAL_CONFIG` before binding the app.
+| Option | Default | Description |
+| --- | --- | --- |
+| `MIN_PASSWORD_LENGTH` | `8` | Minimum password length |
+| `USER_REGISTER_EMAIL_VERIFY_CODE_TTL` | `60` | Verification code lifetime (seconds) |
+| `USER_REGISTER_EMAIL_CODE` | `"USER_REGISTER:EMAIL_CODE:{email}"` | Redis key template for verification codes |
+| `USER_REGISTER_EMAIL_CODE_TIMES` | `"USER_REGISTER:EMAIL_CODE_TIMES:{email}"` | Redis key template for failure counts |
+| `USER_REGISTER_EMAIL_CODE_TIMES_LIMIT` | `10` | Maximum number of verification failures |
 
-## Full Example
+### JWT
 
-```python
-import os
+`JWT_SECRET` (signing key) and `SECRET_KEY` (refresh token digest key) have no defaults and must be
+set explicitly in `app.config`. `setup_auth()` converts `JWT_ACCESS_TOKEN_EXPIRES` to seconds and
+passes it to `sanic-jwt`.
 
-from sanic import Sanic
-from srf.config import srfconfig
+| Option | Default | Description |
+| --- | --- | --- |
+| `JWT_ACCESS_TOKEN_EXPIRES` | `timedelta(hours=24)` | Access token lifetime |
+| `JWT_REFRESH_TOKEN_EXPIRES` | `timedelta(days=30)` | Refresh token lifetime |
 
-app = Sanic("MyApp")
-app.config.update(
-    {
-        "JWT_SECRET": os.environ["SECRET_KEY"],
-        "NON_AUTH_ENDPOINTS": ("login", "register", "health"),
-        "HEALTH_CHECK_LIST": [],
-    }
-)
-settings.set_app(app)
-```
+## Best practices
 
-## Best Practices
+1. **Separate sensitive information**: use environment variables for secrets and passwords
+2. **Multi-environment configuration**: create different configurations for development, testing, and production
+3. **Use a .env file**: convenient for local development
+4. **Do not commit .env**: add `.env` to `.gitignore`
+5. **Provide defaults**: use the second argument of `os.getenv()` for default values
+6. **Validate configuration**: validate required options (such as `JWT_SECRET`) at application startup
+7. **Document configuration**: describe all options in the README
 
-1. **Separate sensitive information**: Use environment variables for keys and passwords
-2. **Multi-environment configuration**: Create different configurations for development, testing, and production environments
-3. **Use .env files**: Convenient for local development
-4. **Do not commit .env**: Add `.env` to `.gitignore`
-5. **Provide default values**: Provide default values using the second parameter of `os.getenv()`
-6. **Validate configuration**: Verify required configuration items (e.g., `JWT_SECRET`) when the application starts
-7. **Document configuration**: Explain all configuration items in README
+## Next steps
 
-## Next Steps
-
-- Read [Authentication](usage/core/authentication.md) configuration for JWT.
-- Read [Project Setup](usage/project-setup.md) to view the complete application structure.
+- Read [Authentication](usage/core/authentication.md) to configure JWT.
+- Read [Project Setup](usage/project-setup.md) for a complete application structure.

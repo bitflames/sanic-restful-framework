@@ -30,7 +30,7 @@ myproject/
 ├── routes.py                   # 路由配置
 ├── permissions.py              # 自定义权限类
 ├── filters.py                  # 自定义过滤器
-├── middleware.py              # 自定义中间件
+├── middleware.py               # 自定义中间件
 ├── utils/                      # 工具函数
 │   ├── __init__.py
 │   ├── helpers.py
@@ -55,7 +55,7 @@ REDIS_URL=redis://localhost:6379/0
 
 # JWT 配置
 JWT_SECRET=your-jwt-secret
-JWT_ACCESS_TOKEN_EXPIRES=86400
+# 访问/刷新令牌有效期在 srf.config.settings 中以 timedelta 定义，不通过环境变量读取
 
 # 邮件配置（srf.tools.email 实际读取的名称）
 FROM_EMAIL=your-email@gmail.com
@@ -63,9 +63,6 @@ SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 PASSWORD=your-password
 
-# GitHub OAuth
-GITHUB_CLIENT_ID=your-github-client-id
-GITHUB_CLIENT_SECRET=your-github-client-secret
 ```
 
 ### 配置文件
@@ -87,26 +84,18 @@ class Config:
         
     # JWT 配置
     JWT_SECRET = os.getenv("JWT_SECRET", SECRET_KEY)
-    # JWT_ACCESS_TOKEN_EXPIRES 在 srf.config.settings 中有定义；setup_auth 未传给 sanic-jwt
+    # JWT_ACCESS_TOKEN_EXPIRES 在 srf.config.settings 中以 timedelta 定义；
+    # setup_auth 会把它换算成秒并传给 sanic-jwt
     
     # 邮件：send_email 读取 srf.config.settings.EmailConfig（FROM_EMAIL/SMTP_SERVER/SMTP_PORT/PASSWORD 环境变量），不是本 Config 类属性
     
     # 社交登录（键名大写，与 SOCIAL_CONFIG 一致）
     SOCIAL_CONFIG = {
-        "github": {
-            "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
-            "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
-            "REDIRECT_URI": os.getenv("GITHUB_REDIRECT_URI"),
-            ...
-        }
+        "github": {...}
     }
     
     # CORS 配置
     CORS_ORIGINS = ["http://localhost:3000", "http://localhost:8080"]
-    
-    # 限流配置
-    RATE_LIMIT_ENABLED = True
-    RATE_LIMIT_PER_MINUTE = 60
 
 class DevelopmentConfig(Config):
     """开发环境配置"""
@@ -132,6 +121,12 @@ config_map = {
 
 env = os.getenv("ENVIRONMENT", "development")
 config = config_map[env]
+```
+
+`python-dotenv` 不属于 SRF 的依赖；如需从 `.env` 文件加载配置，请额外安装：
+
+```bash
+pip install python-dotenv
 ```
 
 ### 应用配置
@@ -165,7 +160,7 @@ register_tortoise(
 
 ### Tortoise ORM 配置
 
-SRF 使用 Tortoise ORM 作为默认的 ORM 框架。
+SRF 使用 Tortoise ORM 1.1.8 及以上版本作为默认 ORM 框架。
 
 #### 基本配置
 
@@ -180,6 +175,8 @@ register_tortoise(
 
 #### PostgreSQL 配置
 
+需要额外安装 PostgreSQL 驱动：`pip install asyncpg`。
+
 ```python
 register_tortoise(
     app,
@@ -190,6 +187,8 @@ register_tortoise(
 ```
 
 #### MySQL 配置
+
+需要额外安装 MySQL 驱动：`pip install asyncmy`。
 
 ```python
 register_tortoise(
@@ -219,17 +218,17 @@ register_tortoise(
                     "database": "mydb",
                     "minsize": 1,
                     "maxsize": 5,
-                }
+                },
             }
         },
         "apps": {
             "models": {
-                "models": ["models", "aerich.models"],
+                "models": ["models"],
                 "default_connection": "default",
             }
         },
         "use_tz": False,
-        "timezone": "Asia/Shanghai"
+        "timezone": "Asia/Shanghai",
     },
     generate_schemas=True,
 )
@@ -237,67 +236,47 @@ register_tortoise(
 
 ### 数据库迁移
 
-使用 Aerich 进行数据库迁移：
-
-#### 安装 Aerich
-
-```bash
-pip install aerich
-```
-
-#### 初始化 Aerich
-
-```bash
-aerich init -t config.TORTOISE_ORM
-```
-
-#### 初始化数据库
-
-```bash
-aerich init-db
-```
-
-#### 创建迁移
-
-```bash
-aerich migrate --name "add_user_model"
-```
-
-#### 应用迁移
-
-```bash
-aerich upgrade
-```
-
-#### 回滚迁移
-
-```bash
-aerich downgrade
-```
-
-### 配置文件示例
-
-创建 `config.py` 用于 Aerich：
+Tortoise ORM 1.1.8 及以上版本包含迁移 CLI。先在 `config.py` 中定义完整的
+`TORTOISE_ORM` 配置：
 
 ```python
 TORTOISE_ORM = {
-    "connections": {
-        "default": "sqlite://db.sqlite3"
-    },
+    "connections": {"default": "sqlite://db.sqlite3"},
     "apps": {
         "models": {
-            "models": ["models", "aerich.models"],
+            "models": ["models"],
             "default_connection": "default",
         }
     },
 }
 ```
 
+在项目根目录使用 Tortoise CLI 初始化迁移目录并管理迁移：
+
+```bash
+# 初始化 models 应用的迁移目录
+tortoise -c config.TORTOISE_ORM init models
+
+# 模型变更后生成迁移
+tortoise -c config.TORTOISE_ORM makemigrations models --name add_products
+
+# 应用迁移
+tortoise -c config.TORTOISE_ORM migrate
+
+# 回滚最近一次迁移
+tortoise -c config.TORTOISE_ORM downgrade
+```
+
+`-c` 后的 `config.TORTOISE_ORM` 是 Python 模块和配置变量的点分路径；
+配置中的模型模块名、迁移应用名应与项目结构一致。开发环境的小型示例可以使用
+`generate_schemas=True` 自动建表；正式环境应通过迁移管理结构变更。
+
 ## 认证设置
 
 ### JWT 与路由注册（推荐）
 
-优先使用 `register_auth_urls`：它会内部调用 `setup_auth`，并注册登录、注册、验证邮件、社交登录等路由。**不要**先 `setup_auth` 再 `register_auth_urls`（会双重初始化）。
+优先使用 `register_auth_urls`：它会内部调用 `setup_auth`，并注册认证、注册、
+注销和邮件验证路由。**不要**先 `setup_auth` 再 `register_auth_urls`（会双重初始化）。
 
 ```python
 from srf.auth.route import register_auth_urls
@@ -311,43 +290,7 @@ register_auth_urls(app, prefix="/api/auth")
 ```python
 from srf.auth.viewset import setup_auth
 
-jwt = setup_auth(app, url_prefix="/api/auth", secret=config.JWT_SECRET)
-app.ctx.jwt = jwt
-```
-
-### 社交登录配置
-
-在配置文件中设置社交登录：
-
-```python
-class Config:
-    SOCIAL_CONFIG = {
-        "github": {
-            "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
-            "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
-            "REDIRECT_URI": os.getenv(
-                "GITHUB_REDIRECT_URI",
-                "http://localhost:8000/api/auth/social/callback",
-            ),
-            ...
-        }
-    }
-```
-
-### 公开端点配置
-
-配置不需要认证的端点：
-
-```python
-class Config:
-    NON_AUTH_ENDPOINTS = [
-        "/api/auth/login",
-        "/api/auth/register",
-        "/api/auth/send-verification-email",
-        "/api/products",  # 公开的产品列表
-        "/health/",       # 健康检查
-        ...
-    ]
+jwt = setup_auth(app, url_prefix="/api/auth")
 ```
 
 ## 中间件设置
@@ -356,6 +299,7 @@ class Config:
 
 ```python
 from srf.middleware.authmiddleware import set_user_to_request_ctx
+
 
 @app.middleware("request")
 async def auth_middleware(request):
@@ -370,7 +314,7 @@ from srf.middleware.throttlemiddleware import (
     MemoryStorage,
     IPRateLimit,
     UserRateLimit,
-    throttle_rate
+    throttle_rate,
 )
 
 # 创建存储
@@ -382,15 +326,20 @@ app.config.REQUEST_LIMITERS = [
     UserRateLimit(1000, 60, storage),   # 用户: 1000次/分钟
 ]
 
+
 @app.middleware("request")
 async def throttle_middleware(request):
     """限流中间件"""
     if not await throttle_rate(request):
         from sanic.response import json
+
         return json({"error": "请求过于频繁，请稍后再试"}, status=429)
 ```
 
 ### CORS 中间件
+
+`sanic-cors` 是可选依赖，不随 SRF 安装。需要此集成时先运行
+`pip install sanic-cors`。
 
 ```python
 from sanic_cors import CORS
@@ -418,17 +367,16 @@ from viewsets.product import ProductViewSet
 from viewsets.order import OrderViewSet
 from viewsets.category import CategoryViewSet
 
+
 def register_routes(app):
     """注册所有路由"""
-    router = SanicRouter(prefix="api")
-    
+    router = SanicRouter(app, prefix="api")
+
     # 注册 ViewSets
     router.register("products", ProductViewSet, name="products")
     router.register("orders", OrderViewSet, name="orders")
     router.register("categories", CategoryViewSet, name="categories")
-    
-    # 将路由添加到应用
-    app.blueprint(router.get_blueprint())
+
 ```
 
 在 `app.py` 中调用：
@@ -448,37 +396,37 @@ register_routes(app)
 ```python
 from srf.route import SanicRouter
 
+
 def register_routes(app):
     # v1 API
-    router_v1 = SanicRouter(prefix="api/v1")
+    router_v1 = SanicRouter(app, prefix="api/v1")
     router_v1.register("products", ProductViewSetV1)
-    app.blueprint(router_v1.get_blueprint())
-    
+
     # v2 API
-    router_v2 = SanicRouter(prefix="api/v2")
+    router_v2 = SanicRouter(app, prefix="api/v2")
     router_v2.register("products", ProductViewSetV2)
-    app.blueprint(router_v2.get_blueprint())
 ```
 
 ## 健康检查设置
 
 ```python
-from srf.health.route import bp as health_bp
 from srf.health.checks import RedisCheck
+from srf.health.viewset import health_check
 
 # 注册健康检查路由
-app.blueprint(health_bp)
-app.config.HEALTH_CHECK_LIST = [RedisCheck] # 可以实现BaseHealthCheck的子类
+app.add_route(health_check, "/health", methods=["GET"])
+app.config.HEALTH_CHECK_LIST = [RedisCheck]  # 可以实现BaseHealthCheck的子类
+
 
 # 配置健康检查服务
 @app.before_server_start
-async def setup_health_checks(app, loop):
+async def setup_health_checks(app):
     """设置健康检查依赖的服务"""
     from redis.asyncio import Redis
 
     # Redis 客户端
     app.ctx.redis = Redis.from_url(config.REDIS_URL)
-    
+
     # PostgreSQL 连接池
     # app.ctx.pg = await asyncpg.create_pool(config.DATABASE_URL)
 ```
@@ -493,10 +441,7 @@ from sanic.log import logger
 logging.basicConfig(
     level=logging.INFO if not config.DEBUG else logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("app.log"),
-        logging.StreamHandler()
-    ]
+    handlers=[logging.FileHandler("app.log"), logging.StreamHandler()],
 )
 
 # 在代码中使用
@@ -508,33 +453,28 @@ logger.error("An error occurred", exc_info=True)
 
 ```python
 from sanic.exceptions import NotFound, InvalidUsage
+from sanic.log import logger
 from srf.views.http_status import HTTPStatus
 from sanic.response import json
+
 
 @app.exception(NotFound)
 async def handle_not_found(request, exception):
     """处理 404 错误"""
-    return json(
-        {"error": "资源未找到", "message": str(exception)},
-        status=HTTPStatus.HTTP_404_NOT_FOUND
-    )
+    return json({"error": "资源未找到", "message": str(exception)}, status=HTTPStatus.HTTP_404_NOT_FOUND)
+
 
 @app.exception(InvalidUsage)
 async def handle_invalid_usage(request, exception):
     """处理 400 错误"""
-    return json(
-        {"error": "无效请求", "message": str(exception)},
-        status=HTTPStatus.HTTP_400_BAD_REQUEST
-    )
+    return json({"error": "无效请求", "message": str(exception)}, status=HTTPStatus.HTTP_400_BAD_REQUEST)
+
 
 @app.exception(Exception)
 async def handle_exception(request, exception):
     """处理未捕获的异常"""
     logger.error(f"Unhandled exception: {exception}", exc_info=True)
-    return json(
-        {"error": "服务器内部错误"},
-        status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR
-    )
+    return json({"error": "服务器内部错误"}, status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR)
 ```
 
 ## 完整的应用示例
@@ -545,9 +485,10 @@ async def handle_exception(request, exception):
 from sanic import Sanic
 from sanic_cors import CORS
 from tortoise.contrib.sanic import register_tortoise
+from srf.auth.route import register_auth_urls
 from srf.config import settings
+from srf.health.viewset import health_check
 from srf.middleware.authmiddleware import set_user_to_request_ctx
-from srf.health.route import bp as health_bp
 from config import config
 from routes import register_routes
 import logging
@@ -573,21 +514,27 @@ register_tortoise(
     generate_schemas=True,
 )
 
+
 # 注册中间件
 @app.middleware("request")
 async def auth_middleware(request):
     await set_user_to_request_ctx(request)
 
+
 # 注册路由
 register_routes(app)
-app.blueprint(health_bp)
+register_auth_urls(app, prefix="/api/auth")
+app.add_route(health_check, "/health", methods=["GET"])
+
 
 # 异常处理
 @app.exception(Exception)
 async def handle_exception(request, exception):
     from sanic.response import json
+
     logging.error(f"Error: {exception}", exc_info=True)
     return json({"error": str(exception)}, status=500)
+
 
 if __name__ == "__main__":
     app.run(
@@ -600,17 +547,12 @@ if __name__ == "__main__":
 
 ## 生产环境部署
 
-### 使用 Gunicorn
+### 使用 Sanic 内置多进程
+
+Sanic 25 已不再提供 `sanic.worker.GunicornWorker`，直接使用 `sanic` 命令启动多个 worker：
 
 ```bash
-pip install gunicorn
-```
-
-```bash
-gunicorn app:app \
-  --bind 0.0.0.0:8000 \
-  --workers 4 \
-  --worker-class sanic.worker.GunicornWorker
+sanic app:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
 ### 使用 Docker
@@ -690,4 +632,4 @@ docker-compose up -d
 
 - 学习 [核心概念](core/viewsets.md) 深入了解 SRF 的功能
 - 查看 [配置项](../config.md) 了解所有配置选项
-- 阅读 [API 参考](../api-reference.md) 查看详细的 API 文档
+- 阅读 [API 参考](../api/views.md) 查看详细的 API 文档

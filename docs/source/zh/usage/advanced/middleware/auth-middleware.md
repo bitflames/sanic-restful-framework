@@ -1,7 +1,8 @@
 # 认证中间件
 
-认证中间件校验 JWT，并把数据库中的用户对象写入
-`request.ctx.user`。
+认证中间件从请求中读取 JWT，并把数据库中的用户对象写入
+`request.ctx.user`。没有认证信息时，`request.ctx.user` 会设为 `None`，请求仍可继续；
+权限类可据此区分匿名用户和已认证用户。
 
 ## 配置
 
@@ -22,40 +23,16 @@ app.config.JWT_SECRET = "从安全的环境变量读取"
 
 ## 请求流程
 
-1. 取 URL 最后一段，检查它是否在 `app.config.NON_AUTH_ENDPOINTS` 中。
-2. 公开端点直接放行，不设置 `request.ctx.user`。
-3. 非公开端点要求 `Authorization: Bearer <token>`。
-4. 使用 HS256 和 `app.config.JWT_SECRET` 解码 Token。
-5. 调用 `srf.auth.auth.retrieve_user(payload)` 查询用户。
-6. 设置 `request.ctx.user`。
+1. 从 `request.app.ctx.auth` 提取 JWT payload。
+2. 没有 payload 时，将 `request.ctx.user` 设为 `None` 并继续处理请求。
+3. 有 payload 时，调用 `retrieve_user(request, payload)` 加载用户，并将 ORM 用户放到
+   `request.ctx.user`。
 
-Token 缺失、格式错误、过期、无效或用户不存在都会抛出
-`Unauthorized`（HTTP 401），不会匿名放行。
+`Authorization` 请求头格式错误、未初始化 JWT 或 Token 对应的用户不存在时返回 401；
+Token 缺失，或签名/有效期校验失败时 payload 为 `None`，请求按匿名请求继续执行
+（`request.ctx.user` 为 `None`），是否拒绝由权限类决定。
 
 ## 核心函数
-
-### is_public_endpoint
-
-```python
-def is_public_endpoint(request):
-    tail = request.path.rstrip("/").rpartition("/")[2]
-    return tail in getattr(request.app.config, "NON_AUTH_ENDPOINTS", [])
-```
-
-配置值是路径最后一段：
-
-```python
-app.config.NON_AUTH_ENDPOINTS = (
-    "login",
-    "register",
-    "send-verification-email",
-    "health",
-)
-```
-
-不要写 `"/api/auth/login"` 或 `"/api/public/"`；当前实现既不做完整路径匹配，
-也不做前缀匹配。相同尾段会同时被豁免，例如 `"products"` 会匹配多个不同
-前缀下的 `/products`。
 
 ### extract_bearer_token
 
@@ -65,8 +42,7 @@ from srf.middleware.authmiddleware import extract_bearer_token
 token = extract_bearer_token(request)
 ```
 
-该函数要求认证方案为 Bearer（大小写不敏感），并在头缺失或格式错误时抛出
-401，而不是返回 `None`。
+该函数要求认证方案为 Bearer（大小写不敏感），并在请求头缺失或格式错误时抛出 401。
 
 ### authenticate_request
 
@@ -77,12 +53,15 @@ await authenticate_request(request)
 user = request.ctx.user
 ```
 
-该函数不检查公开端点；通常应通过 `set_user_to_request_ctx()` 调用。
+### set_user_to_request_ctx
+
+该函数调用 `authenticate_request(request)`，可直接用于应用 middleware。没有认证信息时，
+`request.ctx.user` 为 `None`；携带有效 Token 时则为对应的 ORM 用户。
 
 ## 中间件顺序
 
 用户限流、访问日志等逻辑如需读取 `request.ctx.user`，应确保认证中间件先
-执行。公开端点不会创建 `ctx.user`，读取时使用：
+执行。认证上下文可能尚未设置，读取时使用：
 
 ```python
 user = getattr(request.ctx, "user", None)
@@ -90,13 +69,10 @@ user = getattr(request.ctx, "user", None)
 
 ## 安全限制
 
-- 只允许 HS256，不能通过配置切换算法。
-- 每个受保护请求都会查询数据库。
-- 没有 Token 黑名单、注销吊销或刷新机制。
-- 公开规则只看路径尾段，粒度较粗。
+- 每个携带有效 Token 的请求都会查询数据库。
+- 认证中间件自身不实现 Token 黑名单；刷新令牌由认证路由管理。
 
-生产应用可重写中间件，使用明确的 `(HTTP 方法, 完整路径)` 白名单、可配置
-算法、Token 吊销和适当的用户缓存。
+生产应用可根据需要配置 Token 吊销和适当的用户缓存。
 
 ## 下一步
 

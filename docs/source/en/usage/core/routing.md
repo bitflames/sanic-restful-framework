@@ -1,47 +1,42 @@
 # Routing
 
-The routing system of SRF automatically generates RESTful routes for ViewSets through the `SanicRouter` class.
+SRF's routing system automatically generates RESTful routes for ViewSets through the `SanicRouter` class.
 
-## SanicRouter Basics
+## SanicRouter basics
 
-`SanicRouter` is the core routing class of SRF, which is responsible for:
+`SanicRouter` is SRF's core routing class. It is responsible for:
 
 - Registering ViewSets as routes
 - Automatically generating standard RESTful endpoints
-- Discovering and registering custom operations decorated with `@action`
+- Discovering and registering custom actions decorated with `@action`
 - Managing URL prefixes and naming
 
-### Basic Usage
+### Basic usage
 
 ```python
+from sanic import Sanic
 from srf.route import SanicRouter
 from viewsets import ProductViewSet
 
-# Create a router
-router = SanicRouter(prefix="api")
+app = Sanic("ShopApp")
+router = SanicRouter(app, prefix="api")
 
 # Register the ViewSet
 router.register("products", ProductViewSet, name="products")
-
-# Get the Blueprint and add it to the application
-app.blueprint(router.get_blueprint())
 ```
 
-## Initialization Parameters
+## Initialization parameters
 
-### SanicRouter(bp=None, prefix="")
+### `SanicRouter(instance, prefix="")`
 
 ```python
-router = SanicRouter(
-    bp=None,          # Optional: existing Blueprint object
-    prefix="api"      # Optional: URL prefix
-)
+router = SanicRouter(app, prefix="api")
 ```
 
-**Parameter Description**:
+**Parameter reference**:
 
-- `bp`: Optional Sanic Blueprint object. If not provided, it will be created automatically.
-- `prefix`: URL prefix that will be added to all routes.
+- `instance`: Required. A Sanic `Sanic` or `Blueprint` instance. When a Sanic instance is passed, routes are registered directly on the application; when a Blueprint is passed, routes are registered on that Blueprint.
+- `prefix`: URL prefix added in front of all routes
 
 ## Registering ViewSets
 
@@ -51,45 +46,45 @@ router = SanicRouter(
 router.register(
     path="products",           # URL path
     view_cls=ProductViewSet,   # ViewSet class
-    name="products"            # Optional: route name prefix
+    name="products"            # Optional: route name
 )
 ```
 
-**Parameter Description**:
+**Parameter reference**:
 
-- `path`: URL path of the resource (without prefix)
+- `path`: URL path of the resource (without the prefix)
 - `view_cls`: ViewSet class
 - `name`: Route name prefix used to generate route names
 
-## Auto-generated Routes
+## Automatically generated routes
 
 When a ViewSet is registered, `SanicRouter` automatically generates the following routes:
 
-### Standard CRUD Routes
+### Standard CRUD routes
 
-Assuming the registration code is:
+Assume the registration code is:
 
 ```python
-router = SanicRouter(prefix="api")
+router = SanicRouter(app, prefix="api")
 router.register("products", ProductViewSet, name="products")
 ```
 
 Generated routes:
 
-| HTTP Method | URL Path | Action | ViewSet Method | Route Name |
-|-------------|----------|--------|----------------|------------|
-| GET         | `/api/products` | List | `list()` | `products-list` |
-| POST        | `/api/products` | Create | `create()` | `products-list` |
-| GET         | `/api/products/<pk:int>` | Detail | `retrieve()` | `products-detail` |
-| PUT         | `/api/products/<pk:int>` | Full Update | `update()` | `products-detail` |
-| PATCH       | `/api/products/<pk:int>` | Partial Update | `update()` | `products-detail` |
-| DELETE      | `/api/products/<pk:int>` | Delete | `destroy()` | `products-detail` |
+| HTTP method | URL path | Operation | ViewSet method | Route name |
+| ----------- | ---------- | ------ | -------------- | ---------- |
+| GET | `/api/products` | List | `list()` | `products-list` |
+| POST | `/api/products` | Create | `create()` | `products-list` |
+| GET | `/api/products/<pk>` | Detail | `retrieve()` | `products-detail` |
+| PUT | `/api/products/<pk>` | Full update | `update()` | `products-detail` |
+| PATCH | `/api/products/<pk>` | Partial update | `update()` | `products-detail` |
+| DELETE | `/api/products/<pk>` | Delete | `destroy()` | `products-detail` |
 
-### Custom Operation Routes
+### Custom action routes
 
 For methods decorated with `@action`:
 
-**Collection-level operation** (`detail=False`):
+**Collection-level actions** (`detail=False`):
 
 ```python
 @action(methods=["get"], detail=False, url_path="featured")
@@ -101,9 +96,9 @@ Generated route:
 
 - URL: `/api/products/featured`
 - Method: GET
-- Route Name: `list_featured`
+- Route name: `products-list_featured` (the default `url_name` is the method name)
 
-**Detail-level operation** (`detail=True`):
+**Detail-level actions** (`detail=True`):
 
 ```python
 @action(methods=["post"], detail=True, url_path="publish")
@@ -113,60 +108,53 @@ async def publish(self, request, pk):
 
 Generated route:
 
-- URL: `/api/products/<pk:int>/publish`
+- URL: `/api/products/<pk>/publish`
 - Method: POST
-- Route Name: `publish`
+- Route name: `products-publish` (the default `url_name` is the method name)
 
-## URL Prefix
+## URL prefixes
 
-URL prefix is used to add a unified prefix to all routes.
+URL prefixes add a common prefix to all routes.
 
-### Single Prefix
+### A single prefix
 
 ```python
-router = SanicRouter(prefix="api")
+router = SanicRouter(app, prefix="api")
 router.register("products", ProductViewSet)
 # Generated: /api/products, /api/products/<pk>
 ```
 
-### Versioned API
+### Versioned APIs
 
 ```python
 # v1 API
-router_v1 = SanicRouter(prefix="api/v1")
+router_v1 = SanicRouter(app, prefix="api/v1")
 router_v1.register("products", ProductViewSetV1)
 # Generated: /api/v1/products
 
 # v2 API
-router_v2 = SanicRouter(prefix="api/v2")
+router_v2 = SanicRouter(app, prefix="api/v2")
 router_v2.register("products", ProductViewSetV2)
 # Generated: /api/v2/products
-
-# Register to application
-app.blueprint(router_v1.get_blueprint())
-app.blueprint(router_v2.get_blueprint())
 ```
 
-### Nested Resources
+### Nested resources
+
+`SanicRouter.register()` appends collection and detail paths after the resource name. For nested routes, put the parent resource ID in the prefix and register the child resource name as `path`. The child resource ViewSet must limit its data by the parent resource ID in `get_queryset()`:
 
 ```python
-# Product routes
-product_router = SanicRouter(prefix="api/products")
-product_router.register("", ProductViewSet)
-# Generated: /api/products, /api/products/<pk>
-
-# Review routes (nested under product)
-review_router = SanicRouter(prefix="api/products/<product_id:int>/reviews")
-review_router.register("", ReviewViewSet)
-# Generated: /api/products/<product_id>/reviews
+review_router = SanicRouter(app, prefix="api/products/<product_id:int>")
+review_router.register("reviews", ReviewViewSet)
+# Collection: /api/products/<product_id:int>/reviews
+# Detail: /api/products/<product_id:int>/reviews/<pk>
 ```
 
-## Multiple ViewSet Registrations
+## Registering multiple ViewSets
 
-### Registering in the Same Router
+### Registering in the same router
 
 ```python
-router = SanicRouter(prefix="api")
+router = SanicRouter(app, prefix="api")
 
 # Register multiple ViewSets
 router.register("products", ProductViewSet)
@@ -174,48 +162,44 @@ router.register("categories", CategoryViewSet)
 router.register("orders", OrderViewSet)
 router.register("reviews", ReviewViewSet)
 
-# Add all at once to the application
-app.blueprint(router.get_blueprint())
 ```
 
-### Using Multiple Routers
+### Using multiple routers
 
 ```python
 # Public API routes
-public_router = SanicRouter(prefix="api/public")
+public_router = SanicRouter(app, prefix="api/public")
 public_router.register("products", ProductViewSet)
 public_router.register("categories", CategoryViewSet)
 
 # Admin API routes
-admin_router = SanicRouter(prefix="api/admin")
+admin_router = SanicRouter(app, prefix="api/admin")
 admin_router.register("users", UserViewSet)
 admin_router.register("orders", OrderViewSet)
-
-# Register to application
-app.blueprint(public_router.get_blueprint())
-app.blueprint(admin_router.get_blueprint())
 ```
 
-## Custom Blueprint
+## Custom Blueprints
 
-You can pass your own Blueprint object:
+When you need to organize routes by module or add Blueprint middleware to routes, you can pass your own Blueprint object.
+`SanicRouter` registers routes directly on that Blueprint; after registration, mount the Blueprint on the Sanic application
+with `app.blueprint(bp)`. The URL prefix is set uniformly through `SanicRouter`'s `prefix`:
 
 ```python
 from sanic import Blueprint
 from srf.route import SanicRouter
 
 # Create a custom Blueprint
-my_blueprint = Blueprint("my_api", url_prefix="/api")
+my_blueprint = Blueprint("my_api")
 
 # Use the custom Blueprint
-router = SanicRouter(bp=my_blueprint, prefix="")
+router = SanicRouter(my_blueprint, prefix="api")
 router.register("products", ProductViewSet)
 
-# Register to application
-app.blueprint(router.get_blueprint())
+# After the Blueprint has completed route registration, mount it on the Sanic application
+app.blueprint(my_blueprint)
 ```
 
-## URL Reverse Resolution
+## URL reverse resolution
 
 Generate URLs using route names:
 
@@ -226,37 +210,34 @@ app = Sanic("MyApp")
 
 # ... register routes ...
 
-# Reverse resolve URL
+# Reverse resolve a URL
 url = app.url_for("products-list")
 # Result: /api/products
 
 url = app.url_for("products-detail", pk=1)
 # Result: /api/products/1
 
-url = app.url_for("list_featured")
+url = app.url_for("products-list_featured")
 # Result: /api/products/featured
 
-url = app.url_for("publish", pk=1)
+url = app.url_for("products-publish", pk=1)
 # Result: /api/products/1/publish
 ```
 
-In ViewSet:
+Using it in a ViewSet:
 
 ```python
 class ProductViewSet(BaseViewSet):
     async def create(self, request):
-        # ... create product ...
-        
-        # Generate detail URL
+        # ... create the product ...
+
+        # Generate the detail URL
         detail_url = request.app.url_for("products-detail", pk=product.id)
-        
-        return json({
-            "id": product.id,
-            "url": detail_url
-        }, status=201)
+
+        return json({"id": product.id, "url": detail_url}, status=201)
 ```
 
-## Route Middleware
+## Route middleware
 
 Add middleware for specific routes:
 
@@ -264,24 +245,26 @@ Add middleware for specific routes:
 from sanic import Blueprint
 from srf.route import SanicRouter
 
-# Create Blueprint
-bp = Blueprint("api", url_prefix="/api")
+# Create a Blueprint
+bp = Blueprint("api")
+
 
 # Add middleware
 @bp.middleware("request")
 async def add_custom_header(request):
     request.ctx.custom_data = "value"
 
-# Use Blueprint
-router = SanicRouter(bp=bp, prefix="")
+
+# Use the Blueprint
+router = SanicRouter(bp, prefix="api")
 router.register("products", ProductViewSet)
 
-app.blueprint(router.get_blueprint())
+app.blueprint(bp)
 ```
 
-## Complete Example
+## Complete examples
 
-### Example 1: Basic Routing Setup
+### Example 1: Basic route setup
 
 ```python
 # app.py
@@ -291,15 +274,12 @@ from viewsets import ProductViewSet, CategoryViewSet
 
 app = Sanic("ShopApp")
 
-# Create router
-router = SanicRouter(prefix="api")
+# Create the router
+router = SanicRouter(app, prefix="api")
 
 # Register ViewSets
 router.register("products", ProductViewSet, name="products")
 router.register("categories", CategoryViewSet, name="categories")
-
-# Add to application
-app.blueprint(router.get_blueprint())
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
@@ -331,16 +311,14 @@ from srf.route import SanicRouter
 from viewsets.v1 import ProductViewSetV1
 from viewsets.v2 import ProductViewSetV2
 
+
 def register_routes(app):
     # v1 routes
-    router_v1 = SanicRouter(prefix="api/v1")
+    router_v1 = SanicRouter(app, prefix="api/v1")
     router_v1.register("products", ProductViewSetV1)
-    app.blueprint(router_v1.get_blueprint())
-    
-    # v2 routes
-    router_v2 = SanicRouter(prefix="api/v2")
+
+    router_v2 = SanicRouter(app, prefix="api/v2")
     router_v2.register("products", ProductViewSetV2)
-    app.blueprint(router_v2.get_blueprint())
 ```
 
 Generated routes:
@@ -357,9 +335,9 @@ POST   /api/v2/products           -> ProductViewSetV2.create
 GET    /api/v2/products/<pk>      -> ProductViewSetV2.retrieve
 ```
 
-## Route Debugging
+## Route debugging
 
-### View All Routes
+### Viewing all routes
 
 ```python
 @app.before_server_start
@@ -369,7 +347,7 @@ async def print_routes(app, loop):
         print(f"{route.methods} {route.path} -> {route.name}")
 ```
 
-### Use Sanic's Route List
+### Using Sanic's route list
 
 ```python
 from sanic import Sanic
@@ -383,67 +361,68 @@ for route in app.router.routes:
     print(f"[{methods}] {route.path}")
 ```
 
-Sample Output:
+Example output:
 
 ```
 [GET, POST] /api/products
-[GET, PUT, PATCH, DELETE] /api/products/<pk:int>
+[GET, PUT, PATCH, DELETE] /api/products/<pk>
 [GET] /api/products/featured
-[POST] /api/products/<pk:int>/publish
+[POST] /api/products/<pk>/publish
 ```
 
-## Best Practices
+## Best practices
 
-1. **Use meaningful path names**: Paths should clearly indicate the resource type.
-2. **Keep URL structure consistent**: Use a uniform naming convention.
-3. **Version your API**: Use URL prefixes to distinguish different versions.
-4. **Modular organization**: Organize related routes together.
-5. **Use route names**: Utilize route names for URL reverse resolution.
-6. **Document routes**: Add documentation strings for each ViewSet.
+1. **Use meaningful path names**: paths should clearly indicate the resource type
+2. **Keep URL structure consistent**: use a consistent naming convention
+3. **Version APIs**: use URL prefixes to distinguish versions
+4. **Modular organization**: organize related routes together
+5. **Use route names**: leverage route names for URL reverse resolution
+6. **Document routes**: add docstrings to each ViewSet
 
-## Common Issues
+## FAQ
 
-### How to disable certain HTTP methods?
+### How do I disable certain HTTP methods?
 
 Override the corresponding method and return a 405 error:
 
 ```python
 class ProductViewSet(BaseViewSet):
     async def destroy(self, request, pk):
-        """Disable delete operation"""
+        """Disable the delete operation"""
         from sanic.response import json
-        return json({"error": "Delete operation is not supported"}, status=405)
+
+        return json({"error": "Delete operations are not supported"}, status=405)
 ```
 
-### How to customize URL parameter types?
+### How do I customize URL parameter types?
 
 Use Sanic's path parameter syntax:
 
 ```python
-# Default uses int
-# /api/products/<pk:int>
+# The pk parameter generated by SanicRouter does not specify a type; SRF normalizes the primary key when get_object(pk) is called
+# /api/products/<pk>
 
-# You can use other types in custom operations
+# Other types can be used in custom actions
 @action(methods=["get"], detail=True, url_path="by-slug/<slug:str>")
 async def get_by_slug(self, request, pk, slug):
     pass
 ```
 
-### How to handle nested resources?
+### How do I handle nested resources?
 
-Use multiple routers and different URL prefixes:
+Use multiple routers with different URL prefixes:
 
 ```python
 # Product routes
 router.register("products", ProductViewSet)
 
-# Reviews under products (need to handle product_id in ViewSet)
-review_router = SanicRouter(prefix="api/products/<product_id:int>")
+# Reviews under products (product_id must be handled in the ViewSet)
+review_router = SanicRouter(app, prefix="api/products/<product_id:int>")
 review_router.register("reviews", ReviewViewSet)
 ```
 
-## Next Steps
+## Next steps
 
-- Learn [Views](viewsets.md) to understand how to create ViewSets
+- Study [Views](viewsets.md) to learn how to create ViewSets
 - Read [Authentication](authentication.md) to learn how to protect routes
-- View [Permissions](permissions.md) to understand access control
+- See [Permissions](permissions.md) to learn about access control

@@ -1,52 +1,60 @@
 # Exception Handling
 
-SRF defines two exception classes and catches some ORM, Pydantic, and HTTP exceptions within `BaseViewSet.as_view()`. It does not install a global unified exception handler.
+SRF defines several exception classes and, inside `GenericAPIView.as_view()`, converts Pydantic / Tortoise
+validation errors into 422 exceptions. It does not install a global unified exception handler.
 
-## SRF Exceptions
+## SRF exceptions
 
 ```python
-from srf.exceptions import ImproperlyConfigured, TargetObjectAlreadyExist
+from srf.exceptions import ImproperlyConfigured, PydanticValidationException, TargetObjectAlreadyExist
 ```
 
-- `TargetObjectAlreadyExist`: Subclass of `HTTPException`, status code 409.
-- `ImproperlyConfigured`: Subclass of `HTTPException`, status code 500.
+- `TargetObjectAlreadyExist`: An `HTTPException` subclass with status code 409 (`quiet=True`).
+- `ImproperlyConfigured`: An `HTTPException` subclass with status code 500.
+- `PydanticValidationException`: An `HTTPException` subclass with status code 422 (`quiet=True`).
 
-They only define status codes and descriptions, without custom JSON response structure. The final response format depends on where the exception occurs: inside ViewSet handler it goes through SRF's catching logic, while other routes are handled by Sanic.
+They only define status codes and have no custom JSON response structure; the final response format is decided by Sanic's default
+exception handling (or handlers registered by the application).
 
-## ViewSet Built-in Handling
+## Built-in ViewSet handling
 
-`BaseViewSet.as_view()` handles the following when calling the handler:
+`as_view()` only catches two kinds of validation errors in the `try` block around the handler call:
 
-| Exception | Response |
+| Exception | Handling |
 |---|---|
-| `tortoise.exceptions.DoesNotExist` | 404 text response |
-| `pydantic.ValidationError` | 422 JSON: `{"detail": str(error)}` |
-| `sanic.exceptions.HTTPException` | Exception status code, JSON: `{"detail": ...}` |
+| `pydantic.ValidationError` | Converted to `PydanticValidationException` (422), with message `str(error)` |
+| `tortoise.exceptions.ValidationError` | Same as above, converted to 422 |
+
+Apart from these two kinds, `as_view()` **does not catch** other exceptions:
+
+- Sanic `NotFound` (404) raised by `get_object()` is passed directly to Sanic.
+- Any `HTTPException` raised inside the handler (such as `BadRequest`, `Forbidden`) is also passed directly to Sanic.
+- `check_permissions()` runs before the `try` block, and the `Forbidden` it raises is likewise handled by Sanic.
 
 For example:
 
 ```python
 from sanic.exceptions import BadRequest
+from srf.views import BaseViewSet
 
 
 class ProductViewSet(BaseViewSet):
     async def create(self, request):
         if request.json is None:
-            raise BadRequest("Request body cannot be empty")
+            raise BadRequest("The request body cannot be empty")
         # ...
 ```
 
-Permission checks happen before this `try` block, so `Forbidden` raised by `check_permissions()` is handled by Sanic, not going through the above JSON conversion.
+## Special CRUD behavior
 
-## Special Behavior for CRUD
+- `get_object()` uses `get_or_none()` and raises Sanic `NotFound` when the object does not exist or the primary key cannot be parsed.
+- `perform_create()` converts Tortoise `IntegrityError` into a 409
+  `TargetObjectAlreadyExist(message="data conflict")`.
+- When the request JSON is `None`, the built-in create/update return an empty 400 response directly.
 
-- `get_object()` uses `get_or_none()`, throwing Sanic `NotFound` if the object doesn't exist.
-- `perform_create()` converts Tortoise `IntegrityError` to 409 `HTTPException(detail="data conflict")`.
-- When the request JSON is `None`, built-in create/update directly returns an empty 400 response.
+## Global unified responses
 
-## Global Unified Response
-
-If your application needs consistent formatting, register a Sanic exception handler:
+If the application needs a consistent format, register a Sanic exception handler:
 
 ```python
 from sanic.exceptions import HTTPException
@@ -64,9 +72,10 @@ async def handle_http_exception(request, exception):
     )
 ```
 
-Note: Exceptions already caught and converted by ViewSet will not reach this global handler. To achieve full uniformity across all endpoints, you need to adjust the catching strategy in `BaseViewSet.as_view()` as well.
+Note: the `PydanticValidationException` produced by `as_view()` is also an `HTTPException`,
+so it reaches this global handler; the application can use that to output a unified format.
 
-In production environment, you can add a fallback handler, but do not expose stack traces to clients:
+In production you can add a fallback handler, but do not expose stack traces to clients:
 
 ```python
 from sanic.log import error_logger
@@ -76,14 +85,15 @@ from sanic.log import error_logger
 async def handle_unexpected_error(request, exception):
     error_logger.exception("Unhandled exception")
     return json(
-        {"error": "INTERNAL_ERROR", "message": "Server internal error"},
+        {"error": "INTERNAL_ERROR", "message": "Internal server error"},
         status=500,
     )
 ```
 
-## Pydantic Errors
+## Pydantic errors
 
-The current built-in response uses `str(error)`. If the client needs structured field errors, you can return `error.errors()` in a custom ViewSet handler, or modify the framework's catching logic:
+The built-in response currently uses `str(error)`. If clients need structured field errors, you can return `error.errors()`
+in a custom ViewSet handler, or modify the framework's capture logic:
 
 ```python
 except ValidationError as error:
@@ -93,17 +103,17 @@ except ValidationError as error:
     )
 ```
 
-## Best Practices
+## Best practices
 
-1. **Categorize Exceptions**: Use different exception classes for different types of errors
-2. **Friendly Error Messages**: Provide clear and helpful error messages
-3. **Consistent Response Format**: Use a consistent error response structure
-4. **Log Detailed Context**: Record context information for errors
-5. **Hide Internal Details**: Do not expose internal errors in production
-6. **Use Appropriate Status Codes**: Use correct HTTP status codes for different errors
-7. **Internationalization**: Support multilingual error messages
-## Next Steps
+1. **Classify exceptions**: use different exception classes for different kinds of errors
+2. **Friendly error messages**: provide clear, helpful error messages
+3. **Unified response format**: use a consistent error response structure
+4. **Log details**: log contextual information about errors
+5. **Hide internal details**: do not expose internal errors in production
+6. **Use appropriate status codes**: use the correct HTTP status code for different errors
+7. **Internationalization**: support error messages in multiple languages
+## Next steps
 
-- Learn [HTTP Status Codes](http-status.md) to understand their usage
-- Read [Authentication](../core/authentication.md) to understand authentication exceptions
-- View [Views](../core/viewsets.md) to understand exception handling in ViewSet
+- Study [HTTP Status](http-status.md) to learn about using status codes
+- Read [Authentication](../core/authentication.md) to learn about authentication exceptions
+- See [Views](../core/viewsets.md) to learn about exception handling in ViewSets

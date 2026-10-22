@@ -18,72 +18,6 @@ SRF 提供了许多实用的高级功能，帮助您构建更健壮和功能完�
 - **[CSRF 中间件](middleware/csrf-middleware.md)**: 防止跨站请求伪造攻击
 - **[限流中间件](middleware/rate-limiting.md)**: 防止 API 滥用，控制请求频率
 
-## 快速导航
-
-### 健康检查
-
-监控应用和依赖服务的健康状态。内置部分检查， 通过 `HEALTH_CHECK_LIST` 注册：
-
-```python
-from srf.health.route import bp as health_bp
-
-app.blueprint(health_bp)
-
-# 访问 /health/ 查看健康状态
-```
-
-### 异常处理
-
-ViewSet 会转换部分 ORM、Pydantic 和 HTTP 异常；其他位置仍由 Sanic 处理：
-
-```python
-from srf.exceptions import TargetObjectAlreadyExist
-
-# 抛出自定义异常
-if await Product.filter(sku=sku).exists():
-    raise TargetObjectAlreadyExist("该 SKU 已存在")
-```
-
-### HTTP 状态码
-
-使用语义化的状态码常量：
-
-```python
-from srf.views.http_status import HTTPStatus
-from sanic.response import json
-
-return json(data, status=HTTPStatus.HTTP_201_CREATED)
-```
-
-### 认证中间件
-
-自动验证 JWT Token 并设置用户上下文：
-
-```python
-from srf.middleware.authmiddleware import set_user_to_request_ctx
-
-@app.middleware("request")
-async def auth_middleware(request):
-    await set_user_to_request_ctx(request)
-```
-
-### 限流中间件
-
-控制 API 请求频率，防止滥用：
-
-```python
-from srf.middleware.throttlemiddleware import IPRateLimit, MemoryStorage
-
-storage = MemoryStorage()
-app.config.REQUEST_LIMITERS = [
-    IPRateLimit(100, 60, storage),  # 100 requests per 60 seconds
-]
-```
-
-### CSRF 保护
-
-防止跨站请求伪造攻击（开发中）。
-
 ## 使用建议
 
 ### 生产环境必备
@@ -104,97 +38,12 @@ app.config.REQUEST_LIMITERS = [
 
 ## 功能组合示例
 
-### 完整的生产环境配置
-
-```python
-from sanic import Sanic
-from srf.config import settings
-from srf.middleware.authmiddleware import set_user_to_request_ctx
-from srf.middleware.throttlemiddleware import IPRateLimit, UserRateLimit, MemoryStorage, throttle_rate
-from srf.health.route import bp as health_bp
-from srf.views.http_status import HTTPStatus
-from sanic.response import json
-from sanic.exceptions import NotFound, Forbidden, Unauthorized
-
-app = Sanic("ProductionApp")
-settings.set_app(app)
-
-# 1. 配置限流
-storage = MemoryStorage()
-app.config.REQUEST_LIMITERS = [
-    IPRateLimit(100, 60, storage),      # IP: 100次/分钟
-    UserRateLimit(1000, 60, storage),   # 用户: 1000次/分钟
-]
-
-# 2. 注册中间件
-@app.middleware("request")
-async def auth_middleware(request):
-    """认证中间件"""
-    await set_user_to_request_ctx(request)
-
-@app.middleware("request")
-async def throttle_middleware(request):
-    """限流中间件"""
-    if not await throttle_rate(request):
-        return json({"error": "请求过于频繁"}, status=HTTPStatus.HTTP_429_TOO_MANY_REQUESTS)
-
-# 3. 注册健康检查
-app.blueprint(health_bp)
-
-# 4. 统一异常处理
-@app.exception(NotFound)
-async def handle_not_found(request, exception):
-    return json(
-        {"error": "资源未找到", "message": str(exception)},
-        status=HTTPStatus.HTTP_404_NOT_FOUND
-    )
-
-@app.exception(Forbidden)
-async def handle_forbidden(request, exception):
-    return json(
-        {"error": "权限不足", "message": str(exception)},
-        status=HTTPStatus.HTTP_403_FORBIDDEN
-    )
-
-@app.exception(Unauthorized)
-async def handle_unauthorized(request, exception):
-    return json(
-        {"error": "未授权", "message": "请先登录"},
-        status=HTTPStatus.HTTP_401_UNAUTHORIZED
-    )
-
-@app.exception(Exception)
-async def handle_exception(request, exception):
-    import logging
-    logging.error(f"Unhandled exception: {exception}", exc_info=True)
-    return json(
-        {"error": "服务器内部错误"},
-        status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR
-    )
-```
+把配置、认证中间件、路由、健康检查和异常处理组合起来的完整应用骨架见
+[项目设置](../project-setup.md)；限流器的接入方式见[限流中间件](middleware/rate-limiting.md)。
 
 ## 监控和日志
 
-### 日志配置
-
-```python
-import logging
-from sanic.log import logger
-
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('app.log'),
-        logging.StreamHandler()
-    ]
-)
-
-# 在代码中使用
-logger.info("Application started")
-logger.error("Error occurred", exc_info=True)
-```
+基础日志配置见[项目设置](../project-setup.md)。下面只补充请求/响应级别的监控。
 
 ### 请求日志中间件
 
@@ -203,6 +52,7 @@ logger.error("Error occurred", exc_info=True)
 async def log_request(request):
     """记录请求信息"""
     logger.info(f"{request.method} {request.path} from {request.ip}")
+
 
 @app.middleware("response")
 async def log_response(request, response):
@@ -215,17 +65,19 @@ async def log_response(request, response):
 ```python
 import time
 
+
 @app.middleware("request")
 async def add_start_time(request):
     """添加请求开始时间"""
     request.ctx.start_time = time.time()
 
+
 @app.middleware("response")
 async def add_process_time(request, response):
     """计算处理时间"""
-    if hasattr(request.ctx, 'start_time'):
+    if hasattr(request.ctx, "start_time"):
         process_time = time.time() - request.ctx.start_time
-        response.headers['X-Process-Time'] = str(process_time)
+        response.headers["X-Process-Time"] = str(process_time)
 ```
 
 ## 安全最佳实践
@@ -235,15 +87,12 @@ async def add_process_time(request, response):
 生产环境必须使用 HTTPS：
 
 ```python
+from sanic.log import logger
+from sanic.response import json
+
+
 # 配置 SSL
-app.run(
-    host="0.0.0.0",
-    port=443,
-    ssl={
-        'cert': '/path/to/cert.pem',
-        'key': '/path/to/key.pem'
-    }
-)
+app.run(host="0.0.0.0", port=443, ssl={"cert": "/path/to/cert.pem", "key": "/path/to/key.pem"})
 ```
 
 ### 2. 限制请求大小
@@ -265,6 +114,7 @@ app.config.RESPONSE_TIMEOUT = 60
 # 不要在生产环境开启 debug
 app.run(host="0.0.0.0", port=8000, debug=False)
 
+
 # 不要在错误响应中暴露详细的堆栈信息
 @app.exception(Exception)
 async def handle_exception(request, exception):
@@ -278,18 +128,20 @@ async def handle_exception(request, exception):
 ### 5. 验证输入
 
 ```python
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
+
 
 class ProductSchema(BaseModel):
     name: str
     price: float
 
-    @validator('price')
+    @field_validator("price")
+    @classmethod
     def validate_price(cls, value):
         if value <= 0:
-            raise ValueError('价格必须大于0')
+            raise ValueError("价格必须大于0")
         if value > 1000000:
-            raise ValueError('价格不能超过100万')
+            raise ValueError("价格不能超过100万")
         return value
 ```
 
@@ -313,7 +165,7 @@ register_tortoise(
                     "database": "db",
                     "minsize": 1,
                     "maxsize": 10,  # 连接池大小
-                }
+                },
             }
         },
         "apps": {
@@ -321,8 +173,8 @@ register_tortoise(
                 "models": ["models"],
                 "default_connection": "default",
             }
-        }
-    }
+        },
+    },
 )
 ```
 
@@ -331,10 +183,12 @@ register_tortoise(
 ```python
 from redis.asyncio import Redis, ConnectionPool
 
+
 @app.before_server_start
 async def setup_redis(app, loop):
-    pool = ConnectionPool.from_url('redis://localhost:6379', max_connections=10)
+    pool = ConnectionPool.from_url("redis://localhost:6379", max_connections=10)
     app.ctx.redis = Redis(connection_pool=pool)
+
 
 # 在 ViewSet 中使用缓存
 class ProductViewSet(BaseViewSet):
@@ -347,55 +201,55 @@ class ProductViewSet(BaseViewSet):
         if cached:
             from sanic.response import json
             import json as json_lib
+
             return json(json_lib.loads(cached))
 
         # 从数据库获取
-        obj = await self.get_object(request, pk)
-        schema = self.get_schema(request, is_safe=True)
-        data = schema.model_validate(obj).model_dump()
+        obj = await self.get_object(pk)
+        schema = self.get_schema()
+        data = schema.model_validate(obj).model_dump(mode="json")
 
         # 存入缓存（10分钟过期）
         await redis.setex(cache_key, 600, json_lib.dumps(data))
 
         from sanic.response import json
+
         return json(data)
 ```
+
+!!! warning "缓存与对象权限"
+    上面的示例先读缓存再调用 `get_object()`，命中缓存时会跳过对象级权限检查。
+    需要对象级权限的接口应先执行权限检查，或按用户维度设置缓存键。
 
 ### 3. 使用异步操作
 
 ```python
 import asyncio
 
+
 class ProductViewSet(BaseViewSet):
     async def create(self, request):
         # 并行执行多个异步操作
-        results = await asyncio.gather(
-            Product.all().count(),
-            Category.all(),
-            Brand.all()
-        )
+        results = await asyncio.gather(Product.all().count(), Category.all(), Brand.all())
 
         product_count, categories, brands = results
 ```
 
 ## 部署建议
 
-### 使用 Gunicorn
+### 使用 Sanic 内置多进程
+
+Sanic 25 不再提供 `sanic.worker.GunicornWorker`，使用 `sanic` 命令直接启动多个 worker：
 
 ```bash
-gunicorn app:app \
-  --bind 0.0.0.0:8000 \
-  --workers 4 \
-  --worker-class sanic.worker.GunicornWorker \
-  --access-logfile /var/log/access.log \
-  --error-logfile /var/log/error.log
+sanic app:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
 ### 使用 Supervisor
 
 ```ini
 [program:myapp]
-command=/path/to/venv/bin/gunicorn app:app --bind 0.0.0.0:8000 --workers 4 --worker-class sanic.worker.GunicornWorker
+command=/path/to/venv/bin/sanic app:app --host 0.0.0.0 --port 8000 --workers 4
 directory=/path/to/app
 user=www-data
 autostart=true

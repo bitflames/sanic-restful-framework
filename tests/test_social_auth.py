@@ -10,7 +10,6 @@ from sanic.exceptions import BadRequest, NotFound
 from srf.auth import social_auth
 from srf.tools.signing import sign_state
 
-
 GITHUB_CONFIG = {
     "CLIENT_ID": "client-id",
     "CLIENT_SECRET": "client-secret",
@@ -106,20 +105,39 @@ class TestGithubCallback:
 
 class TestLoginByCode:
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("body", [None, [], "code"])
+    async def test_non_object_body_raises_bad_request(self, body):
+        request = make_request()
+        request.json = body
+        with pytest.raises(BadRequest, match="JSON request body must be an object"):
+            await social_auth.github_login_by_code(request)
+
+    @pytest.mark.asyncio
     async def test_missing_code_raises(self):
         request = make_request(args={})
+        request.json = {}
         with pytest.raises(BadRequest, match="Missing authorization code"):
+            await social_auth.github_login_by_code(request)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("code", [123, [], {}, "   "])
+    async def test_invalid_code_type_or_value_raises(self, code):
+        request = make_request()
+        request.json = {"code": code}
+        with pytest.raises(BadRequest, match="Invalid authorization code"):
             await social_auth.github_login_by_code(request)
 
     @pytest.mark.asyncio
     async def test_too_long_code_raises(self):
         request = make_request(args={"code": "x" * 257})
+        request.json = {"code": "x" * 257}
         with pytest.raises(BadRequest, match="Invalid authorization code"):
             await social_auth.github_login_by_code(request)
 
     @pytest.mark.asyncio
     async def test_expired_code_raises(self):
         request = make_request(args={"code": "once"})
+        request.json = {"code": "once"}
         request.app.ctx.redis.getdel = AsyncMock(return_value=None)
         with pytest.raises(NotFound, match="Invalid or expired"):
             await social_auth.github_login_by_code(request)
@@ -127,22 +145,20 @@ class TestLoginByCode:
     @pytest.mark.asyncio
     async def test_happy_path_returns_access_token(self):
         request = make_request(args={"code": "once"})
+        request.json = {"code": "once"}
         request.app.ctx.redis.getdel = AsyncMock(return_value=b"7")
         request.app.config.JWT = SimpleNamespace(config={})
 
         mock_user = MagicMock()
         mock_user.id = 7
-        mock_user.name = "alice"
+        mock_user.username = "alice"
         mock_user.email = "alice@example.com"
         mock_user.is_active = True
-        mock_user.is_staff = False
         mock_user.is_superuser = False
         mock_user.last_login = None
         mock_user.create_time = None
         mock_user.update_time = None
-        mock_role = MagicMock()
-        mock_role.name = "user"
-        mock_user.role = mock_role
+        mock_user.roles = []
         mock_user.save = AsyncMock()
 
         auth_instance = MagicMock()
@@ -158,7 +174,7 @@ class TestLoginByCode:
                 return_value=MagicMock(model_dump=MagicMock(return_value={"id": 7, "username": "alice"})),
             ),
         ):
-            UserMock.filter.return_value.select_related.return_value.first = AsyncMock(return_value=mock_user)
+            UserMock.filter.return_value.prefetch_related.return_value.first = AsyncMock(return_value=mock_user)
             response = await social_auth.github_login_by_code(request)
 
         assert response.status == 200

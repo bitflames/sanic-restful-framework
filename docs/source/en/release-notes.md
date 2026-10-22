@@ -1,89 +1,95 @@
 # Release Notes
 
-The version release history and changelog of the Sanic RESTful Framework.
+Release history and changelog for Sanic RESTful Framework.
 
-Current package version: `srf.__version__ == "0.1.0"`.
+Current package version: `srf.__version__ == "0.1.1"`.
 
-## Version Naming Convention
+## Versioning scheme
 
-SRF follows the [Semantic Versioning](https://semver.org/lang/zh-CN/) specification:
+SRF follows [Semantic Versioning](https://semver.org/):
 
-- **Major Version**: Incompatible API changes
-- **Minor Version**: Backward-compatible feature additions
-- **Patch Version**: Backward-compatible bug fixes
+- **Major version**: Incompatible API changes
+- **Minor version**: Backward-compatible feature additions
+- **Patch version**: Backward-compatible bug fixes
 
-Format: `Major.Version.Patch`
+Format: `major.minor.patch`
 
-## Version History
+## Version history
+
+### v0.1.1
+
+- Login requests use the `account` field, which accepts a username or an email address.
+- Email verification codes are six-digit numbers, handled atomically together with failure counts via a Redis Lua script.
+- Added the asynchronous template email interface `send_template_email()`.
+- GitHub OAuth login now uses a one-time login code flow.
 
 ### v0.0.2 (2026-02-07)
 
 **First official release** 🎉
 
-#### Core Features
+#### Core features
 
-- ✅ **ViewSet System**
-  - Implementation of BaseViewSet
-  - CRUD Mixins (Create, Retrieve, Update, Destroy, List)
-  - @action decorator for custom operations
+- ✅ **ViewSet system**
+  - BaseViewSet implementation
+  - CRUD mixins (Create, Retrieve, Update, Destroy, List)
+  - The @action decorator for custom actions
   - Automatic route generation
 
-- ✅ **Routing System**
-  - SanicRouter router manager
+- ✅ **Routing system**
+  - SanicRouter route manager
   - Automatic discovery of methods decorated with @action
-  - Support for collection-level and detail-level operations
+  - Supports both collection-level and detail-level actions
   - URL prefix and naming support
 
-- ✅ **Authentication and Authorization**
+- ✅ **Authentication and authorization**
   - JWT (JSON Web Token) authentication
   - Social login (GitHub OAuth)
-  - Email verification code
-  - Permission class system (IsAuthenticated, IsRoleAdminUser, IsSafeMethodOnly)
+  - Email verification codes
+  - Permission class system (AllowAny, IsAuthenticated, SafeMethodOnly, SuperuserOnly)
   - Authentication middleware
 
-- ✅ **Data Processing**
+- ✅ **Data processing**
   - Data validation based on Pydantic
-  - Separation of read and write Schemas
+  - Separate read/write schemas
   - Automatic serialization and deserialization
 
-- ✅ **Filtering and Search**
-  - SearchFilter - Full-text search
-  - JsonLogicFilter - Complex queries
-  - QueryParamFilter - Precise filtering
-  - OrderingFactory - Sorting
+- ✅ **Filtering and search**
+  - SearchFilter - searches the fields configured in `search_fields`
+  - QueryParamFilter - exact filtering
+  - OrderingFactory - sorting
 
 - ✅ **Pagination**
-  - Pagination based on page number
-  - Configurable number per page
-  - Unified pagination response format
+  - Page-number-based pagination
+  - Configurable page size
+  - Unified paginated response format
 
 - ✅ **Middleware**
   - Authentication middleware
-  - Rate limiting middleware (IP, user, path, request header)
-  - CSRF middleware (planned)
+  - Rate limiting middleware (IP, user, path, headers)
+  - Authentication and rate limiting middleware (no CSRF middleware)
 
-- ✅ **Health Check**
-  - Expandable health check system (registered via `HEALTH_CHECK_LIST`)
-  - Built-in `RedisCheck`, `SQLiteCheck`
+- ✅ **Health checks**
+  - Extensible health check system (registered via `HEALTH_CHECK_LIST`)
+  - Built-in `RedisCheck` and `SQLiteCheck`
 
-- ✅ **Exception Handling**
+- ✅ **Exception handling**
   - Unified exception handling mechanism
   - Custom exception classes
   - Standardized error responses
 
-- ✅ **Utility Classes**
-  - HTTP status code enumeration
-  - Email sending functionality
+- ✅ **Utilities**
+  - HTTP status code enums
+  - Email sending
   - Configuration management system
 
-#### ORM Support
+#### ORM support
 
-- Integration with Tortoise ORM
+- Tortoise ORM integration
 - Native asynchronous database operations
 
 #### Documentation
 
-- Support for complete English and Chinese documentation
+- Complete English and Chinese documentation
 - Code examples and tutorials
 - API reference documentation
 
@@ -91,64 +97,63 @@ Format: `Major.Version.Patch`
 
 ### v0.1.0 (2026-08-06)
 
-**Security Enhancements, Configuration Cleanup, and Alignment of Documentation/Test**
+**Security hardening, configuration cleanup, and documentation/test alignment**
 
-#### ⚠️ Breaking Changes
+#### ⚠️ Breaking changes
 
-- Authentication key is now explicitly passed, no longer silently uses default values
-- Configuration entry unified to `settings` (`srfconfig` is deprecated)
-- Some configuration items have been renamed and aligned with Sanic's uppercase convention
-- ViewSet is split out from `GenericAPIView`; creation hook signature is tightened
+- Authentication keys are now passed explicitly instead of silently using defaults
+- The configuration entry point is unified as `srf.config.settings`
+- Several configuration options were renamed and aligned with Sanic's uppercase convention
+- `GenericAPIView` was split out of ViewSet; create hook signatures were tightened
 
-#### ✅ New / Improved Features
+#### ✅ Added / Improved
 
-- Improved social login process, reducing CSRF risk
-- Login supports email or username
+- Refined the social login flow to reduce CSRF risk
+- Login supports either email or username
 - Health checks are driven by `HEALTH_CHECK_LIST` and support timeouts
-- Rate limiting, verification code, and other configurations are more robust, with clearer default behavior
+- Configuration for rate limiting, verification codes, and more is more robust, with clearer default behavior
 - Completed dependencies and unit tests
-- Updated Chinese documentation according to current API; recorded a list of technical debts
+- Updated the Chinese documentation to the current API; recorded the technical debt list
 
 ---
 
 ## Roadmap
 
-### v0.2.0 (Planned)
+### v0.2.0 (planned)
 
-**Target Release Date**: Not yet determined
+**Target release date**: TBD
 
-#### Planned Improvements
+#### Planned improvements
 
-- [ ] Unify login error responses to avoid account enumeration
-- [ ] Strict whitelist for filter fields
-- [ ] Support PATCH for real partial updates
-- [x] Email sending no longer blocks the event loop (`send_verify_code` + `asyncio.to_thread`)
+- [ ] Unify login error responses to prevent account enumeration
+- [ ] Strict allowlists for filter fields
+- [ ] True partial updates for PATCH
+- [ ] Add a configurable password strength validator that lets projects compose length, character-type, and other password rules as needed, and use it consistently for registration and password changes
 
 ---
 
-## Supported Python Versions
+## Supported Python versions
 
-| SRF Version | Python Version |
-|-------------|----------------|
+| SRF version | Python version |
+|----------|-------------|
 | 0.0.x / 0.1.x | >= 3.11 |
 
 ---
 
-## Get Updates
+## Getting updates
 
-- **GitHub**: https://github.com/bitflames/sanic-restful-framework/
-- **PyPI**: https://pypi.org/project/sanic-restful-framework/
-- **Documentation**: https://sanic-restful-framework.bitflames.com/
+- **GitHub**: <https://github.com/bitflames/sanic-restful-framework/>
+- **PyPI**: <https://pypi.org/project/sanic-restful-framework/>
+- **Documentation**: <https://sanic-restful-framework.bitflames.com/>
 
-
-## Feedback and Suggestions
+## Feedback and suggestions
 
 We welcome any feedback and suggestions:
 
-- **Bug Reports**: Submit an Issue on GitHub
-- **Feature Requests**: Submit a Feature Request on GitHub
-- **Questions**: Post on GitHub Discussions
-- **Security Issues**: Send an email to security@example.com
+- **Bug reports**: submit an Issue on GitHub
+- **Feature requests**: submit a Feature Request on GitHub
+- **Questions**: post in GitHub Discussions
+- **Security issues**: email <1364707405c@gmail.com>
 
 ---
 
@@ -158,22 +163,22 @@ Sanic RESTful Framework is released under the MIT License.
 
 ---
 
-## Changelog Format Explanation
+## Changelog format
 
 ### Legend
 
-- ✅ New Feature
+- ✅ New feature
 - 🔧 Improvement
-- 🐛 Bug Fix
-- ⚠️ Breaking Change
-- 📝 Documentation Update
-- 🎨 Code Style Improvement
-- ⚡ Performance Optimization
-- 🔒 Security Fix
+- 🐛 Bug fix
+- ⚠️ Breaking change
+- 📝 Documentation update
+- 🎨 Code style improvement
+- ⚡ Performance optimization
+- 🔒 Security fix
 
-### Contribution
+### Contributing
 
-Welcome to submit Pull Requests to improve SRF!
+Pull Requests to help improve SRF are welcome!
 
 ---
 

@@ -1,35 +1,41 @@
 # 异常处理
 
-SRF 定义了两个异常类，并在 `BaseViewSet.as_view()` 内捕获部分 ORM、
-Pydantic 和 HTTP 异常。它没有安装全局统一异常处理器。
+SRF 定义了多个异常类，并在 `GenericAPIView.as_view()` 内将 Pydantic / Tortoise
+的验证错误转换为 422 异常。它没有安装全局统一异常处理器。
 
 ## SRF 异常
 
 ```python
-from srf.exceptions import ImproperlyConfigured, TargetObjectAlreadyExist
+from srf.exceptions import ImproperlyConfigured, PydanticValidationException, TargetObjectAlreadyExist
 ```
 
-- `TargetObjectAlreadyExist`：`HTTPException` 子类，状态码 409。
+- `TargetObjectAlreadyExist`：`HTTPException` 子类，状态码 409（`quiet=True`）。
 - `ImproperlyConfigured`：`HTTPException` 子类，状态码 500。
+- `PydanticValidationException`：`HTTPException` 子类，状态码 422（`quiet=True`）。
 
-它们只定义状态码和说明，没有自定义 JSON 响应结构。最终响应格式取决于异常
-发生位置：在 ViewSet handler 内会经过 SRF 的捕获逻辑，其他路由则由 Sanic
-处理。
+它们只定义状态码，没有自定义 JSON 响应结构；最终响应格式由 Sanic 的默认
+异常处理（或应用注册的处理器）决定。
 
 ## ViewSet 内置处理
 
-`BaseViewSet.as_view()` 在调用 handler 时处理：
+`as_view()` 只在调用 handler 的 `try` 块中捕获两类验证错误：
 
-| 异常 | 响应 |
+| 异常 | 处理 |
 |---|---|
-| `tortoise.exceptions.DoesNotExist` | 404 文本响应 |
-| `pydantic.ValidationError` | 422 JSON：`{"detail": str(error)}` |
-| `sanic.exceptions.HTTPException` | 异常状态码，JSON：`{"detail": ...}` |
+| `pydantic.ValidationError` | 转为 `PydanticValidationException`（422），message 为 `str(error)` |
+| `tortoise.exceptions.ValidationError` | 同上，转为 422 |
+
+除这两类之外，`as_view()` **不捕获**其他异常：
+
+- `get_object()` 抛出的 Sanic `NotFound`（404）直接交给 Sanic 处理。
+- handler 内抛出的任何 `HTTPException`（如 `BadRequest`、`Forbidden`）也直接交给 Sanic。
+- `check_permissions()` 在 `try` 块之前执行，其抛出的 `Forbidden` 同样由 Sanic 处理。
 
 例如：
 
 ```python
 from sanic.exceptions import BadRequest
+from srf.views import BaseViewSet
 
 
 class ProductViewSet(BaseViewSet):
@@ -39,14 +45,11 @@ class ProductViewSet(BaseViewSet):
         # ...
 ```
 
-权限检查发生在这个 `try` 块之前，因此 `check_permissions()` 抛出的
-`Forbidden` 由 Sanic 处理，不经过上述 JSON 转换。
-
 ## CRUD 的特殊行为
 
-- `get_object()` 使用 `get_or_none()`，对象不存在时抛出 Sanic `NotFound`。
+- `get_object()` 使用 `get_or_none()`，对象不存在或主键无法解析时抛出 Sanic `NotFound`。
 - `perform_create()` 把 Tortoise `IntegrityError` 转成 409
-  `HTTPException(detail="data conflict")`。
+  `TargetObjectAlreadyExist(message="data conflict")`。
 - 请求 JSON 为 `None` 时，内置 create/update 直接返回空 400 响应。
 
 ## 全局统一响应
@@ -69,8 +72,8 @@ async def handle_http_exception(request, exception):
     )
 ```
 
-注意：ViewSet 已捕获并转换的异常不会再到达这个全局处理器。若要让所有端点
-完全统一，需要同时调整 `BaseViewSet.as_view()` 的捕获策略。
+注意：`as_view()` 转换出的 `PydanticValidationException` 也是 `HTTPException`，
+会到达上面这个全局处理器；应用可以据此输出统一格式。
 
 生产环境可另加兜底处理器，但不要向客户端暴露堆栈：
 

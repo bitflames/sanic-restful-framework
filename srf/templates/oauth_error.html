@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login Failed</title>
+</head>
+<body>
+    <p>Social login failed.</p>
+    <p>Redirecting in <span id="countdown">{{ delay }}</span> seconds. <a href="#" id="redirect-btn" style="color: blue; text-decoration: underline;">Redirect Now</a></p>
+
+    <script>
+        const redirectUrl = {{ redirect_uri | tojson }};
+        let remaining = {{ delay }};
+        const countdown = document.getElementById("countdown");
+
+        function redirect() {
+            window.location.replace(redirectUrl);
+        }
+
+        document.getElementById("redirect-btn").addEventListener("click", (event) => {
+            event.preventDefault();
+            redirect();
+        });
+
+        const timer = setInterval(() => {
+            remaining -= 1;
+            countdown.textContent = remaining;
+
+            if (remaining <= 0) {
+                clearInterval(timer);
+                redirect();
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

@@ -1,8 +1,8 @@
 # 发布说明
 
-Sanic RESTful Framework 的版本发布历史和更新日志。
+Sanic RESTful framework 的版本发布历史和更新日志。
 
-当前包版本：`srf.__version__ == "0.1.0"`。
+当前包版本：`srf.__version__ == "0.1.1"`。
 
 ## 版本命名规则
 
@@ -15,6 +15,13 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
 格式：`主版本号.次版本号.修订号`
 
 ## 版本历史
+
+### v0.1.1
+
+- 登录请求使用 `account` 字段，支持用户名或邮箱。
+- 邮箱验证码使用六位数字，并通过 Redis Lua 脚本原子处理验证码和错误次数。
+- 增加异步模板邮件接口 `send_template_email()`。
+- GitHub OAuth 登录增加一次性登录码流程。
 
 ### v0.0.2 (2026-02-07)
 
@@ -38,7 +45,7 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
   - JWT (JSON Web Token) 认证
   - 社交登录（GitHub OAuth）
   - 邮箱验证码
-  - 权限类系统（IsAuthenticated, IsRoleAdminUser, IsSafeMethodOnly）
+  - 权限类系统（AllowAny、IsAuthenticated、SafeMethodOnly、SuperuserOnly）
   - 认证中间件
 
 - ✅ **数据处理**
@@ -47,8 +54,7 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
   - 自动序列化和反序列化
 
 - ✅ **过滤与搜索**
-  - SearchFilter - 全文搜索
-  - JsonLogicFilter - 复杂查询
+  - SearchFilter - 按 `search_fields` 配置搜索字段
   - QueryParamFilter - 精确过滤
   - OrderingFactory - 排序
 
@@ -60,7 +66,7 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
 - ✅ **中间件**
   - 认证中间件
   - 限流中间件（IP、用户、路径、请求头）
-  - CSRF 中间件（规划中）
+  - 认证与限流中间件（不包含 CSRF 中间件）
 
 - ✅ **健康检查**
   - 可扩展的健康检查系统（通过 `HEALTH_CHECK_LIST` 注册）
@@ -89,7 +95,6 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
 
 ---
 
-
 ### v0.1.0 (2026-08-06)
 
 **安全加固、配置整理与文档/测试对齐**
@@ -97,7 +102,7 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
 #### ⚠️ 破坏性变更
 
 - 认证密钥改为显式传入，不再静默使用默认值
-- 配置入口统一为 `settings`（`srfconfig` 废弃）
+- 配置入口统一为 `srf.config.settings`
 - 若干配置项更名并对齐 Sanic 大写约定
 - ViewSet 拆分出 `GenericAPIView`；创建钩子签名收紧
 
@@ -123,7 +128,7 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
 - [ ] 登录错误响应统一，避免账户枚举
 - [ ] 过滤字段严格白名单
 - [ ] PATCH 支持真正的局部更新
-- [x] 邮件发送不再阻塞事件循环（`send_verify_code` + `asyncio.to_thread`）
+- [ ] 增加可配置的密码强度校验器，支持项目按需组合长度、字符类型等密码规则，并统一用于注册和修改密码
 
 ---
 
@@ -137,10 +142,9 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
 
 ## 获取更新
 
-- **GitHub**: https://github.com/bitflames/sanic-restful-framework/
-- **PyPI**: https://pypi.org/project/sanic-restful-framework/
-- **文档**: https://sanic-restful-framework.bitflames.com/
-
+- **GitHub**: <https://github.com/bitflames/sanic-restful-framework/>
+- **PyPI**: <https://pypi.org/project/sanic-restful-framework/>
+- **文档**: <https://sanic-restful-framework.bitflames.com/>
 
 ## 反馈和建议
 
@@ -149,13 +153,13 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
 - **Bug 报告**: 在 GitHub 提交 Issue
 - **功能请求**: 在 GitHub 提交 Feature Request
 - **问题咨询**: 在 GitHub Discussions 发帖
-- **安全问题**: 发送邮件到 security@example.com
+- **安全问题**: 发送邮件到 <1364707405c@gmail.com>
 
 ---
 
 ## 许可证
 
-Sanic RESTful Framework 采用 MIT 许可证。
+Sanic RESTful framework 采用 MIT 许可证。
 
 ---
 

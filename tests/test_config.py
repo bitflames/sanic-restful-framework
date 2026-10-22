@@ -20,7 +20,7 @@ class TestLazySettings:
     def test_uppercase_settings_loaded(self):
         assert settings.HEALTH_CHECK_LIST == []
         assert settings.REQUEST_LIMITERS == []
-        assert settings.EMAIL_CODE_REDIS == "EMAIL_CODE"
+        assert settings.USER_REGISTER_EMAIL_CODE == "USER_REGISTER:EMAIL_CODE:{email}"
         assert len(settings.DEFAULT_FILTERS) == 4
         assert settings.DEFAULT_PERMISSION_CLASSES[0].__name__ == "AllowAny"
 
@@ -32,15 +32,15 @@ class TestLazySettings:
         previous = getattr(settings, "app", None)
         try:
             app1 = MagicMock()
-            app1.config = SimpleNamespace(EMAIL_CODE_REDIS="FROM_APP1")
+            app1.config = SimpleNamespace(USER_REGISTER_EMAIL_CODE="FROM_APP1:{email}")
             app2 = MagicMock()
-            app2.config = SimpleNamespace(EMAIL_CODE_REDIS="FROM_APP2")
+            app2.config = SimpleNamespace(USER_REGISTER_EMAIL_CODE="FROM_APP2:{email}")
 
             settings.set_app(app1)
-            assert settings.EMAIL_CODE_REDIS == "FROM_APP1"
+            assert settings.USER_REGISTER_EMAIL_CODE == "FROM_APP1:{email}"
 
             settings.set_app(app2)
-            assert settings.EMAIL_CODE_REDIS == "FROM_APP2"
+            assert settings.USER_REGISTER_EMAIL_CODE == "FROM_APP2:{email}"
             assert settings.MIN_PASSWORD_LENGTH == 8
         finally:
             _restore_settings_app(previous)
@@ -50,18 +50,18 @@ class TestLazySettings:
         try:
             app1 = MagicMock()
             app1.config = SimpleNamespace(
-                EMAIL_CODE_REDIS="A",
+                USER_REGISTER_EMAIL_CODE="A:{email}",
                 MIN_PASSWORD_LENGTH=10,
             )
             app2 = MagicMock()
-            app2.config = SimpleNamespace(EMAIL_CODE_REDIS="B")
+            app2.config = SimpleNamespace(USER_REGISTER_EMAIL_CODE="B:{email}")
 
             settings.set_app(app1)
-            assert settings.EMAIL_CODE_REDIS == "A"
+            assert settings.USER_REGISTER_EMAIL_CODE == "A:{email}"
             assert settings.MIN_PASSWORD_LENGTH == 10
 
             settings.set_app(app2)
-            assert settings.EMAIL_CODE_REDIS == "B"
+            assert settings.USER_REGISTER_EMAIL_CODE == "B:{email}"
             assert settings.MIN_PASSWORD_LENGTH == 8
         finally:
             _restore_settings_app(previous)

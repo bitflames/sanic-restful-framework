@@ -1,9 +1,5 @@
 from enum import IntEnum
 
-__all__ = [
-    "HTTPStatus",
-]
-
 
 def is_informational(code):
     return 100 <= code <= 199

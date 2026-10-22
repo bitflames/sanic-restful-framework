@@ -1,6 +1,8 @@
 # Authentication Middleware
 
-The authentication middleware verifies JWT and writes the user object from the database into `request.ctx.user`.
+The authentication middleware reads the JWT from the request and writes the user object from the database into
+`request.ctx.user`. When there is no authentication information, `request.ctx.user` is set to `None` and the request continues;
+permission classes can use this to distinguish anonymous users from authenticated users.
 
 ## Configuration
 
@@ -13,45 +15,24 @@ async def auth_middleware(request):
     await set_user_to_request_ctx(request)
 ```
 
-The application must provide the same key used to issue the Token:
+The application must provide the same secret used to issue tokens:
 
 ```python
 app.config.JWT_SECRET = "read from a secure environment variable"
 ```
 
-## Request Flow
+## Request flow
 
-1. Take the last segment of the URL and check if it is in `app.config.NON_AUTH_ENDPOINTS`.
-2. Public endpoints are allowed directly without setting `request.ctx.user`.
-3. Non-public endpoints require `Authorization: Bearer <token>`.
-4. Decode the Token using HS256 and `app.config.JWT_SECRET`.
-5. Call `srf.auth.auth.retrieve_user(payload)` to query the user.
-6. Set `request.ctx.user`.
+1. Extract the JWT payload from `request.app.ctx.auth`.
+2. When there is no payload, set `request.ctx.user` to `None` and continue processing the request.
+3. When there is a payload, call `retrieve_user(request, payload)` to load the user and put the ORM user into
+   `request.ctx.user`.
 
-Token missing, format error, expired, invalid, or user not found will throw `Unauthorized` (HTTP 401), no anonymous access is allowed.
+When the `Authorization` header format is invalid, JWT is not initialized, or the user corresponding to the token does not exist, it returns 401;
+when the token is missing or the signature/expiry check fails, the payload is `None` and the request continues as an anonymous request
+(`request.ctx.user` is `None`), with the permission classes deciding whether to reject it.
 
-## Core Functions
-
-### is_public_endpoint
-
-```python
-def is_public_endpoint(request):
-    tail = request.path.rstrip("/").rpartition("/")[2]
-    return tail in getattr(request.app.config, "NON_AUTH_ENDPOINTS", [])
-```
-
-The configuration value is the last segment of the path:
-
-```python
-app.config.NON_AUTH_ENDPOINTS = (
-    "login",
-    "register",
-    "send-verification-email",
-    "health",
-)
-```
-
-Do not write `"/api/auth/login"` or `"/api/public/"`; the current implementation does not perform full path matching or prefix matching. The same tail segment will be exempted, for example, `"products"` will match `/products` under multiple different prefixes.
+## Core functions
 
 ### extract_bearer_token
 
@@ -61,7 +42,7 @@ from srf.middleware.authmiddleware import extract_bearer_token
 token = extract_bearer_token(request)
 ```
 
-This function requires the authentication scheme to be Bearer (case-insensitive) and raises 401 when the header is missing or malformed, rather than returning `None`.
+This function requires the authentication scheme to be Bearer (case-insensitive), and raises 401 when the request header is missing or malformed.
 
 ### authenticate_request
 
@@ -72,27 +53,29 @@ await authenticate_request(request)
 user = request.ctx.user
 ```
 
-This function does not check public endpoints; it is usually called through `set_user_to_request_ctx()`.
+### set_user_to_request_ctx
 
-## Middleware Order
+This function calls `authenticate_request(request)` and can be used directly as application middleware. When there is no authentication information,
+`request.ctx.user` is `None`; when a valid token is present, it is the corresponding ORM user.
 
-If logic such as user rate limiting or access logging needs to read `request.ctx.user`, ensure the authentication middleware runs first. Public endpoints do not create `ctx.user`, so use:
+## Middleware order
+
+If user rate limiting, access logging, or similar logic needs to read `request.ctx.user`, make sure the authentication middleware runs
+first. The authentication context may not have been set yet, so read it with:
 
 ```python
 user = getattr(request.ctx, "user", None)
 ```
 
-## Security Restrictions
+## Security limitations
 
-- Only HS256 is allowed, cannot switch algorithms through configuration.
-- Each protected request queries the database.
-- No token blacklist, revocation, or refresh mechanism.
-- Public rules only look at the path tail, with coarse granularity.
+- Every request with a valid token queries the database.
+- The authentication middleware itself does not implement a token blacklist; refresh tokens are managed by the authentication routes.
 
-Production applications can rewrite the middleware to use explicit `(HTTP method, full path)` whitelists, configurable algorithms, token revocation, and appropriate user caching.
+Production applications can configure token revocation and appropriate user caching as needed.
 
-## Next Steps
+## Next steps
 
 - Read [Authentication](../../core/authentication.md) to configure token issuance.
-- Read [Permissions](../../core/permissions.md) to control user access.
+- Read [Permissions](../../core/permissions.md) to control the scope of user access.
 - Read [Rate Limiting](rate-limiting.md) to protect authentication endpoints.

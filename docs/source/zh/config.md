@@ -5,19 +5,15 @@ SRF 使用 `srf.config.settings`（`LazySettings`）读取配置。查找顺序�
 1. 最近一次通过 `settings.set_app(app)` 绑定的 `app.config`
 2. `srf.config.settings` 模块中的大写默认值
 
-
 ## 初始化
 
-`SECRET_KEY` / `JWT_SECRET` **不再**在导入 SRF 时强制读取。启用 JWT 认证时，
-请在 Sanic 配置中自行设置，并传给 `setup_auth(..., secret=...)`：
+请在 Sanic 配置中设置：
 
 ```python
 from sanic import Sanic
 from srf.config import settings
 
 app = Sanic("MyApp")
-app.config.JWT_SECRET = "请从安全的环境变量读取"
-app.config.NON_AUTH_ENDPOINTS = ("login", "health")
 settings.set_app(app)
 ```
 
@@ -26,82 +22,30 @@ settings.set_app(app)
 
 ## 默认配置
 
-### 核心与 JWT
+以下配置项定义在 `srf/config/settings.py`，以源码为准。
 
-| 名称 | 默认值 | 当前用途 |
-|---|---|---|
-| `JWT_SECRET` | 无（需应用设置） | JWT 签名、认证中间件、OAuth state 回退密钥 |
-| `JWT_ACCESS_TOKEN_EXPIRES` | `timedelta(hours=24)` | 仅定义；`setup_auth()` 当前未自动读取 |
+### 分页 / 过滤 / 权限
 
-如需控制 `sanic-jwt` 的过期设置，请把该库支持的参数直接传给
-`setup_auth()`，不要假设 `JWT_ACCESS_TOKEN_EXPIRES` 会自动生效。
+ViewSet 未声明对应类属性时使用的默认值。
 
-### 认证豁免
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `PAGINATION_CLASS` | `PageNumberPagination` | 默认分页类 |
+| `DEFAULT_FILTERS` | `[SearchFilter, QueryParamFilter, OrderingFactory]` | 默认过滤器链 |
+| `DEFAULT_PERMISSION_CLASSES` | `(AllowAny,)` | 默认权限类 |
 
-`NON_AUTH_ENDPOINTS` 是 URL **最后一段**的集合：
+### 序列化与缓存
 
-```python
-NON_AUTH_ENDPOINTS = (
-    "register",
-    "login",
-    "send-verification-email",
-    "health",
-    ...
-)
-```
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `BASE_DIR` | `os.getcwd()` | 项目根目录（进程工作目录） |
+| `CACHE_ROOT` | `BASE_DIR/.diskcache` | 缓存目录 |
+| `DATETIME_FORMAT` | `"%Y-%m-%d %H:%M:%S"` | 时间字符串模板 |
+| `JSON_ENCODER` | `custom_dumps` | JSON 序列化函数（处理 `datetime` / `Exception`），需应用自行接入 Sanic |
 
-它不支持完整路径或前缀规则。例如 `"products"` 会同时匹配
-`/api/products` 和 `/admin/products`。
+### 健康检查与限流
 
-### 过滤器
-
-```python
-from srf.filters.filter import (
-    JsonLogicFilter,
-    OrderingFactory,
-    QueryParamFilter,
-    SearchFilter,
-)
-
-DEFAULT_FILTERS = [
-    SearchFilter,
-    JsonLogicFilter,
-    QueryParamFilter,
-    OrderingFactory,
-]
-```
-
-每个 `GenericAPIView` / `BaseViewSet` 实例初始化时，若类上未声明
-`filter_class`，则使用 `settings.DEFAULT_FILTERS`。
-
-### 权限
-
-```python
-from srf.permission.permission import AllowAny
-
-DEFAULT_PERMISSION_CLASSES = (AllowAny,)
-```
-
-若 ViewSet 未声明 `permission_classes`，则使用 `settings.DEFAULT_PERMISSION_CLASSES`；类上声明的值优先。
-
-### 分页
-
-`PAGINATION_CLASS = PageNumberPagination` 虽已定义，但内置 `list()` 当前没有
-读取它，而是直接使用 `PageNumberPagination`。当前也没有全局 `PAGE_SIZE`、
-`MAX_PAGE_SIZE` 配置；默认值在分页类中。
-
-### 限流
-
-```python
-REQUEST_LIMITERS = []  # 默认不限流；由应用设置为限流器实例列表
-```
-
-`throttle_rate()` 读取 `app.config.REQUEST_LIMITERS`（缺失时视为 `[]`）。
-
-### 健康检查
-
-`HEALTH_CHECK_LIST` 默认为空列表。健康检查路由实际读取
-`app.config.HEALTH_CHECK_LIST`：
+健康检查路由实际读取 `app.config.HEALTH_CHECK_LIST`：
 
 ```python
 from srf.health.checks import RedisCheck
@@ -110,61 +54,54 @@ app.config.HEALTH_CHECK_LIST = [RedisCheck]
 app.ctx.redis = redis_client
 ```
 
-### JSON 编码
-
-`DATETIME_FORMAT` 默认为 `"%Y-%m-%d %H:%M:%S"`。
-`JSON_ENCODER` 指向 `custom_dumps()`，可序列化 `datetime` 和异常对象。
-是否使用该编码器取决于应用如何接入 Sanic 配置；SRF 不会自动安装它。
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `HEALTH_CHECK_LIST` | `[]` | 健康检查类列表 |
+| `REQUEST_LIMITERS` | `[]` | 限流器列表，`throttle_rate()` 从 `app.config.REQUEST_LIMITERS` 读取 |
+| `THROTTLE_REDIS_PREFIX` | `"throttle"` | 限流 Redis 键前缀（`RedisStorage`） |
 
 ### 邮件
 
-`srf.tools.email.send_email()` 直接读取 `srf.config.settings.EmailConfig`：
+`srf.tools.email.send_email()` 直接读取 `srf.config.settings.EmailConfig`，
+各属性在模块导入时从环境变量读取，后续修改 `app.config` 不会改变邮件配置。
 
-| 属性 | 环境变量 |
-|---|---|
-| `from_email` | `FROM_EMAIL` |
-| `smtp_server` | `SMTP_SERVER` |
-| `smtp_port` | `SMTP_PORT` |
-| `password` | `PASSWORD` |
+| 属性 | 环境变量 | 说明 |
+| --- | --- | --- |
+| `EmailConfig.from_email` | `FROM_EMAIL` | 发件人地址 |
+| `EmailConfig.smtp_server` | `SMTP_SERVER` | SMTP 服务器 |
+| `EmailConfig.smtp_port` | `SMTP_PORT` | SMTP 端口 |
+| `EmailConfig.password` | `PASSWORD` | 邮箱密码 / 授权码 |
 
-这些值在模块导入时读取，后续修改 `app.config` 不会改变邮件配置。
-端口判断使用 `int(smtp_port) == 465` 选择 SSL。
+### 社交登录
 
-### GitHub OAuth
+GitHub OAuth 的使用教程见[社交登录](usage/core/social-login.md)。
 
-```python
-SOCIAL_CONFIG = {
-    "github": {
-        "CLIENT_ID": ...,
-        "CLIENT_SECRET": ...,
-        "REDIRECT_URI": ...,
-        ...
-    }
-}
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `SOCIAL_CONFIG` | GitHub OAuth 配置字典 | 各字段从 `GITHUB_CLIENT_ID` 等环境变量读取 |
+| `SOCIAL_LOGIN_COOKIE_KEY` | `"oauth_state"` | OAuth state 的 Cookie 名 |
+| `SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE` | `600` | state Cookie 有效期（秒） |
 
-```
+### 注册验证码与密码
 
-默认值来自对应的大写环境变量。可以在绑定应用前通过
-`app.config.SOCIAL_CONFIG` 整体覆盖。
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `MIN_PASSWORD_LENGTH` | `8` | 密码最小长度 |
+| `USER_REGISTER_EMAIL_VERIFY_CODE_TTL` | `60` | 验证码有效期（秒） |
+| `USER_REGISTER_EMAIL_CODE` | `"USER_REGISTER:EMAIL_CODE:{email}"` | 验证码 Redis 键模板 |
+| `USER_REGISTER_EMAIL_CODE_TIMES` | `"USER_REGISTER:EMAIL_CODE_TIMES:{email}"` | 失败次数 Redis 键模板 |
+| `USER_REGISTER_EMAIL_CODE_TIMES_LIMIT` | `10` | 验证码失败次数上限 |
 
-## 完整示例
+### JWT
 
-```python
-import os
+`JWT_SECRET`（签名密钥）与 `SECRET_KEY`（刷新令牌摘要密钥）无默认值，必须在
+`app.config` 中显式设置。`setup_auth()` 会将 `JWT_ACCESS_TOKEN_EXPIRES` 换算为
+秒并传给 `sanic-jwt`。
 
-from sanic import Sanic
-from srf.config import srfconfig
-
-app = Sanic("MyApp")
-app.config.update(
-    {
-        "JWT_SECRET": os.environ["SECRET_KEY"],
-        "NON_AUTH_ENDPOINTS": ("login", "register", "health"),
-        "HEALTH_CHECK_LIST": [],
-    }
-)
-settings.set_app(app)
-```
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `JWT_ACCESS_TOKEN_EXPIRES` | `timedelta(hours=24)` | 访问令牌有效期 |
+| `JWT_REFRESH_TOKEN_EXPIRES` | `timedelta(days=30)` | 刷新令牌有效期 |
 
 ## 最佳实践
 

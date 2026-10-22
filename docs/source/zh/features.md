@@ -1,6 +1,6 @@
 # 特点
 
-Sanic RESTful Framework(SRF) 提供了一套完整的工具和功能，帮助您快速构建高质量的 RESTful API。
+Sanic RESTful framework（SRF） 提供了一套完整的工具和功能，帮助您快速构建高质量的 RESTful API。
 
 ## 核心特性
 
@@ -52,10 +52,10 @@ SRF 提供了多种认证方式，满足不同场景的需求。
 
 **认证特性：**
 
-- 自动处理 token 验证
-- 用户角色和权限管理
+- 提供 Token 校验中间件（由应用接入）
+- 通过内置及自定义权限类实现权限控制
 - 密码加密存储（bcrypt）
-- 公开端点配置
+- JWT 密钥需由应用显式配置；认证中间件由应用接入
 
 ### 🛡️ 灵活的权限系统
 
@@ -65,10 +65,9 @@ SRF 提供了多种认证方式，满足不同场景的需求。
 
 - `AllowAny`：始终允许（未声明 `permission_classes` 时的默认）
 - `IsAuthenticated`：用户必须已登录
-- `IsRoleAdminUser`：用户必须是管理员角色
-- `IsSafeMethodOnly`：仅允许安全的 HTTP 方法（GET, HEAD, OPTIONS）
+- `SuperuserOnly`：用户必须是超级用户
+- `SafeMethodOnly`：仅允许安全的 HTTP 方法（GET, HEAD, OPTIONS）
 - 基于`BasePermission`实现自定义的权限管控
-
 
 ### 📊 强大的数据处理
 
@@ -83,15 +82,15 @@ SRF 提供了多种认证方式，满足不同场景的需求。
 
 SRF 提供了多种过滤器，可以组合使用：
 
-1. **SearchFilter**：全文搜索过滤
-2. **JsonLogicFilter**：支持复杂的 JSON Logic 表达式
-3. **QueryParamFilter**：基于查询参数的精确过滤
-4. **OrderingFactory**：排序功能
+1. **SearchFilter**：按 `search_fields` 配置的字段做关键词包含匹配
+2. **QueryParamFilter**：基于查询参数的精确过滤
+3. **OrderingFactory**：排序功能
+4. 其他...
 
 #### 分页
 
 - 基于页码的分页
-- 可配置每页数量
+- 可通过查询参数设置每页数量（最大 100）
 - 返回统一的分页响应格式
 
 ### 🚦 限流中间件
@@ -106,7 +105,7 @@ SRF 提供了多种过滤器，可以组合使用：
 **存储方式：**
 
 - 内存存储（MemoryStorage）
-- 可扩展支持 Redis 等外部存储
+- Redis 存储（RedisStorage）
 
 ### 🏥 健康检查
 
@@ -119,17 +118,20 @@ SRF 提供了多种过滤器，可以组合使用：
 
 **特点：**
 
-- 自动检测服务可用性
-- 返回标准化的健康状态响应
+- 执行配置的检查并返回状态映射
+- 当前检查失败时响应仍为 HTTP 200
 - 易于集成到监控系统
+
+### 📝 审计事件
+
+SRF 提供 `Event` 模型、`EventSchema` 和仅超级用户可访问的 `EventViewSet`，用于创建、列表和读取事件。事件记录需由应用主动写入；框架不会自动记录所有请求。
 
 ### 🔧 实用工具
 
 #### HTTP 状态码
 
-- 完整的 HTTP 状态码枚举
+- 常用 HTTP 状态码枚举
 - 语义化的常量命名（如 `HTTP_200_OK`, `HTTP_404_NOT_FOUND`）
-- 状态码类型检查函数
 
 #### 异常处理
 
@@ -140,11 +142,9 @@ SRF 提供了多种过滤器，可以组合使用：
 #### 邮件发送
 
 - 基于标准库 `smtplib` 的同步 SMTP（`srf/tools/email.py`）
-- `send_email(to_email, subject, content)` 发送纯文本邮件（同步）
-- `send_verify_code(to_email, code)` 异步封装，内部 `asyncio.to_thread`，不阻塞事件循环
-- 注册验证码支持 Redis TTL、重发冷却与发送失败清理
-
-
+- `send_email(to_email, subject, content)` 发送 HTML 内容邮件（同步）
+- `send_template_email(...)` 提供异步模板邮件发送，内部在线程中执行 SMTP
+- 注册验证码默认为六位数字，并支持 Redis TTL 和错误次数限制
 
 ## 设计理念
 
@@ -168,12 +168,13 @@ SRF 采用模块化设计，每个功能都是独立的模块，可以根据需�
 
 - **异步 I/O**：基于 Sanic，原生支持 async/await
 - **高效路由**：自动生成和注册路由，减少运行时开销
-- **灵活缓存**：支持配置缓存策略，提升响应速度
+- **模块化**：按需接入各组件，数据缓存由应用自行实现
 - **轻量级**：核心功能精简，按需加载模块
 
 ## 开发体验
 
 ### 生态完善
+
 - 以 Sanic 为基础框架，可以和生态中各种框架完美融合
 
 ### IDE 友好
@@ -208,10 +209,10 @@ SRF 适合以下场景：
 
 ## 对比其他框架
 
-| 特性 | SRF | FastAPI | Django REST |
-|------|-----|---------|-------------|
+| 特性 | Sanic RESTful framework | FastAPI | Django REST framework |
+| ------ | ----- | --------- | ------------- |
 | 异步支持 | ✅ 完整 | ✅ 完整 | ⚠️ 部分 |
-| 性能 | 🚀很高  | 🚀 较高 | ⚡ 中等 |
+| 性能 | 🚀很高 | 🚀 较高 | ⚡ 中等 |
 | 开发速度 | 很快 | 快 | 很快 |
 | 学习曲线 | 📈 平缓 | 📈 平缓 | 📈 陡峭 |
 | ViewSet | ✅ 支持 | ❌ 不支持 | ✅ 支持 |
@@ -225,4 +226,4 @@ SRF 适合以下场景：
 
 - 查看 [快速开始](usage/getting-started.md) 创建您的第一个项目
 - 阅读 [核心概念](usage/core/viewsets.md) 深入了解 ViewSet 的使用
-- 浏览 [API 参考](api-reference.md) 查看详细的 API 文档
+- 浏览 [API 参考](api/views.md) 查看详细的 API 文档

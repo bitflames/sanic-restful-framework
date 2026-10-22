@@ -1,75 +1,74 @@
 # Sanic RESTful Framework
 
-Welcome to Sanic RESTful Framework (SRF) — a powerful and flexible RESTful API development framework based on [Sanic](https://sanic.dev/).
+Welcome to Sanic RESTful Framework (SRF) — a powerful and flexible RESTful API development framework built on [Sanic](https://sanic.dev/).
 
 ## What is SRF?
 
-Sanic RESTful Framework is a modern RESTful API development framework built on top of the [Sanic](https://sanic.dev/) application, providing a complete set of tools and best practices to help you quickly build high-performance web APIs.
+Sanic RESTful Framework (hereafter referred to as SRF) is a modern RESTful API development framework designed for [Sanic](https://sanic.dev/) applications. It provides a complete set of tools and best practices to help you quickly build high-performance web APIs.
 
-SRF is inspired by Django REST Framework, porting its excellent design concepts into the asynchronous Sanic ecosystem. If you are familiar with DRF (Django REST framework), you will quickly get up to speed with SRF (Sanic RESTful Framework). Even if you are not familiar with DRF, SRF's convenience will help you quickly build your application!
+SRF is inspired by Django REST framework (hereafter referred to as DRF), bringing its excellent design concepts to the asynchronous Sanic ecosystem. If you are familiar with DRF, you will be able to get started with SRF quickly. Even if you are not familiar with DRF, that is fine — SRF's convenience will certainly help you build your application quickly!
 
 ## Why choose SRF?
 
-- **🚀 High performance**: Built on [Sanic](https://sanic.dev/), offering exceptional performance
-- **📦 Common components**: Provides authentication, permissions, pagination, filtering, rate limiting, and other basic components
-- **🎯 Easy to use**: Offers an experience closest to Django REST Framework, with a gentle learning curve
-- **🔧 Flexible and scalable**: Modular design, allowing easy customization and extension
-- **🔒 Secure extension points**: Provides JWT, permission, and rate limiting components; production security still requires application configuration and audit
-- **📊 Ready to use out of the box**: Provides health checks, exception handling, HTTP status codes, and other useful tools
+- **🚀 High performance**: Built on [Sanic](https://sanic.dev/), with outstanding performance
+- **📦 Common components**: Provides authentication, permissions, pagination, filtering, rate limiting, and other foundational components
+- **🎯 Simple and easy to use**: Offers an experience closest to Django REST Framework, with a gentle learning curve
+- **🔧 Flexible and extensible**: Modular design makes customization and extension easy
+- **🔒 Security extension points**: Provides JWT, permission, and rate limiting components; production security still requires application configuration and auditing
+- **📊 Ready out of the box**: Provides health checks, exception handling, HTTP status codes, and other practical utilities
 
-## Main Features
+## Main features
 
-### ViewSet and Routing
+### ViewSet and routing
 
 - Class-based view sets (ViewSet) that automatically generate RESTful routes
-- Supports standard CRUD operations (Create, Read, Update, Delete, List)
-- Easily add custom operations using the `@action` decorator
+- Supports standard CRUD operations (Create, Read, Update, Delete, List, etc.)
+- Easily add custom actions with the `@action` decorator
 - Automatic route discovery and registration
 
-### Authentication and Authorization
+### Authentication and authorization
 
 - JWT (JSON Web Token) authentication support
 - Social login integration (GitHub OAuth, etc.)
-- Flexible permission system (IsAuthenticated, IsRoleAdminUser, etc.)
-- Authentication middleware automatically handles user authentication, ensuring request legitimacy
+- Flexible permission system (IsAuthenticated, SafeMethodOnly, SuperuserOnly, etc.)
+- Provides authentication middleware utilities that the application must wire in according to its routing strategy
 
-### Data Processing
+### Data processing
 
 - Data validation and serialization based on Pydantic
-- Out-of-the-box filtering system (search, JSON Logic, query parameters)
-- Pagination and sorting features
+- Page-number pagination and sorting
 
-### Security Features
+### Security features
 
 - Rate limiting middleware (based on IP, user, path, etc.)
-- CSRF protection
+- CSRF protection is implemented by the application according to its authentication approach
 - Password encryption (bcrypt)
-- Public endpoint configuration
+- Authentication keys must be configured explicitly by the application
 
-## Quick Preview
+## Quick preview
 
-Here is a simple example showing how to use SRF to create a RESTful API:
+Here is a simple example showing how to create a RESTful API with SRF:
 
 ```python
-import os
 from sanic import Sanic
-
-os.environ.setdefault("SECRET_KEY", "development-only-change-me")
-
 from srf.views import BaseViewSet
 from srf.route import SanicRouter
+
 from tortoise import fields
 from tortoise.models import Model
+from tortoise.contrib.sanic import register_tortoise
 from pydantic import BaseModel, ConfigDict
 
-# Define ORM model
+
+# Define the ORM model
 class Product(Model):
     id = fields.IntField(pk=True)
     name = fields.CharField(max_length=100)
     price = fields.DecimalField(max_digits=10, decimal_places=2)
     description = fields.TextField()
 
-# Define Schema model
+
+# Define the Schema model
 class ProductSchema(BaseModel):
     id: int | None = None
     name: str
@@ -77,7 +76,8 @@ class ProductSchema(BaseModel):
     description: str
     model_config = ConfigDict(from_attributes=True)
 
-# Define ViewSet
+
+# Define the ViewSet
 class ProductViewSet(BaseViewSet):
     schema = ProductSchema
 
@@ -86,32 +86,35 @@ class ProductViewSet(BaseViewSet):
         return Product.all()
 
 
-# Create application and routes
+# Create the application and routes
 app = Sanic("MyApp")
-router = SanicRouter(prefix="api")
+register_tortoise(app, db_url=*, modules=*})
+router = SanicRouter(app, prefix="api")
 router.register("products", ProductViewSet)
-app.blueprint(router.get_blueprint())
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000)
 ```
 
-This creates a complete RESTful API:
+Once the routes are registered, these ViewSet endpoints are available:
 
-- `GET /api/products` - Get product list
+- `GET /api/products` - Get the product list
 - `POST /api/products` - Create a new product
-- `GET /api/products/<id>` - Get a single product
-- `PUT /api/products/<id>` - Update a product
-- `DELETE /api/products/<id>` - Delete a product
+- `GET /api/products/<pk>` - Get a single product
+- `PUT/PATCH /api/products/<pk>` - Update a product
+- `DELETE /api/products/<pk>` - Delete a product
 
-## Next Steps
+## Next steps
 
-- View [Features](features.md) to learn all the capabilities of SRF
+- See [Features](features.md) to learn about everything SRF can do
 - Read [Getting Started](usage/getting-started.md) to start your first project
-- Browse [API Reference](api-reference.md) for detailed API documentation
+- Browse the [API Reference](api/views.md) for detailed API documentation
 
-## Community and Support
+## Community and support
 
 - **GitHub**: [sanic-restful-framework](https://github.com/bitflames/sanic-restful-framework)
-- **Issue Feedback**: If you find a bug or have a feature suggestion, please submit an issue on GitHub
-- **Contribute Code**: Welcome to submit Pull Requests to help improve SRF
+- **Issue feedback**: If you find a bug or have a feature suggestion, please submit an issue on GitHub
+- **Contribute code**: Pull Requests to help improve SRF are welcome
 
 ## License
 

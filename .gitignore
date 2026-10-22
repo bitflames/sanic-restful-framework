@@ -21,6 +21,7 @@ ENV/
 *~
 .ruff_cache/
 .pytest_cache/
+check_code.sh
 
 # OS
 .DS_Store

@@ -16,3 +16,12 @@ class ImproperlyConfigured(HTTPException):
     """
 
     status_code = 500
+
+
+class PydanticValidationException(HTTPException):
+    """
+    The Pydantic validation error.
+    """
+
+    status_code = 422
+    quiet = True

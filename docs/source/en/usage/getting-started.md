@@ -1,27 +1,27 @@
-# Quick Start
+# Getting Started
 
-This guide will take you from zero to your first project using the Sanic RESTful Framework.
+This guide walks you through creating your first Sanic RESTful Framework project from scratch.
 
-## Environment Requirements
+## Requirements
 
-Before you start, make sure your environment meets the following requirements:
+Before you begin, make sure your environment meets the following requirements:
 
-- **Python**: 3.11 or higher
+- **Python**: 3.11 or later
 - **pip**: Python package manager
-- **Database**: PostgreSQL, MySQL, SQLite, etc. (This tutorial uses SQLite)
+- **Database**: PostgreSQL, MySQL, SQLite, etc. (this tutorial uses SQLite)
 
 ## Installation
 
-### 1. Create Project Directory
+### 1. Create the project directory
 
 ```bash
 mkdir bookstore
 cd bookstore
 ```
 
-### 2. Create Virtual Environment
+### 2. Create a virtual environment
 
-It is recommended to use conda to create an independent Python environment:
+Using conda to create an isolated Python environment is recommended:
 
 ```bash
 # Create a virtual environment named srf
@@ -45,34 +45,29 @@ pip install sanic-restful-framework
 uv add sanic-restful-framework
 ```
 
-### 4. Install Dependencies
+### 4. Check the runtime dependencies
 
-SRF requires the following dependencies (usually installed automatically):
+Installing SRF automatically installs the core dependencies, including Sanic `>=25.0.0,<26`,
+Tortoise ORM `>=1.1.8,<2`, Pydantic `>=2.6.1,<3`, `sanic-jwt`, `redis`,
+and `bcrypt`.
 
-```bash
-sanic
-tortoise-orm
-pydantic
-sanic-jwt
-redis
-bcrypt
-```
+`sanic-cors` and `python-dotenv` are optional dependencies, used for CORS integration and loading
+configuration from `.env` files respectively; install them separately only when using the corresponding examples.
 
-## Create Your First Project
+## Create your first project
 
 Let's create a simple book management API.
 
-### Step 1: Create Application File
+### Step 1: Create the application file
 
-Create `app.py` file:
+Create an `app.py` file:
 
 ```python
 from sanic import Sanic
 from tortoise.contrib.sanic import register_tortoise
-from srf.route import SanicRouter
 from srf.config import settings
 
-# Create Sanic application
+# Create the Sanic application
 app = Sanic("BookStore")
 
 # Configure SRF
@@ -86,133 +81,116 @@ register_tortoise(
     generate_schemas=True,
 )
 
-# Create routes
-router = SanicRouter(prefix="api")
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True)
 ```
 
-### Step 2: Define Data Model
+### Step 2: Define the data model
 
-Create `models.py` file:
+Create a `models.py` file:
 
 ```python
 from tortoise import fields
 from tortoise.models import Model
 
+
 class Book(Model):
     """Book model"""
+
     id = fields.IntField(pk=True)
     title = fields.CharField(max_length=200)
     author = fields.CharField(max_length=100)
     price = fields.DecimalField(max_digits=10, decimal_places=2)
     stock = fields.IntField(default=0)
-    
+
     class Meta:
         table = "books"
 ```
 
-### Step 3: Define Schema
+### Step 3: Define the schemas
 
-Create `schemas.py` file:
+Create a `schemas.py` file:
 
 ```python
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 
+
 class BookSchemaWriter(BaseModel):
-    """Book write schema (used for creation and update)"""
+    """Book write schema (used for create and update)"""
+
     title: str = Field(..., max_length=200)
     author: str = Field(..., max_length=100)
     price: float = Field(..., gt=0)
     stock: int = Field(default=0, ge=0)
 
+
 class BookSchemaReader(BaseModel):
     """Book read schema (used for serialization)"""
+
     id: int
     title: str
     author: str
     price: float
     stock: int
-    
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
 ```
 
-### Step 4: Create ViewSet
+### Step 4: Create the ViewSet
 
-Create `viewsets.py` file:
+Create a `viewsets.py` file:
 
 ```python
 from srf.views import BaseViewSet
 from srf.views.decorators import action
-from sanic.constants import SAFE_HTTP_METHODS
 from sanic.response import json
 from models import Book
 from schemas import BookSchemaWriter, BookSchemaReader
 
+
 class BookViewSet(BaseViewSet):
     """Book ViewSet"""
-    
+
     search_fields = ["title", "author"]
+    # Both search_fields and filter_fields support alias mapping; dictionaries map query parameter names to ORM fields
     filter_fields = {"author": "author"}
-    
+
     @property
     def queryset(self):
         return Book.all()
-    
-    def get_schema(self, request, *args, is_safe=False, **kwargs):
-        if request.method.upper() in SAFE_HTTP_METHODS or is_safe:
+
+    def get_schema(self):
+        # as_view sets self.action; distinguish read/write schemas by ViewSet action name here.
+        if self.action in ("list", "retrieve"):
             return BookSchemaReader
         return BookSchemaWriter
-    
+
     @action(methods=["get"], detail=False, url_path="search")
     async def search_books(self, request):
         """Search books"""
-        keyword = request.args.get('q', '')
+        keyword = request.args.get("q", "")
         books = await Book.filter(title__icontains=keyword)
-        schema = self.get_schema(request, is_safe=True)
-        data = [schema.model_validate(b).model_dump() for b in books]
+        data = [BookSchemaReader.model_validate(b).model_dump() for b in books]
         return json({"results": data})
 ```
 
-### Step 5: Register Routes
+### Step 5: Register the routes
 
-Update `app.py` to register the ViewSet:
+Add the imports at the top of `app.py`, then register the ViewSet after `register_tortoise(...)`:
 
 ```python
-from sanic import Sanic
-from tortoise.contrib.sanic import register_tortoise
 from srf.route import SanicRouter
-from srf.config import settings
 from viewsets import BookViewSet
 
-app = Sanic("BookStore")
-
-# Apply our SRF framework
-settings.set_app(app)
-
-# Register database
-register_tortoise(
-    app,
-    db_url="sqlite://db.sqlite3",
-    modules={"models": ["models"]},
-    generate_schemas=True,
-)
-
-# Create routes and register ViewSet
-router = SanicRouter(prefix="api")
+router = SanicRouter(app, prefix="api")
 router.register("books", BookViewSet, name="books")
-
-# Add routes to the application
-app.blueprint(router.get_blueprint())
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
 ```
 
-### Step 6: Run the Application
+`SanicRouter` automatically generates collection routes (`/api/books`) and detail routes
+(`/api/books/<pk>`) for the ViewSet, and discovers `@action` methods.
+
+### Step 6: Run the application
 
 ```bash
 python app.py
@@ -227,16 +205,16 @@ You should see output similar to the following:
 
 ## Test the API
 
-Now that your API is running, let's test it!
+Your API is now running. Let's test it!
 
-### 1. Create a Book
+### 1. Create a book
 
 ```bash
 curl -X POST http://localhost:8000/api/books \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Python Programming",
-    "author": "Zhang San",
+    "author": "John Doe",
     "price": 89.00,
     "stock": 50
   }'
@@ -248,13 +226,13 @@ Response:
 {
   "id": 1,
   "title": "Python Programming",
-  "author": "Zhang San",
+  "author": "John Doe",
   "price": 89.00,
   "stock": 50
 }
 ```
 
-### 2. Get Book List
+### 2. Get the book list
 
 ```bash
 curl http://localhost:8000/api/books
@@ -271,7 +249,7 @@ Response:
     {
       "id": 1,
       "title": "Python Programming",
-      "author": "Zhang San",
+      "author": "John Doe",
       "price": 89.00,
       "stock": 50
     }
@@ -279,34 +257,48 @@ Response:
 }
 ```
 
-### 3. Get Single Book
+### 3. Get a single book
 
 ```bash
 curl http://localhost:8000/api/books/1
 ```
 
-### 4. Update Book
+The response body is the same book object returned by the create endpoint.
+
+### 4. Update a book
 
 ```bash
 curl -X PUT http://localhost:8000/api/books/1 \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "Python Programming (Second Edition)",
-    "author": "Zhang San",
+    "title": "Python Programming (2nd Edition)",
+    "author": "John Doe",
     "price": 99.00,
     "stock": 50
   }'
 ```
 
-### 5. Search Books
+Response:
+
+```json
+{
+  "id": 1,
+  "title": "Python Programming (2nd Edition)",
+  "author": "John Doe",
+  "price": 99.00,
+  "stock": 50
+}
+```
+
+### 5. Filter by field
+
+Parameters declared in `filter_fields` can be used directly for exact filtering:
 
 ```bash
-# Search for books with "Python" in the title
-curl "http://localhost:8000/api/books?search=Python"
-
-# Filter by author
-curl "http://localhost:8000/api/books?author=Zhang San"
+curl "http://localhost:8000/api/books?author=John%20Doe"
 ```
+
+The response structure is the same as the list endpoint, with only matching records in `results`.
 
 ### 6. Pagination
 
@@ -315,58 +307,77 @@ curl "http://localhost:8000/api/books?author=Zhang San"
 curl "http://localhost:8000/api/books?page=1&page_size=10"
 ```
 
-### 7. Use Custom Actions
+The response format is the same as above: `count` is the total, and `results` contains the current page's data.
+
+### 7. Use a custom action
 
 ```bash
-# Search books
+# The custom action uses the q parameter to search titles
 curl "http://localhost:8000/api/books/search?q=Python"
 ```
 
-### 8. Delete Book
+Response:
 
-```bash
-curl -X DELETE http://localhost:8000/api/books/1
+```json
+{
+  "results": [
+    {
+      "id": 1,
+      "title": "Python Programming (2nd Edition)",
+      "author": "John Doe",
+      "price": 99.00,
+      "stock": 50
+    }
+  ]
+}
 ```
 
-## Complete Project Structure
+### 8. Delete a book
+
+```bash
+curl -i -X DELETE http://localhost:8000/api/books/1
+```
+
+Response: `204 No Content` (no response body).
+
+## Complete project structure
 
 ```
 bookstore/
 ├── app.py                 # Application entry point
 ├── models.py              # Data models
-├── schemas.py             # Pydantic Schemas
+├── schemas.py             # Pydantic schemas
 ├── viewsets.py            # ViewSets
-├── db.sqlite3             # Database file (auto-generated)
-└── requirements.txt       # Dependency list
+└── db.sqlite3             # Database file (generated automatically)
 ```
 
-## Next Steps
+## Next steps
 
-Congratulations! You have successfully created your first SRF project. Next, you can:
+Congratulations! You have successfully created your first SRF project. Next you can:
 
-1. **Add Authentication**: See the [Authentication](core/authentication.md) section to add JWT authentication to your API
-2. **Add Permission Control**: Read the [Permissions](core/permissions.md) section to restrict user access
-3. **Understand ViewSet in Detail**: Learn advanced usage of [Views](core/viewsets.md)
-4. **Configure the Project**: See [Project Setup](project-setup.md) for more configuration options
+1. **Add authentication**: see [Authentication](core/authentication.md) to add JWT authentication to your API
+2. **Add permission control**: read [Permissions](core/permissions.md) to restrict user access
+3. **Learn more about ViewSets**: study the advanced usage of [Views](core/viewsets.md)
+4. **Configure the project**: see [Project Setup](project-setup.md) for more configuration options
 
-## Frequently Asked Questions
+## FAQ
 
-### How to modify the database?
+### How do I change the database?
 
-Modify the `db_url` in `register_tortoise`:
+Change `db_url` in `register_tortoise`:
 
 ```python
 # PostgreSQL
-db_url="postgres://user:password@localhost:5432/dbname"
+db_url = "postgres://user:password@localhost:5432/dbname"
 
 # MySQL
-db_url="mysql://user:password@localhost:3306/dbname"
+db_url = "mysql://user:password@localhost:3306/dbname"
 
 # SQLite
-db_url="sqlite://db.sqlite3"
+db_url = "sqlite://db.sqlite3"
 ```
 
-### How to disable auto-generating table structures?
+### How do I disable automatic schema generation?
 
 Set `generate_schemas=False`:
 
@@ -375,21 +386,21 @@ register_tortoise(
     app,
     db_url="sqlite://db.sqlite3",
     modules={"models": ["models"]},
-    generate_schemas=False,  # Disable auto-generation
+    generate_schemas=False,  # Disable automatic generation
 )
 ```
 
-### How to change the port?
+### How do I change the port?
 
-Modify the parameters of `app.run()`:
+Change the arguments to `app.run()`:
 
 ```python
 app.run(host="0.0.0.0", port=9000, debug=True)
 ```
 
-### How to enable CORS?
+### How do I enable CORS?
 
-Install and configure `sanic-cors`:
+Install and configure sanic-cors:
 
 ```bash
 pip install sanic-cors

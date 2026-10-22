@@ -1,148 +1,199 @@
 # Social Login
 
-SRF supports social login integration, currently supporting GitHub OAuth.
+SRF supports social login integration and currently supports GitHub OAuth.
 
 ## Overview
 
-Social login allows users to log in to your application using third-party accounts (such as GitHub, Google, etc.), without the need to register a separate account.
+SRF includes GitHub OAuth login. Other identity providers require the application to implement and register the corresponding OAuth flow itself.
 
-### Benefits
+### Advantages
 
-- **Improved User Experience**: No need to remember additional passwords
-- **Lower Registration Barriers**: One-click login, improving conversion rates
-- **High Security**: Utilizing the security mechanisms of third-party platforms
-- **Automatic Information Retrieval**: Can retrieve user basic information
+- **Good user experience**: no extra password to remember
+- **Lower registration barrier**: one-click login improves conversion
+- **High security**: leverages the security mechanisms of third-party platforms
+- **Automatic data retrieval**: basic user information can be obtained
 
 ## GitHub OAuth
 
 ### Preparation
 
-#### 1. Create GitHub OAuth App
+#### 1. Create a GitHub OAuth App
 
-1. Visit [GitHub Settings > Developer settings > OAuth Apps](https://github.com/settings/developers)
+1. Go to [GitHub Settings > Developer settings > OAuth Apps](https://github.com/settings/developers)
 2. Click **"New OAuth App"**
 3. Fill in the application information:
    - **Application name**: Your App Name
    - **Homepage URL**: `http://localhost:8000` (development environment)
    - **Authorization callback URL**: `http://localhost:8000/api/auth/social/callback`
 4. Click **"Register application"**
-5. Record the **Client ID** and generate the **Client Secret**
+5. Note the **Client ID** and the generated **Client Secret**
 
-#### 2. Configure Environment Variables
+#### 2. Configure environment variables
 
-Add the following to your `.env` file:
+Add the following to the `.env` file:
 
 ```bash
 GITHUB_CLIENT_ID=your-github-client-id
 GITHUB_CLIENT_SECRET=your-github-client-secret
 GITHUB_REDIRECT_URI=http://localhost:8000/api/auth/social/callback
+OAUTH_SUCCESS_REDIRECT_URI=http://localhost:3000/auth/callback
+JWT_SECRET=replace-with-a-long-random-secret
+SECRET_KEY=replace-with-another-long-random-secret
+SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY=replace-with-another-long-random-secret
+REDIS_URL=redis://localhost:6379/0
 ```
 
-#### 3. Configure the Application
+The secret examples here only illustrate the variable names; deployments should use secure random values. The social login callback also requires
+a usable `app.ctx.redis`.
 
-In `config.py`:
+#### 3. Configure the application
+
+The social login handlers read `request.app.config.SOCIAL_CONFIG` directly. At application startup, write the following configuration
+into the Sanic configuration and register the authentication routes:
 
 ```python
 import os
+from sanic import Sanic
+from redis.asyncio import Redis
+from srf.auth.route import register_auth_urls
+from srf.config import settings
 
-class Config:
-    SOCIAL_CONFIG = {
-        "github": {
-            "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
-            "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
-            "REDIRECT_URI": os.getenv(
-                "GITHUB_REDIRECT_URI",
-                "http://localhost:8000/api/auth/social/callback"
-            ),
-            ...
-        }
+app = Sanic("MyApp")
+app.config.JWT_SECRET = os.environ["JWT_SECRET"]
+app.config.SECRET_KEY = os.environ["SECRET_KEY"]
+app.config.SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY = os.environ["SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY"]
+app.config.SOCIAL_CONFIG = {
+    "github": {
+        "CLIENT_ID": os.environ["GITHUB_CLIENT_ID"],
+        "CLIENT_SECRET": os.environ["GITHUB_CLIENT_SECRET"],
+        "AUTHORIZE_URL": "https://github.com/login/oauth/authorize",
+        "REDIRECT_URI": os.environ["GITHUB_REDIRECT_URI"],
+        "ACCESS_TOKEN_URL": "https://github.com/login/oauth/access_token",
+        "OAUTH_SUCCESS_REDIRECT_URI": os.environ["OAUTH_SUCCESS_REDIRECT_URI"],
+        "GITHUB_USER": "https://api.github.com/user",
+        "GITHUB_USER_EMAIL": "https://api.github.com/user/emails",
     }
+}
+
+settings.set_app(app)
+register_auth_urls(app, prefix="/api/auth")
+
+
+@app.before_server_start
+async def setup_redis(app):
+    app.ctx.redis = Redis.from_url(os.environ["REDIS_URL"])
+
+
+@app.before_server_stop
+async def close_redis(app):
+    await app.ctx.redis.aclose()
 ```
 
-### Login Process
+`SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY` is used to sign the OAuth state cookie. Production environments should set
+it to an independent random secret. Optional behavior settings are as follows:
 
-#### Flowchart
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY` | Falls back to `JWT_SECRET` | HMAC-signs the OAuth state cookie |
+| `SOCIAL_LOGIN_COOKIE_KEY` | `oauth_state` | OAuth state cookie name |
+| `SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE` | `600` | State cookie lifetime in seconds |
+| `SOCIAL_LOGIN_COOKIE_SECURE` | Based on whether the current request is HTTPS | Whether to send the cookie only over HTTPS |
+| `SOCIAL_LOGIN_REDIS_CODE_PREFIX` | `social-login` | Redis key prefix for one-time login codes |
+| `SOCIAL_LOGIN_CODE_MAX_AGE` | `300` | One-time login code lifetime in seconds |
+
+### Login flow
+
+#### Flow diagram
 
 ```
-1. User clicks "GitHub Login"
+1. The user clicks "Sign in with GitHub"
    ↓
-2. Browser accesses GET /api/auth/social/github/login
+2. The frontend sends a request to POST /api/auth/social/github/login
    ↓
-3. Backend generates a random state, writes a signed state with timestamp into an HttpOnly Cookie
+3. The backend generates a random state, writes the timestamped signed state into an HttpOnly cookie
    ↓
-4. Backend directly redirects to GitHub authorization page
+4. The backend redirects directly to the GitHub authorization page
    ↓
-5. User authorizes on GitHub
+5. The user authorizes on GitHub
    ↓
-6. GitHub redirects to backend callback URL (with OAuth code and state)
+6. GitHub redirects to the backend callback URL (with the OAuth code and state)
    ↓
-7. Backend verifies the signed Cookie, state, and expiration, then exchanges code for access_token
+7. The backend verifies the signed cookie, state, and validity period, then exchanges the code for an access_token
    ↓
-8. Backend retrieves user information and verified email using access_token
+8. The backend uses the access_token to fetch user information and a verified email
    ↓
-9. Backend creates or retrieves user account
+9. The backend creates or retrieves the user account
    ↓
-10. Backend generates a random one-time code, writes it into Redis with <prefix>:<code>
+10. The backend generates a random one-time code and writes it to Redis as <prefix>:<code>
    ↓
-11. Backend redirects to OAUTHCALLBACK?code=<temporary code>
+11. The backend redirects to OAUTHCALLBACK?code=<temporary code>
    ↓
-12. Frontend exchanges the temporary code for JWT via GET /api/auth/social/github/login_by_code?code=...
+12. The frontend calls POST /api/auth/social/github/login_by_code with JSON {"code":"..."} to exchange for a JWT
 ```
 
-### API Endpoints
+### API endpoints
 
-The `register_auth_urls(app)` automatically registers the following GitHub OAuth endpoints:
+The following GitHub OAuth endpoints are registered automatically by `register_auth_urls(app)`:
 
-#### 1. Get Authorization URL
+#### 1. Get the authorization URL
 
-**Endpoint**: `GET /api/auth/social/github/login`
+**Endpoint**: `POST /api/auth/social/github/login`
 
 **Request**:
 
 ```bash
-curl -i http://localhost:8000/api/auth/social/github/login
+curl -i -X POST http://localhost:8000/api/auth/social/github/login
 ```
 
-The response is a `302` redirect, while also writing a signed OAuth state cookie. This cookie uses `HttpOnly`, `SameSite=Lax`, and the path comes from `GITHUB_REDIRECT_URI`; `Secure` is controlled by `SOCIAL_LOGIN_COOKIE_SECURE`. If not configured, it depends on whether the current request is HTTPS.
+The response is a `302` redirect, and a signed OAuth state cookie is written at the same time. The cookie uses
+`HttpOnly`, `SameSite=Lax`, and its path comes from `GITHUB_REDIRECT_URI`; `Secure`
+is controlled by `SOCIAL_LOGIN_COOKIE_SECURE` and, when not configured, is decided by whether the current request is HTTPS.
 
-**Frontend Handling**:
+**Frontend handling**:
 
 ```javascript
-window.location.assign('/api/auth/social/github/login');
+const form = document.createElement('form');
+form.method = 'POST';
+form.action = '/api/auth/social/github/login';
+document.body.appendChild(form);
+form.submit(); // The browser follows the backend 302 redirect to GitHub
 ```
 
-#### 2. Handle Callback
+#### 2. Handle the callback
 
 **Endpoint**: `GET /api/auth/social/callback`
 
-This endpoint is triggered by GitHub redirection. SRF will automatically:
-1. Verify the `state` in the URL against the signed, time-stamped cookie
-2. Exchange OAuth code for access_token
-3. Retrieve GitHub user information and select the primary verified email (or the first verified email if no primary email exists)
-4. Create or retrieve a local user account using the email; the database must already have a role named `user`
-5. Generate a random one-time code and write it into `app.ctx.redis`
-6. Redirect to `SOCIAL_CONFIG['github']['OAUTHCALLBACK']?code=<one-time code>`
-7. Delete the OAuth state cookie in the normal response path
+This endpoint is triggered by the GitHub redirect. SRF automatically:
+1. Validates the `state` in the URL against the signed, time-limited cookie
+2. Exchanges the OAuth code for an access_token
+3. Fetches GitHub user information and selects a verified primary email (or the first verified email if there is no primary email)
+4. Creates or retrieves the local user account using the email; if no user exists for that email, SRF creates a local user and binds the OAuth account
+5. Generates a random one-time code and writes it to `app.ctx.redis`
+6. Redirects to `SOCIAL_CONFIG['github']['OAUTH_SUCCESS_REDIRECT_URI']?code=<one-time code>`
+7. Deletes the OAuth state cookie on the normal response path
 
-The default Redis key format is `social-login:<code>`, with a default expiration of 300 seconds. This can be overridden via `SOCIAL_LOGIN_REDIS_CODE_PREFIX` and `SOCIAL_LOGIN_CODE_MAX_AGE`.
+The Redis key format defaults to `social-login:<code>`, with a default lifetime of 300 seconds. It can be overridden
+via `SOCIAL_LOGIN_REDIS_CODE_PREFIX` and `SOCIAL_LOGIN_CODE_MAX_AGE`.
 
-**URL Format** (GitHub → Backend):
+**URL format** (GitHub → backend):
 
 ```
 http://localhost:8000/api/auth/social/callback?code=xxx&state=xxx
 ```
 
-#### 3. Log in Using Temporary Code
+#### 3. Log in with the temporary code
 
-**Endpoint**: `GET /api/auth/social/github/login_by_code`
+**Endpoint**: `POST /api/auth/social/github/login_by_code`
 
-**Request** (query parameter `code`, not JSON body):
+**Request** (JSON body):
 
 ```bash
-curl "http://localhost:8000/api/auth/social/github/login_by_code?code=one-time-code"
+curl -X POST http://localhost:8000/api/auth/social/github/login_by_code \
+  -H 'Content-Type: application/json' \
+  -d '{"code":"one-time-code"}'
 ```
 
-**Response** (flat structure: user fields + `access_token`, not nested `{"user": {...}}`):
+**Response** (flat structure: user fields + `access_token`, not a nested `{"user": {...}}`):
 
 ```json
 {
@@ -150,26 +201,31 @@ curl "http://localhost:8000/api/auth/social/github/login_by_code?code=one-time-c
   "username": "github-user",
   "email": "user@example.com",
   "is_active": true,
-  "is_staff": false,
   "is_superuser": false,
-  "created_date": "2026-01-01 00:00:00",
-  "updated_date": "2026-01-01 00:00:00",
-  "url": "/users/1",
-  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+  "last_login": null,
+  "roles": null,
+  "create_time": "2026-01-01 00:00:00",
+  "update_time": "2026-01-01 00:00:00",
+  "access_token": "...",
+  "refresh_token": "..."
 }
 ```
 
-### Frontend Integration
+### Frontend integration
 
-#### React Example
+#### React example
 
 ```javascript
 import React, { useEffect } from 'react';
 
 function GitHubLogin() {
   const handleGitHubLogin = () => {
-    // The backend will directly redirect to GitHub and set the OAuth state Cookie.
-    window.location.assign('/api/auth/social/github/login');
+    // The backend redirects directly to GitHub and sets the OAuth state cookie.
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/api/auth/social/github/login';
+    document.body.appendChild(form);
+    form.submit(); // The browser follows the backend 302 redirect to GitHub
   };
 
   return (
@@ -183,7 +239,7 @@ function GitHubLogin() {
 function GitHubCallback() {
   useEffect(() => {
     const handleCallback = async () => {
-      // Get temporary code from URL
+      // Get the temporary code from the URL
       const params = new URLSearchParams(window.location.search);
       const code = params.get('code');
       
@@ -193,17 +249,22 @@ function GitHubCallback() {
       }
       
       try {
-        // 3. Exchange temporary code for JWT (GET + query)
+        // 3. Put the temporary code in the JSON request body and exchange it for a JWT via POST
         const response = await fetch(
-          `/api/auth/social/github/login_by_code?code=${encodeURIComponent(code)}`
+          `/api/auth/social/github/login_by_code`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code }),
+          }
         );
         
         const data = await response.json();
         
-        // 4. Save token (response is flat structure)
+        // 4. Save the token (the response has a flat structure)
         localStorage.setItem('access_token', data.access_token);
         
-        // 5. Redirect to homepage
+        // 5. Redirect to the home page
         window.location.href = '/';
       } catch (error) {
         console.error('Failed to get token:', error);
@@ -213,13 +274,13 @@ function GitHubCallback() {
     handleCallback();
   }, []);
 
-  return <div>Logging in...</div>;
+  return <div>Signing in...</div>;
 }
 
 export { GitHubLogin, GitHubCallback };
 ```
 
-#### Vue Example
+#### Vue example
 
 ```vue
 <template>
@@ -232,19 +293,23 @@ export { GitHubLogin, GitHubCallback };
 export default {
   methods: {
     handleGitHubLogin() {
-      // The backend will directly redirect to GitHub and set the OAuth state Cookie.
-      window.location.assign('/api/auth/social/github/login');
+      // The backend redirects directly to GitHub and sets the OAuth state cookie.
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/api/auth/social/github/login';
+      document.body.appendChild(form);
+      form.submit(); // The browser follows the backend 302 redirect to GitHub
     }
   }
 }
 </script>
 ```
 
-**Callback Page**:
+**Callback page**:
 
 ```vue
 <template>
-  <div>Logging in...</div>
+  <div>Signing in...</div>
 </template>
 
 <script>
@@ -259,15 +324,20 @@ export default {
     
     try {
       const response = await fetch(
-        `/api/auth/social/github/login_by_code?code=${encodeURIComponent(code)}`
+        `/api/auth/social/github/login_by_code`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        }
       );
       
       const data = await response.json();
       
-      // Save token
+      // Save the token
       localStorage.setItem('access_token', data.access_token);
       
-      // Redirect to homepage
+      // Redirect to the home page
       this.$router.push('/');
     } catch (error) {
       console.error('Failed to get token:', error);
@@ -279,149 +349,39 @@ export default {
 ```
 
 
-## Adding Other Social Logins
+## Extending to other login providers
 
-The following Google example is **custom extended code** (the framework currently only includes GitHub natively). Configuration keys are recommended to follow the framework's `SOCIAL_CONFIG` style, using uppercase `CLIENT_ID`, etc.
+SRF currently only includes GitHub OAuth. Other providers require the application to implement OAuth authorization, callback validation,
+local user association, and login credential issuance itself; SRF does not automatically create routes or account binding logic for them.
 
-### Google OAuth Example
+## Security considerations
 
-```python
-# config.py
-SOCIAL_CONFIG = {
-    "github": {
-        "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
-        "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
-        "REDIRECT_URI": "http://localhost:8000/api/auth/social/callback",
-    },
-    "google": {
-        "CLIENT_ID": os.getenv("GOOGLE_CLIENT_ID"),
-        "CLIENT_SECRET": os.getenv("GOOGLE_CLIENT_SECRET"),
-        "REDIRECT_URI": "http://localhost:8000/api/auth/social/google/callback",
-    }
-}
-```
+1. **Validate the state parameter**: prevent CSRF attacks
 
-```python
-# social_auth.py (custom extension, not built-in to framework)
-from sanic import Blueprint
-from sanic.response import json, redirect
-import aiohttp
+The framework generates a random `state` for each login, signs the state together with the issuance time using HMAC-SHA256,
+and writes it into an HttpOnly cookie. On callback it validates the signature, the lifetime, and the state in the URL at the same time,
+using `hmac.compare_digest()`. The cookie defaults to a 600-second lifetime and is deleted on a normal callback
+response. The signature only prevents tampering; it does not encrypt the state.
 
-bp = Blueprint("social_auth", url_prefix="/api/auth/social")
+Production environments should configure an independent `SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY` so it can be rotated separately and its purpose isolated.
 
-@bp.route("/google/login", methods=["POST"])
-async def google_login(request):
-    """Google Login (custom)"""
-    from srf.config import settings
-    
-    config = settings.SOCIAL_CONFIG['google']
-    
-    auth_url = (
-        "https://accounts.google.com/o/oauth2/v2/auth"
-        f"?client_id={config['CLIENT_ID']}"
-        f"&redirect_uri={config['REDIRECT_URI']}"
-        "&response_type=code"
-        "&scope=email profile"
-    )
-    
-    return json({"auth_url": auth_url})
+2. **HTTPS only**: production environments must use HTTPS
 
-@bp.route("/google/callback", methods=["GET"])
-async def google_callback(request):
-    """Google Callback (custom)"""
-    code = request.args.get("code")
-    
-    if not code:
-        return json({"error": "Missing code"}, status=400)
-    
-    from srf.config import settings
-    config = settings.SOCIAL_CONFIG['google']
-    
-    # Exchange access_token
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "client_id": config['CLIENT_ID'],
-                "client_secret": config['CLIENT_SECRET'],
-                "code": code,
-                "redirect_uri": config['REDIRECT_URI'],
-                "grant_type": "authorization_code",
-            }
-        ) as resp:
-            token_data = await resp.json()
-    
-    access_token = token_data.get("access_token")
-    
-    # Get user info
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            "https://www.googleapis.com/oauth2/v2/userinfo",
-            headers={"Authorization": f"Bearer {access_token}"}
-        ) as resp:
-            user_info = await resp.json()
-    
-    # Create or get user, write one-time code to Redis
-    # ... similar logic to GitHub (use app.ctx.redis)
-    
-    return redirect(f"/auth/callback?code={temp_code}")
-```
+3. **Limit scopes**: request only the necessary permissions
 
-## Security Considerations
+4. **One-time exchange**: the temporary code has a short expiry and is deleted atomically as soon as it is successfully exchanged
 
-1. **Validate the state parameter**: Prevent CSRF attacks
+## Best practices
 
-The framework generates a random `state` for each login, signs it with HMAC-SHA256 along with the issuance time, and writes it into an HttpOnly Cookie. During the callback, it simultaneously validates the signature, validity, and state in the URL; validation uses `hmac.compare_digest()`. The default cookie validity is 600 seconds and is deleted upon normal return. The signature prevents tampering but does not encrypt the state.
+1. **Offer multiple login methods**: social login and traditional login can coexist; the application chooses how to integrate them
+2. **Email policy**: the current GitHub flow only accepts verified emails; the application should also handle email conflicts explicitly
+3. **User agreement**: show the user agreement and privacy policy on first login
+4. **Error handling**: provide friendly error messages
+5. **Logging**: log social login events
 
-It is recommended to configure a separate `SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY`. If not configured, the framework will fall back to `JWT_SECRET`, but a separate key facilitates rotation and isolation of purposes.
+SRF currently looks up bound OAuth accounts by GitHub user ID; multi-provider account binding must be implemented separately by the application.
 
-2. **HTTPS Only**: Must use HTTPS in production environments
+## Next steps
 
-3. **Limit Scope**: Request only necessary permissions
-
-4. **One-Time Redemption**: Set a short expiration time for temporary codes and immediately atomically delete them upon successful redemption
-
-## Best Practices
-
-1. **Provide multiple login methods**: Social login + traditional email login
-2. **Account Binding**: Allow users to bind multiple social accounts
-3. **Email Verification**: Verify the validity of the email after obtaining it
-4. **User Agreement**: Display the user agreement and privacy policy on first login
-5. **Error Handling**: Provide friendly error messages
-6. **Log Recording**: Record social login events
-
-## Frequently Asked Questions
-
-### How to Handle Email Conflicts?
-
-If the email of the GitHub account has already been used by another user:
-
-```python
-account = await Account.get_or_none(email=github_user['email'])
-
-if account:
-    if account.github_id != github_user['id']:
-        # The email is already used by another account
-        return json({"error": "This email is already used by another account"}, status=400)
-```
-
-### How to Bind Multiple Social Accounts?
-
-Create a social account association table:
-
-```python
-class SocialAccount(Model):
-    user = fields.ForeignKeyField("models.Account")
-    provider = fields.CharField(max_length=50)  # github, google, etc.
-    provider_user_id = fields.CharField(max_length=255)
-    access_token = fields.TextField(null=True)
-    
-    class Meta:
-        unique_together = (("provider", "provider_user_id"),)
-```
-
-## Next Steps
-
-- Learn [JWT Authentication](authentication.md) to understand the basics of authentication
-- Read [Interface Permission Verification](auth-permissions.md) to understand permission control
-- View [Configuration Items](../../config.md) to understand social login configuration
+- Study [JWT Authentication](authentication.md) to learn about basic authentication
+- Read [API Permissions](auth-permissions.md) to learn about permission control

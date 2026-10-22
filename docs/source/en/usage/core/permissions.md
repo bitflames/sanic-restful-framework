@@ -1,25 +1,24 @@
 # Permissions
 
-The permission classes in SRF are used to control access to ViewSets.
-View-level checks run in `check_permissions()` before the handler; 
-object-level checks run in `check_object_permissions()` from `get_object()` (retrieve / update / destroy and custom actions that call `get_object()`).
+SRF permission classes control access to ViewSets. View-level checks run before the handler through `check_permissions()`;
+object-level checks run when `get_object()` calls `check_object_permissions()` (covering retrieve / update / destroy, as well as custom actions that call `get_object()`).
 
-## Built-in Permission Classes
+## Built-in permission classes
 
 ```python
 from srf.permission.permission import (
     AllowAny,
     BasePermission,
     IsAuthenticated,
-    IsRoleAdminUser,
-    IsSafeMethodOnly,
+    SuperuserOnly,
+    SafeMethodOnly,
 )
 ```
 
-- `AllowAny`: Always allow (default in `settings.DEFAULT_PERMISSION_CLASSES`).
+- `AllowAny`: Always allow (the default value of `settings.DEFAULT_PERMISSION_CLASSES`).
 - `IsAuthenticated`: `request.ctx.user` exists and the user's `is_active` is true.
-- `IsRoleAdminUser`: The name of the role associated with the current user is equal to `"admin"`.
-- `IsSafeMethodOnly`: Only allows GET, HEAD, OPTIONS.
+- `SuperuserOnly`: `request.ctx.user.is_superuser` is true.
+- `SafeMethodOnly`: Only GET, HEAD, and OPTIONS are allowed.
 
 Declare permission classes on a ViewSet:
 
@@ -32,11 +31,15 @@ class OrderViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated,)
 ```
 
-`BaseViewSet.check_permissions()` calls `has_permission(request, view)` on each class **without instantiating**; both synchronous and asynchronous return values are supported. If any result is false, it throws 403 Forbidden. When the authentication middleware rejects a request due to missing or invalid Token, it returns 401.
+`BaseViewSet.check_permissions()` calls
+`has_permission(request, view)` **on the class** in order; both synchronous and asynchronous return values are supported. If any result is falsy, it raises
+403 Forbidden. When there is no authentication information, the authentication middleware sets `request.ctx.user` to `None`, and the
+permission class decides whether to allow the request; when the request header format is invalid, JWT is not configured, or the user does not exist, the authentication middleware returns
+401, while a missing token or a failed signature/expiry check is treated as an anonymous request.
 
-Permission methods are `@staticmethod`s. Inheriting `BasePermission` is recommended but not required; any class with the same static methods works (duck typing).
+Permission methods are `@staticmethod`s: inheriting from `BasePermission` is recommended but not required; providing a static method with the same name is enough (duck typing).
 
-## Custom View-Level Permissions
+## Custom view-level permissions
 
 ```python
 from srf.permission.permission import BasePermission
@@ -46,33 +49,35 @@ class IsEditor(BasePermission):
     @staticmethod
     def has_permission(request, view=None):
         user = getattr(request.ctx, "user", None)
-        role = getattr(user, "role", None)
-        return role is not None and role.name == "editor"
+        # is_editor is an application-defined field; the built-in SRF User only has is_superuser and the roles relationship.
+        return user is not None and getattr(user, "is_editor", False)
 ```
 
-`view` is optional; `BaseViewSet` passes the current view instance.
+`view` is an optional parameter; `BaseViewSet` passes the current View instance.
 
-Asynchronous checks are also available:
+Asynchronous checks work as well:
 
 ```python
+from models import Subscription
+from srf.permission.permission import BasePermission
+
+
 class HasActiveSubscription(BasePermission):
     @staticmethod
     async def has_permission(request, view=None):
         user = getattr(request.ctx, "user", None)
-        return user is not None and await Subscription.filter(
-            user_id=user.id, active=True
-        ).exists()
+        return user is not None and await Subscription.filter(user_id=user.id, active=True).exists()
 ```
 
-## Setting Permissions by Request Method
+## Setting permissions by request method
 
-The current framework does not have `self.action`, `get_permissions()`, or action-level permission parameters. When different operations need to be distinguished, you can override `check_permissions()`:
+To differentiate permissions by operation, select permission classes based on `self.action` in `check_permissions()`:
 
 ```python
 import asyncio
 
 from sanic.exceptions import Forbidden
-from srf.permission.permission import IsAuthenticated, IsRoleAdminUser
+from srf.permission.permission import IsAuthenticated, SuperuserOnly
 from srf.views import BaseViewSet
 
 
@@ -81,11 +86,7 @@ class ProductViewSet(BaseViewSet):
         if request.method.upper() in ("GET", "HEAD", "OPTIONS"):
             return
 
-        classes = (
-            (IsAuthenticated,)
-            if request.method.upper() == "POST"
-            else (IsAuthenticated, IsRoleAdminUser)
-        )
+        classes = (IsAuthenticated,) if request.method.upper() == "POST" else (IsAuthenticated, SuperuserOnly)
         for permission_class in classes:
             result = permission_class.has_permission(request, self)
             if asyncio.iscoroutine(result):
@@ -94,23 +95,28 @@ class ProductViewSet(BaseViewSet):
                 raise Forbidden(message="Forbidden")
 ```
 
-## Object-Level Permissions
+## Object-level permissions
 
 `BasePermission.has_object_permission(request, view, obj)` defines the object-level interface.
-`get_object()` calls `check_object_permissions()`, which invokes
-`has_object_permission(request, view, obj)` on each class (no instantiation).
+`get_object()` calls `check_object_permissions()`, which calls
+`has_object_permission(request, view, obj)` on the permission class and raises `Forbidden` when the result is falsy.
 
-Object-level checks are not applied per item to list results. For list interfaces, limit data in `queryset`.
+Object-level checks are not applied item by item to list results. List endpoints should limit data in the `queryset`.
 
-### Basic Usage
+### Basic usage
 
 ```python
+from models import Order
+from srf.permission.permission import BasePermission, IsAuthenticated
+from srf.views import BaseViewSet
+
+
 class IsOwner(BasePermission):
-    """Object-level permission: Check if it is the owner"""
+    """Object-level permission: check whether the user is the owner"""
 
     @staticmethod
     def has_object_permission(request, view=None, obj=None):
-        # Users can only view, modify, or delete their own objects
+        # Users can only view, modify, and delete their own objects
         return obj.owner_id == request.ctx.user.id
 
 
@@ -118,53 +124,62 @@ class OrderViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated, IsOwner)
 ```
 
-Limit list visibility via `queryset`:
+Limit visible data on the list side through `queryset`:
 
 ```python
+from models import Order
+from srf.permission.permission import IsAuthenticated
+from srf.views import BaseViewSet
+
+
 class OrderViewSet(BaseViewSet):
     @property
     def queryset(self):
         user = self.get_current_user(self.request)
-        role = getattr(user, "role", None)
-        if role is not None and role.name == "admin":
+        if user.is_superuser:
             return Order.all()
         return Order.filter(user_id=user.id)
 ```
 
 `self.request` is set by `BaseViewSet.as_view()` before handling the request.
 
-## Permissions for Custom Actions
+## Permissions for custom actions
 
-All actions registered by `SanicRouter` will first execute the ViewSet's `check_permissions()`. If additional restrictions are needed, perform additional checks within the action:
+All actions registered by `SanicRouter` first run the ViewSet's
+`check_permissions()`. If additional restrictions are needed, perform extra checks inside the action:
 
 ```python
 from sanic.exceptions import Forbidden
-from srf.permission.permission import IsRoleAdminUser
+from sanic.response import json
+from models import Product
+from srf.permission.permission import SuperuserOnly
+from srf.views import BaseViewSet
 from srf.views.decorators import action
 
 
-@action(methods=["post"], detail=True, url_path="approve")
-async def approve(self, request, pk):
-    if not IsRoleAdminUser.has_permission(request, self):
-        raise Forbidden(message="Administrator privileges required")
-    product = await self.get_object(request, pk)
-    product.is_approved = True
-    await product.save()
-    return json({"message": "Approved"})
+class ProductViewSet(BaseViewSet):
+    @action(methods=["post"], detail=True, url_path="approve")
+    async def approve(self, request, pk):
+        if not SuperuserOnly.has_permission(request, self):
+            raise Forbidden(message="Superuser permission required")
+        product = await self.get_object(pk)
+        product.is_approved = True
+        await product.save()
+        return json({"message": "Approved"})
 ```
 
-## Best Practices
+## Best practices
 
-1. **Principle of Least Privilege**: Default to denying access and grant only necessary permissions explicitly.
-2. **Separation of Concerns**: Isolate permission logic into permission classes.
-3. **Combining Permissions**: Use multiple simple permission classes to achieve complex permissions.
-4. **Object-Level Permissions**: Use object-level permission checks for sensitive resources.
-5. **Asynchronous Support**: Use asynchronous methods when database queries are needed.
-6. **Clear Error Messages**: Provide friendly permission error messages.
-7. **Test Permissions**: Write unit tests for permission classes.
+1. **Principle of least privilege**: deny access by default and grant only the necessary permissions
+2. **Separation of concerns**: keep permission logic in dedicated permission classes
+3. **Composing permissions**: combine several simple permission classes to implement complex permissions
+4. **Object-level permissions**: use object-level permission checks for sensitive resources
+5. **Async support**: use asynchronous methods when database queries are needed
+6. **Clear error messages**: provide friendly permission error messages
+7. **Test permissions**: write unit tests for permission classes
 
-## Next Steps
+## Next steps
 
 - Read [Authentication](authentication.md) to learn about JWT authentication.
-- Read [Authentication and Permissions Integration](auth-permissions.md) to see combination examples.
-- View [Authentication Middleware](../advanced/middleware/auth-middleware.md) to understand public endpoint rules.
+- Read [Authentication and Permissions Together](auth-permissions.md) for combined examples.
+- See [Authentication Middleware](../advanced/middleware/auth-middleware.md) to learn how `request.ctx.user` is set.

@@ -20,6 +20,10 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+import jwt
+
+from .app_server import JWT_SECRET
+
 BASE = "http://127.0.0.1:8800"
 AUTH = f"{BASE}/api/auth"
 EVENTS = f"{BASE}/api/events"
@@ -30,6 +34,7 @@ SEED_EMAIL = "alice@example.com"
 SEED_PASSWORD = "password123"
 SEED_USERNAME = "alice"
 ADMIN_EMAIL = "admin@example.com"
+ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "Admin12345"
 
 _passed = 0
@@ -86,11 +91,52 @@ def call_public_hello() -> None:
     _ok("GET /api/public/hello → 200", status == 200 and data.get("message") == "hello", (status, data))
 
 
+def call_registration_styles(token: str | None = None) -> None:
+    """SanicRouter.register and direct add_route both reach the view action."""
+    status, data = _request("GET", f"{BASE}/api/public/router-widgets")
+    ok = status == 200 and isinstance(data, dict) and data.get("source") == "router" and data.get("action") == "list"
+    _ok("GET /api/public/router-widgets via SanicRouter → 200 list", ok, (status, data))
+
+    status, data = _request("GET", f"{BASE}/api/public/manual-widgets")
+    ok = status == 200 and isinstance(data, dict) and data.get("source") == "add_route" and data.get("action") == "list"
+    _ok("GET /api/public/manual-widgets via add_route → 200 list", ok, (status, data))
+
+    status, data = _request("GET", f"{BASE}/api/public/qwe")
+    ok = status == 200 and isinstance(data, dict) and data.get("action") == "qwe" and data.get("handler") == "qwe"
+    _ok("GET /api/public/qwe via as_view({'get': 'qwe'}) → 200", ok, (status, data))
+
+    status, _ = _request("GET", f"{BASE}/api/public/manual-widgets/1")
+    _ok("GET /api/public/manual-widgets/1 without token → 401", status == 401, status)
+
+    if not token:
+        return
+
+    status, data = _request("GET", f"{BASE}/api/public/router-widgets/1", token=token)
+    ok = (
+        status == 200
+        and isinstance(data, dict)
+        and data.get("source") == "router"
+        and data.get("action") == "retrieve"
+        and str(data.get("pk")) == "1"
+    )
+    _ok("GET /api/public/router-widgets/1 via SanicRouter → 200 retrieve", ok, (status, data))
+
+    status, data = _request("GET", f"{BASE}/api/public/manual-widgets/1", token=token)
+    ok = (
+        status == 200
+        and isinstance(data, dict)
+        and data.get("source") == "add_route"
+        and data.get("action") == "retrieve"
+        and str(data.get("pk")) == "1"
+    )
+    _ok("GET /api/public/manual-widgets/1 via app.add_route → 200 retrieve", ok, (status, data))
+
+
 def call_login_email() -> dict:
     status, data = _request(
         "POST",
-        f"{AUTH}/login",
-        body={"email": SEED_EMAIL, "password": SEED_PASSWORD},
+        AUTH,
+        body={"account": SEED_EMAIL, "password": SEED_PASSWORD},
     )
     ok = status == 200 and bool(data.get("access_token")) and bool(data.get("refresh_token"))
     _ok("POST /api/auth/login (email)", ok, (status, data))
@@ -100,7 +146,7 @@ def call_login_email() -> dict:
 def call_login_username() -> dict:
     status, data = _request(
         "POST",
-        f"{AUTH}/login",
+        AUTH,
         body={"username": SEED_USERNAME, "password": SEED_PASSWORD},
     )
     ok = status == 200 and bool(data.get("access_token"))
@@ -111,8 +157,8 @@ def call_login_username() -> dict:
 def call_login_wrong_password() -> None:
     status, _ = _request(
         "POST",
-        f"{AUTH}/login",
-        body={"email": SEED_EMAIL, "password": "wrong-password"},
+        AUTH,
+        body={"account": SEED_EMAIL, "password": "wrong-password"},
     )
     _ok("POST /api/auth/login wrong password → 401", status == 401, status)
 
@@ -128,10 +174,50 @@ def call_protected_with_token(access: str) -> None:
     _ok("GET /api/profile/ping with token → 200", ok, (status, data))
 
 
-def call_users_self(access: str) -> None:
+def call_users_self(access: str) -> dict:
     status, data = _request("GET", f"{BASE}/api/users/self", token=access)
-    ok = status == 200 and (data.get("username") == SEED_USERNAME or data.get("name") == SEED_USERNAME)
+    ok = status == 200 and data.get("username") == SEED_USERNAME
     _ok("GET /api/users/self → 200", ok, (status, data))
+    return data if ok else {}
+
+
+def call_users_list_only_self(access: str) -> None:
+    status, data = _request("GET", USERS, token=access)
+    names = {item.get("username") for item in _results(data)}
+    ok = status == 200 and names == {SEED_USERNAME}
+    _ok("GET /api/users as alice → only herself", ok, (status, data))
+
+
+def call_users_retrieve_self(access: str, user_id: int) -> None:
+    status, data = _request("GET", f"{USERS}/{user_id}", token=access)
+    ok = status == 200 and data.get("id") == user_id and data.get("username") == SEED_USERNAME
+    _ok(f"GET /api/users/{user_id} as self → 200", ok, (status, data))
+
+
+def call_users_create_forbidden(access: str) -> None:
+    body = {
+        "username": "should-not-create",
+        "email": "should-not-create@example.com",
+        "password1": "Password123",
+        "password2": "Password123",
+    }
+    status, _ = _request("POST", USERS, body=body, token=access)
+    _ok("POST /api/users as alice → 403", status == 403, status)
+
+
+def call_logout_without_token() -> None:
+    status, _ = _request("POST", f"{AUTH}/logout")
+    _ok("POST /api/auth/logout without token → 200", status == 200, status)
+
+
+def call_logout_expired_access_revokes_refresh(user_id: int, refresh: str) -> None:
+    """Expired access token still identifies the user and deletes the refresh row."""
+
+    expired = jwt.encode({"user_id": user_id, "exp": 1}, JWT_SECRET, algorithm="HS256")
+    status, _ = _request("POST", f"{AUTH}/logout", token=expired)
+    _ok("POST /api/auth/logout with expired access → 200", status == 200, status)
+    status, _ = _request("POST", f"{AUTH}/refresh", body={"refresh_token": refresh}, token=expired)
+    _ok("refresh rejected after expired-access logout", status >= 400, status)
 
 
 def call_verify(access: str) -> None:
@@ -195,8 +281,8 @@ def call_refresh_revoked_after_logout(access: str, refresh: str) -> None:
 def call_relogin_after_logout() -> None:
     status, data = _request(
         "POST",
-        f"{AUTH}/login",
-        body={"email": SEED_EMAIL, "password": SEED_PASSWORD},
+        AUTH,
+        body={"account": SEED_EMAIL, "password": SEED_PASSWORD},
     )
     ok = status == 200 and bool(data.get("access_token")) and bool(data.get("refresh_token"))
     _ok("login again after logout → 200", ok, (status, data))
@@ -219,8 +305,8 @@ def call_events_forbidden_as_user(user_access: str) -> None:
 def call_login_admin() -> dict:
     status, data = _request(
         "POST",
-        f"{AUTH}/login",
-        body={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+        AUTH,
+        body={"account": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
     )
     ok = status == 200 and bool(data.get("access_token"))
     _ok("POST /api/auth/login (admin)", ok, (status, data))
@@ -257,10 +343,7 @@ def call_events_create_list_retrieve(admin_access: str) -> None:
 
     status, detail = _request("GET", f"{EVENTS}/{event_id}", token=admin_access)
     ok_detail = (
-        status == 200
-        and detail.get("id") == event_id
-        and detail.get("action") == "user.update"
-        and detail.get("req_remote") == "api_call_tests"
+        status == 200 and detail.get("id") == event_id and detail.get("action") == "user.update" and detail.get("req_remote") == "api_call_tests"
     )
     _ok(f"GET /api/events/{event_id} → 200", ok_detail, (status, detail))
 
@@ -281,25 +364,115 @@ def call_users_search(admin_access: str) -> None:
 
 
 def call_users_query_param_filter(admin_access: str) -> None:
-    status, data = _request("GET", f"{USERS}?name={SEED_USERNAME}", token=admin_access)
+    status, data = _request("GET", f"{USERS}?username={SEED_USERNAME}", token=admin_access)
     names = {item.get("username") or item.get("name") for item in _results(data)}
     ok = status == 200 and names == {SEED_USERNAME}
-    _ok("GET /api/users?name=alice → query-param filter", ok, (status, data))
+    _ok("GET /api/users?username=alice → query-param filter", ok, (status, data))
 
 
 def call_users_json_logic_filter(admin_access: str) -> None:
-    logic = json.dumps({"==": [{"var": "name"}, SEED_USERNAME]})
+    logic = json.dumps({"==": [{"var": "username"}, SEED_USERNAME]})
     url = f"{USERS}?filter={urllib.parse.quote(logic)}"
     status, data = _request("GET", url, token=admin_access)
     names = {item.get("username") or item.get("name") for item in _results(data)}
     ok = status == 200 and names == {SEED_USERNAME}
-    _ok("GET /api/users?filter=(name) → JsonLogic whitelist field", ok, (status, data))
+    _ok("GET /api/users?filter=(username) → JsonLogic whitelist field", ok, (status, data))
+
+
+def call_users_json_logic_unknown_field(admin_access: str) -> None:
+    logic = json.dumps({"==": [{"var": "password"}, "should-not-filter"]})
+    url = f"{USERS}?filter={urllib.parse.quote(logic)}"
+    status, data = _request("GET", url, token=admin_access)
+    ok = status == 200 and len(_results(data)) >= 2
+    _ok("GET /api/users?filter=(password) → non-whitelist field skipped", ok, (status, data))
+
+
+def call_users_patch_and_restore(admin_access: str) -> None:
+    status, listed = _request("GET", f"{USERS}?username={SEED_USERNAME}", token=admin_access)
+    rows = _results(listed)
+    if status != 200 or not rows:
+        _ok("PATCH setup: find alice", False, (status, listed))
+        return
+    user_id = rows[0]["id"]
+    status, patched = _request(
+        "PATCH",
+        f"{USERS}/{user_id}",
+        body={"username": "alice_patched"},
+        token=admin_access,
+    )
+    ok = status == 200 and patched.get("username") == "alice_patched"
+    _ok(f"PATCH /api/users/{user_id} → 200", ok, (status, patched))
+    status, restored = _request(
+        "PATCH",
+        f"{USERS}/{user_id}",
+        body={"username": SEED_USERNAME},
+        token=admin_access,
+    )
+    _ok("PATCH restore alice username", status == 200 and restored.get("username") == SEED_USERNAME, (status, restored))
+
+
+def call_change_password_and_restore(user_access: str) -> None:
+    new_password = "Secret123"
+    status, _ = _request(
+        "POST",
+        f"{USERS}/change-password",
+        body={"old_password": SEED_PASSWORD, "password1": new_password, "password2": new_password},
+        token=user_access,
+    )
+    _ok("POST /api/users/change-password → 200", status == 200, status)
+
+    status_old, _ = _request("POST", AUTH, body={"account": SEED_EMAIL, "password": SEED_PASSWORD})
+    _ok("old password rejected after change", status_old == 401, status_old)
+
+    status_new, data = _request("POST", AUTH, body={"account": SEED_EMAIL, "password": new_password})
+    new_access = (data or {}).get("access_token") if status_new == 200 else None
+    _ok("new password logs in", bool(new_access), (status_new, data))
+    if not new_access:
+        return
+
+    status, _ = _request(
+        "POST",
+        f"{USERS}/change-password",
+        body={"old_password": new_password, "password1": SEED_PASSWORD, "password2": SEED_PASSWORD},
+        token=new_access,
+    )
+    _ok("change-password restore seed password", status == 200, status)
 
 
 def call_users_query_param_ignores_unknown_field(admin_access: str) -> None:
     status, data = _request("GET", f"{USERS}?password=should-be-ignored", token=admin_access)
     ok = status == 200 and len(_results(data)) >= 2
     _ok("GET /api/users?password=… → unknown query param ignored", ok, (status, data))
+
+
+def call_users_admin_sees_everyone(admin_access: str) -> None:
+    status, data = _request("GET", USERS, token=admin_access)
+    names = {item.get("username") for item in _results(data)}
+    ok = status == 200 and {SEED_USERNAME, ADMIN_USERNAME} <= names
+    _ok("GET /api/users as superuser → seed users", ok, (status, data))
+
+
+def call_users_admin_create_then_alice_forbidden(admin_access: str, user_access: str) -> None:
+    suffix = int(time.time() * 1000)
+    username = f"created{suffix}"
+    body = {
+        "username": username,
+        "email": f"{username}@example.com",
+        "password1": "Password123",
+        "password2": "Password123",
+    }
+    status, created = _request("POST", USERS, body=body, token=admin_access)
+    ok = status == 201 and isinstance(created, dict) and created.get("username") == username and created.get("is_superuser") is False
+    _ok("POST /api/users as superuser → 201", ok, (status, created))
+    if not ok:
+        return
+    user_id = created["id"]
+    status, _ = _request("GET", f"{USERS}/{user_id}", token=user_access)
+    _ok("GET /api/users/{id} as alice for someone else → 404", status == 404, status)
+    status, detail = _request("GET", f"{USERS}/{user_id}", token=admin_access)
+    _ok("GET /api/users/{id} as superuser → 200", status == 200 and detail.get("id") == user_id, (status, detail))
+    status, _ = _request("DELETE", f"{USERS}/{user_id}", token=admin_access)
+    _ok("DELETE /api/users/{id} as superuser → 204", status == 204, status)
 
 
 def call_users_create_duplicate_email_409(admin_access: str) -> None:
@@ -323,35 +496,55 @@ def call_notes_create_duplicate_title_409(user_access: str) -> None:
     _ok("POST /api/notes duplicate title → 409 (IntegrityError path)", ok, (status1, status2, data2))
 
 
+def _note_id_by_title(token: str, title: str) -> int | None:
+    """Create responses use the write schema (no id); list uses the read schema."""
+    status, data = _request("GET", f"{NOTES}?title={urllib.parse.quote(title)}", token=token)
+    if status != 200:
+        return None
+    for item in _results(data):
+        if item.get("title") == title:
+            return item.get("id")
+    return None
+
+
 def call_notes_idor_forbidden(user_access: str, admin_access: str) -> None:
     suffix = int(time.time() * 1000)
+    admin_title = f"admin-private-{suffix}"
     status_admin, admin_note = _request(
         "POST",
         NOTES,
-        body={"title": f"admin-private-{suffix}", "body": "admin only"},
+        body={"title": admin_title, "body": "admin only"},
         token=admin_access,
     )
     if status_admin != 201 or not isinstance(admin_note, dict):
         _ok("POST /api/notes as admin (setup for IDOR)", False, (status_admin, admin_note))
         return
 
-    note_id = admin_note["id"]
+    note_id = admin_note.get("id") or _note_id_by_title(admin_access, admin_title)
+    if note_id is None:
+        _ok("resolve admin note id after create", False, admin_note)
+        return
     status, data = _request("GET", f"{NOTES}/{note_id}", token=user_access)
     ok = status == 403 and isinstance(data, dict) and "detail" in data
     _ok("GET /api/notes/{admin_id} as alice → 403 IDOR blocked", ok, (status, data))
 
+    own_title = f"alice-own-{suffix}"
     status_self, own = _request(
         "POST",
         NOTES,
-        body={"title": f"alice-own-{suffix}", "body": "mine"},
+        body={"title": own_title, "body": "mine"},
         token=user_access,
     )
     if status_self != 201 or not isinstance(own, dict):
         _ok("POST /api/notes as alice (setup for owner retrieve)", False, (status_self, own))
         return
 
-    status_ok, detail = _request("GET", f"{NOTES}/{own['id']}", token=user_access)
-    ok_owner = status_ok == 200 and detail.get("title") == f"alice-own-{suffix}"
+    own_id = own.get("id") or _note_id_by_title(user_access, own_title)
+    if own_id is None:
+        _ok("resolve alice note id after create", False, own)
+        return
+    status_ok, detail = _request("GET", f"{NOTES}/{own_id}", token=user_access)
+    ok_owner = status_ok == 200 and detail.get("title") == own_title
     _ok("GET /api/notes/{own_id} as owner → 200", ok_owner, (status_ok, detail))
 
 
@@ -385,9 +578,11 @@ def main() -> int:
         return 2
 
     call_public_hello()
+    call_registration_styles()
     call_login_wrong_password()
     call_protected_without_token()
     call_events_without_token()
+    call_logout_without_token()
     call_social_provision_new_user()
 
     call_login_username()
@@ -397,8 +592,13 @@ def main() -> int:
     refresh = login.get("refresh_token", "")
 
     if access:
+        call_registration_styles(access)
         call_protected_with_token(access)
-        call_users_self(access)
+        me = call_users_self(access)
+        if me.get("id") is not None:
+            call_users_retrieve_self(access, me["id"])
+        call_users_list_only_self(access)
+        call_users_create_forbidden(access)
         call_verify(access)
         call_me(access)
         call_events_forbidden_as_user(access)
@@ -418,6 +618,14 @@ def main() -> int:
             call_refresh_revoked_after_logout(access2, refresh2)
             call_relogin_after_logout()
 
+        expired_login = call_login_email()
+        expired_access = expired_login.get("access_token", "")
+        expired_refresh = expired_login.get("refresh_token", "")
+        if expired_access and expired_refresh:
+            who = call_users_self(expired_access)
+            if who.get("id") is not None:
+                call_logout_expired_access_revokes_refresh(who["id"], expired_refresh)
+
     admin_login = call_login_admin()
     admin_access = admin_login.get("access_token", "") or ""
     if admin_access:
@@ -425,11 +633,18 @@ def main() -> int:
         call_users_search(admin_access)
         call_users_query_param_filter(admin_access)
         call_users_json_logic_filter(admin_access)
+        call_users_json_logic_unknown_field(admin_access)
         call_users_query_param_ignores_unknown_field(admin_access)
+        call_users_admin_sees_everyone(admin_access)
         call_users_create_duplicate_email_409(admin_access)
+        if access:
+            call_users_admin_create_then_alice_forbidden(admin_access, access)
+        call_users_patch_and_restore(admin_access)
 
     login_for_notes = call_login_email()
     user_access = login_for_notes.get("access_token", "")
+    if user_access:
+        call_change_password_and_restore(user_access)
     if user_access and admin_access:
         call_notes_create_duplicate_title_409(user_access)
         call_notes_idor_forbidden(user_access, admin_access)

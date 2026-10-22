@@ -1,15 +1,13 @@
 import functools
 import json
 import operator
-from abc import ABC, abstractmethod
+from abc import ABC
 from collections.abc import Callable
-from typing import Any, ClassVar, cast
-from urllib.parse import unquote
+from typing import Any, ClassVar
 
 from sanic import Request
 from sanic.exceptions import BadRequest
 from sanic.log import logger
-from sanic.views import HTTPMethodView
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
@@ -28,19 +26,38 @@ def visualize_q(q: Q, indent=0):
 
 
 class BaseFilter(ABC):
-    def __init__(self, view_class: HTTPMethodView):
+    """
+    Base class for all filters.
+
+    Subclasses must set ``cls_fields`` to the name of the view attribute holding the
+    field configuration (e.g. ``"search_fields"``); missing it raises ``TypeError``
+    at class-definition time.
+
+    Attributes:
+        cls_fields: Name of the view attribute that lists the allowed fields.
+        view_class: The view instance this filter is bound to.
+        filter_fields: Resolved field mapping. A list config becomes ``{field: field}``,
+            a dict config is used as-is, anything else becomes ``{}``.
+    """
+
+    # Name of the attribute on the view that lists allowed fields.
+    # Default None so a subclass missing it fails fast (TypeError) at class-definition time.
+    cls_fields: str | None = None
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if cls.cls_fields is None:
+            raise TypeError(f"cls_fields must be set in {cls.__name__}.")
+
+    def __init__(self, view_class):
         self.view_class = view_class
-
-    @property
-    @abstractmethod
-    def _filter_params(self) -> Any:
-        """Subclasses must implement;
-        return type is filter-specific. For internal use only."""
-        ...
-
-    def get_search_terms(self, request: Request):
-        """Extract search keywords from requests"""
-        return request.args.getlist(self._filter_params, [])
+        raw = getattr(view_class, self.cls_fields, None)
+        if isinstance(raw, list):
+            self.filter_fields = {field: field for field in raw}
+        elif isinstance(raw, dict):
+            self.filter_fields = raw
+        else:
+            self.filter_fields = {}
 
     def filter_queryset(self, request: Request, queryset: QuerySet) -> QuerySet:
         """Actual filtering logic (to be implemented according to ORM)"""
@@ -48,31 +65,32 @@ class BaseFilter(ABC):
 
 
 class SearchFilter(BaseFilter):
-    """Search filter applicable to common ORM (example uses TortoiseORM syntax)"""
+    """
+    Keyword filter applicable to common ORM (example uses TortoiseORM syntax).
 
-    def __init__(self, view_class):
-        super().__init__(view_class)
+    Reads the ``search`` query parameter, splits it on whitespace, and matches each
+    term against every configured field with ``__icontains``: terms are AND-ed,
+    fields are OR-ed.
+    """
 
-    @property
-    def _filter_params(self) -> str:
-        return "search"
+    cls_fields = "search_fields"
 
     def get_search_terms(self, request: Request):
-        search_param = request.args.get(self._filter_params, None)
+        search_param = request.args.get("search", None)
         if search_param:
             return search_param.split()
         return []
 
     def filter_queryset(self, request: Request, queryset: QuerySet) -> QuerySet:
         search_terms = self.get_search_terms(request)
-        if not search_terms or not self.view_class.search_fields:
+        if not search_terms or not self.filter_fields:
             return queryset
 
         query = None  # Tortoise: empty Q() | Q(...) yields empty; build term_query first then combine
         for term in search_terms:
             term_query = None
-            for field in self.view_class.search_fields:
-                condition = Q(**{f"{field}__icontains": term})
+            for value in self.filter_fields.values():
+                condition = Q(**{f"{value}__icontains": term})
                 if term_query is None:
                     term_query = condition
                 else:
@@ -88,6 +106,18 @@ class SearchFilter(BaseFilter):
 
 
 class JsonLogicFilter(BaseFilter):
+    """
+    Filter driven by a JSON expression in the ``filter`` query parameter.
+
+    Supports operators ``==``, ``!=``, ``>``, ``>=``, ``<``, ``<=``, ``in``, ``not in``,
+    ``like`` (icontains) and nested ``and`` / ``or`` / ``not``. Only fields listed in
+    the view's ``filter_fields`` are usable; anything else is ignored.
+
+    Attributes:
+        OPERATOR_MAP: Mapping of JSON-logic operators to ``Q`` expression builders.
+    """
+
+    cls_fields = "filter_fields"
     OPERATOR_MAP: ClassVar[dict[str, Callable]] = {
         "==": lambda k, v: Q(**{k: v}),
         "!=": lambda k, v: ~Q(**{k: v}),
@@ -101,19 +131,8 @@ class JsonLogicFilter(BaseFilter):
         "like": lambda k, v: Q(**{f"{k}__icontains": v}),
     }
 
-    def __init__(self, view_class):
-        super().__init__(view_class)
-        self.filter_fields = cast(
-            dict,
-            getattr(view_class, "filter_fields", {}),
-        )
-
-    @property
-    def _filter_params(self) -> str:
-        return "filter"
-
     def filter_queryset(self, request, queryset: QuerySet):
-        raw_logic = request.args.get(self._filter_params)
+        raw_logic = request.args.get("filter")
         if not raw_logic or not self.filter_fields:
             return queryset
 
@@ -160,28 +179,25 @@ class JsonLogicFilter(BaseFilter):
 
 
 class QueryParamFilter(BaseFilter):
-    def __init__(self, view_class=None):
-        super().__init__(view_class)
+    """
+    Exact-match filter based on query parameters.
 
-    @property
-    def _filter_params(self) -> dict:
-        if hasattr(self.view_class, "filter_fields"):
-            return cast(dict, self.view_class.filter_fields)
-        return {}
+    A query parameter is applied only when its name exactly matches a key of the view's
+    ``filter_fields``. A repeated parameter (``?a=1&a=2``) becomes an ``__in`` lookup,
+    a single value becomes an exact match.
+    """
+
+    cls_fields = "filter_fields"
 
     def filter_queryset(self, request, queryset: QuerySet):
         filters = {}
-        _filter_keys = self._filter_params.keys()
-        if self._filter_params:
+        _filter_keys = self.filter_fields.keys()
+        if self.filter_fields:
             for key in request.args:
-                if key in ("ordering",):
-                    continue
-                if self._filter_params and not any(key.startswith(field) for field in _filter_keys):
-                    continue
-                if key not in self._filter_params:
+                if key not in self.filter_fields:
                     continue
                 values = request.args.getlist(key)
-                mapped = self._filter_params[key]
+                mapped = self.filter_fields[key]
                 if values and len(values) > 1:
                     filters[f"{mapped}__in"] = values
                 elif values:
@@ -191,44 +207,23 @@ class QueryParamFilter(BaseFilter):
 
 
 class OrderingFactory(BaseFilter):
-    def __init__(self, view_class=None):
-        super().__init__(view_class)
+    """
+    Ordering filter driven by the ``ordering`` query parameter.
 
-    @property
-    def _filter_params(self) -> dict:
-        if hasattr(self.view_class, "ordering_fields"):
-            ordering_fields = cast(list | dict, self.view_class.ordering_fields)
-            # If it's a list, convert to dict for easier lookup
-            if isinstance(ordering_fields, list):
-                return {field: field for field in ordering_fields}
-            return ordering_fields
-        return {}
+    Accepts a comma-separated list such as ``?ordering=name,-create_time``; fields not
+    listed in the view's ``ordering_fields`` are silently ignored.
+    """
+
+    cls_fields = "ordering_fields"
 
     def filter_queryset(self, request, queryset: QuerySet):
-        sort_value = request.args.get("sort")
-        if not sort_value:
-            return queryset
-
-        allowed_fields = self._filter_params
         order_by_fields = []
-
-        # Parse multiple sorting fields, and support '-' to indicate reverse order
-        for raw_field in unquote(sort_value).split(","):
-            raw_field = raw_field.strip()
-            if not raw_field:
+        for raw in request.args.get("ordering", "").strip().split(","):
+            if not raw:
                 continue
+            desc = raw.startswith("-")
+            mapped = self.filter_fields.get(raw[1:] if desc else raw)
+            if mapped:
+                order_by_fields.append(f"-{mapped}" if desc else mapped)
 
-            desc = raw_field.startswith("-")
-            field_name = raw_field[1:] if desc else raw_field
-
-            # Verify that it is in the allowed field
-            if field_name in allowed_fields:
-                mapped_field = allowed_fields[field_name]
-                if desc:
-                    order_by_fields.append(f"-{mapped_field}")
-                else:
-                    order_by_fields.append(mapped_field)
-
-        if order_by_fields:
-            return queryset.order_by(*order_by_fields)
-        return queryset
+        return queryset.order_by(*order_by_fields) if order_by_fields else queryset

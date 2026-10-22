@@ -1,55 +1,58 @@
 # Pagination
 
-SRF provides a page-based pagination feature for handling list queries with large amounts of data.
+SRF provides page-number-based pagination for list queries over large datasets.
 
-## Overview of Pagination
+## Pagination overview
 
-Pagination divides large data into multiple pages, returning only one page of data at a time, which improves API performance and user experience.
+Pagination splits large datasets into multiple pages and returns only one page of data at a time, improving API performance and user experience.
 
-### Key Features
+### Main features
 
-- **Page-based**: Uses page numbers and the number of items per page for pagination
-- **Automatic Pagination**: Automatically applied in the `list` operation of ViewSet
-- **Configurable**: Supports customizing parameters such as the number of items per page and maximum limit
-- **Unified Response**: Returns a standardized pagination response format
+- **Page-number based**: uses a page number and page size for pagination
+- **Automatic pagination**: applied automatically in the ViewSet's list operation
+- **Configurable**: supports custom page sizes, maximum size limits, and other parameters
+- **Unified response**: returns a standardized paginated response format
 
 ## PageNumberPagination
 
-`PageNumberPagination` is the pagination handler class in SRF. Custom styles should subclass `BasePagination` (or `PageNumberPagination`) and implement the methods that raise `NotImplementedError` on the base class (`from_queryset`, `paginate`, `num_pages`). `to_dict` has a default implementation on `BasePagination`.
+`PageNumberPagination` is SRF's pagination class. Custom pagination can inherit from `BasePagination`,
+in which case you must implement `from_queryset()`, `paginate()`, and `num_pages()`; or inherit from
+`PageNumberPagination` and override only the behavior you want to change. `to_dict()` already has a default implementation
+on `BasePagination`.
 
-### Basic Usage
+### Basic usage
 
-Pagination is automatically applied in the `list` method of `BaseViewSet`:
+Pagination is applied automatically in `BaseViewSet`'s `list` method:
 
 ```python
 from srf.views import BaseViewSet
+
 
 class ProductViewSet(BaseViewSet):
     @property
     def queryset(self):
         return Product.all()
-    
-    def get_schema(self, request, is_safe=False):
-        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
-        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
-    
-    # The list method automatically applies pagination
+
+    def get_schema(self):
+        return ProductSchemaReader if self.request.is_safe else ProductSchemaWriter
+
+    # The list method applies pagination automatically
 ```
 
-### Request Examples
+### Request examples
 
 ```bash
-# Get page 1, using default items per page
+# Get page 1 with the default page size
 GET /api/products?page=1
 
-# Get page 2, 20 items per page
+# Get page 2 with 20 items per page
 GET /api/products?page=2&page_size=20
 
-# Page 1 can omit the page parameter
+# The page parameter can be omitted on the first page
 GET /api/products?page_size=10
 ```
 
-### Response Format
+### Response format
 
 ```json
 {
@@ -71,43 +74,45 @@ GET /api/products?page_size=10
 }
 ```
 
-**Field Description**:
+**Field reference**:
 
 - `count`: Total number of records
 - `next`: Whether there is a next page (boolean)
 - `previous`: Whether there is a previous page (boolean)
-- `results`: List of data on the current page
+- `results`: The list of data on the current page
 
-## Configuration Options
+## Configuration options
 
-### Default Configuration
+### Default configuration
 
 ```python
 class PageNumberPagination:
-    MAX_PAGE_SIZE: int = 100           # Upper limit for page_size
-    PAGE_QUERY_PARAM: str = 'page'     # Query parameter name for page number
-    PAGE_SIZE_QUERY_PARAM: str = 'page_size'  # Query parameter name for items per page
+    MAX_PAGE_SIZE: int = 100           # Upper bound for the requested page_size
+    PAGE_QUERY_PARAM: str = 'page'     # Page number query parameter name
+    PAGE_SIZE_QUERY_PARAM: str = 'page_size'  # Page size query parameter name
 ```
 
-**No** `page_size` / `max_page_size` class attributes. If `page_size` is missing or invalid, `from_queryset` falls back to `page=1`, `page_size=10`. The requested `page_size` is limited within `MAX_PAGE_SIZE`.
+There are **no** `page_size` / `max_page_size` class attributes. When `page_size` is missing or invalid, `from_queryset` falls back to `page=1` and `page_size=10`. The requested `page_size` is limited to at most `MAX_PAGE_SIZE`.
 
-#### Creating a Custom Pagination Class
+#### Creating a custom pagination class
 
 ```python
 from srf.paginator import PageNumberPagination
 
+
 class CustomPagination(PageNumberPagination):
     MAX_PAGE_SIZE = 50
-    PAGE_QUERY_PARAM = 'p'
-    PAGE_SIZE_QUERY_PARAM = 'size'
+    PAGE_QUERY_PARAM = "p"
+    PAGE_SIZE_QUERY_PARAM = "size"
+
 
 class ProductViewSet(BaseViewSet):
     pagination_class = CustomPagination
 ```
 
-## Manually Using Pagination
+## Using pagination manually
 
-Apply pagination manually in custom operations:
+Apply pagination manually in a custom action:
 
 ```python
 from srf.views import BaseViewSet
@@ -115,44 +120,42 @@ from srf.views.decorators import action
 from srf.paginator import PageNumberPagination
 from sanic.response import json
 
+
 class ProductViewSet(BaseViewSet):
     @action(methods=["get"], detail=False, url_path="featured")
     async def list_featured(self, request):
         """Get featured products (with pagination)"""
-        # Get query set
+        # Get the queryset
         queryset = Product.filter(is_featured=True)
-        
-        # Create paginator
+
+        # Create the paginator
         paginator = PageNumberPagination.from_queryset(queryset, request)
-        
-        # Get Schema
-        schema = self.get_schema(request, is_safe=True)
-        
-        # Execute pagination and serialization
+
+        # Get the schema
+        schema = self.get_schema()
+
+        # Paginate and serialize
         result = await paginator.to_dict(schema)
-        
+
         return json(result)
 ```
 
-## Detailed Pagination Methods
+## Pagination method details
 
 ### from_queryset(queryset, request)
 
-Create a paginator instance from a query set and request:
+Creates a paginator instance from a queryset and a request:
 
 ```python
 from srf.paginator import PageNumberPagination
 
-# Create paginator
-paginator = PageNumberPagination.from_queryset(
-    queryset=Product.all(),
-    request=request
-)
+# Create the paginator
+paginator = PageNumberPagination.from_queryset(queryset=Product.all(), request=request)
 ```
 
 ### paginate(sch_model)
 
-Execute pagination and return a `PaginationResult` object:
+Performs pagination and returns a `PaginationResult` object:
 
 ```python
 from schemas import ProductSchemaReader
@@ -164,12 +167,12 @@ result = await paginator.paginate(sch_model=ProductSchemaReader)
 print(result.count)      # Total count
 print(result.next)       # Whether there is a next page
 print(result.previous)   # Whether there is a previous page
-print(result.results)    # Current page data (serialized)
+print(result.results)    # Current page data (already serialized)
 ```
 
 ### to_dict(sch_model)
 
-Execute pagination and return a dictionary format:
+Performs pagination and returns a dictionary:
 
 ```python
 from schemas import ProductSchemaReader
@@ -186,9 +189,9 @@ result_dict = await paginator.to_dict(sch_model=ProductSchemaReader)
 # }
 ```
 
-## Pagination Combined with Filtering
+## Combining pagination with filtering
 
-Pagination is often used with filtering, search, and sorting:
+Pagination is usually used together with filtering, search, and ordering:
 
 ```python
 class ProductViewSet(BaseViewSet):
@@ -201,43 +204,44 @@ class ProductViewSet(BaseViewSet):
         "price": "price",
         "name": "name",
     }
-    
-    # Example request:
-    # GET /api/products?search=phone&category=1&min_price=1000&sort=-price&page=1&page_size=20
-    # 
-    # Execution order:
-    # 1. Apply search filter
-    # 2. Apply field filters
-    # 3. Apply sorting
-    # 4. Apply pagination
+
+    # Request example:
+    # GET /api/products?category=1&min_price=1000&ordering=-price&page=1&page_size=20
+    # Default filter_class execution order:
+    # 1. SearchFilter
+    # 2. JsonLogicFilter
+    # 3. QueryParamFilter
+    # 4. OrderingFactory
+    # 5. Pagination
 ```
 
-## Custom Pagination Logic
+## Custom pagination logic
 
-### Example 1: Adding Extra Metadata
+### Example 1: Adding extra metadata
 
 ```python
 from srf.paginator import PageNumberPagination
 from sanic.response import json
 
+
 class ProductViewSet(BaseViewSet):
     async def list(self, request):
-        """Custom list method, add extra information"""
-        # Get query set and apply filters
+        """Custom list method that adds extra information"""
+        # Get the queryset and apply filtering
         queryset = self.queryset
         for filter_class in self.filter_class:
             queryset = filter_class(self).filter_queryset(request, queryset)
-        
-        # Pagination
+
+        # Paginate
         paginator = PageNumberPagination.from_queryset(queryset, request)
-        schema = self.get_schema(request, is_safe=True)
+        schema = self.get_schema()
         result = await paginator.to_dict(schema)
-        
+
         # Add extra information
-        result['total_pages'] = (result['count'] + paginator.page_size - 1) // paginator.page_size
-        result['current_page'] = paginator.page
-        result['page_size'] = paginator.page_size
-        
+        result["total_pages"] = (result["count"] + paginator.page_size - 1) // paginator.page_size
+        result["current_page"] = paginator.page
+        result["page_size"] = paginator.page_size
+
         return json(result)
 ```
 
@@ -255,106 +259,48 @@ Response:
 }
 ```
 
-### Example 2: Cursor Pagination
+### Example 2: Cursor pagination
 
 For large datasets, you can implement cursor pagination:
 
 ```python
 from sanic.response import json
 
+
 class ProductViewSet(BaseViewSet):
     @action(methods=["get"], detail=False, url_path="cursor-list")
     async def cursor_list(self, request):
         """Use cursor pagination"""
-        cursor = request.args.get('cursor', 0)  # Last ID of the previous page
-        limit = int(request.args.get('limit', 20))
-        
-        # Query records greater than cursor
+        cursor = request.args.get("cursor", 0)  # The last ID of the previous page
+        limit = int(request.args.get("limit", 20))
+
+        # Query records greater than the cursor
         queryset = Product.filter(id__gt=cursor).limit(limit + 1)
         products = await queryset
-        
-        # Check if there is a next page
+
+        # Check whether there is a next page
         has_next = len(products) > limit
         if has_next:
             products = products[:limit]
-        
-        # Serialization
-        schema = self.get_schema(request, is_safe=True)
-        results = [schema.model_validate(p).model_dump() for p in products]
-        
-        # Return results
+
+        # Serialize
+        results = [ProductSchemaReader.model_validate(p).model_dump() for p in products]
+
+        # Return the result
         next_cursor = products[-1].id if products and has_next else None
-        
-        return json({
-            "results": results,
-            "next_cursor": next_cursor,
-            "has_next": has_next,
-        })
+
+        return json(
+            {
+                "results": results,
+                "next_cursor": next_cursor,
+                "has_next": has_next,
+            }
+        )
 ```
 
-## Complete Example
+## Client usage examples
 
-```python
-from srf.views import BaseViewSet
-from srf.views.decorators import action
-from srf.permission.permission import IsAuthenticated
-from srf.paginator import PageNumberPagination
-from sanic.response import json
-from models import Product
-from schemas import ProductSchemaReader, ProductSchemaWriter
-
-class ProductViewSet(BaseViewSet):
-    """Product ViewSet - Pagination Example"""
-    
-    permission_classes = (IsAuthenticated,)
-    search_fields = ["name", "description", "sku"]
-    filter_fields = {
-        "category": "category_id",
-        "min_price": "price__gte",
-        "max_price": "price__lte",
-    }
-    ordering_fields = {
-        "price": "price",
-        "name": "name",
-        "created": "created_at",
-    }
-
-
-    @property
-    def queryset(self):
-        return Product.all().prefetch_related("category")
-    
-    def get_schema(self, request, is_safe=False):
-        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
-        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
-    
-    # The list method automatically applies pagination
-    
-    @action(methods=["get"], detail=False, url_path="search")
-    async def search_products(self, request):
-        """Custom search (with pagination)"""
-        keyword = request.args.get('q', '')
-        
-        if not keyword:
-            return json({"error": "Please provide a search keyword"}, status=400)
-        
-        # Search
-        queryset = Product.filter(name__icontains=keyword)
-        
-        # Pagination
-        paginator = PageNumberPagination.from_queryset(queryset, request)
-        schema = self.get_schema(request, is_safe=True)
-        result = await paginator.to_dict(schema)
-        
-        # Add search keyword to response
-        result['keyword'] = keyword
-        
-        return json(result)
-```
-
-### Client Usage Examples
-
-#### Basic Pagination
+### Basic pagination
 
 ```javascript
 // Get page 1
@@ -367,7 +313,7 @@ fetch('/api/products?page=1&page_size=20')
   });
 ```
 
-#### Pagination Navigation
+### Pagination navigation
 
 ```javascript
 let currentPage = 1;
@@ -376,10 +322,10 @@ async function loadPage(page) {
   const response = await fetch(`/api/products?page=${page}&page_size=20`);
   const data = await response.json();
   
-  // Display data
+  // Render the data
   renderProducts(data.results);
   
-  // Update navigation buttons
+  // Update the navigation buttons
   document.getElementById('prev-btn').disabled = !data.previous;
   document.getElementById('next-btn').disabled = !data.next;
   
@@ -399,7 +345,7 @@ document.getElementById('next-btn').onclick = () => {
 };
 ```
 
-#### Infinite Scroll
+### Infinite scrolling
 
 ```javascript
 let currentPage = 1;
@@ -423,7 +369,7 @@ async function loadMore() {
   isLoading = false;
 }
 
-// Listen for scroll
+// Listen for scrolling
 window.addEventListener('scroll', () => {
   if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
     loadMore();
@@ -434,43 +380,43 @@ window.addEventListener('scroll', () => {
 loadMore();
 ```
 
-## Performance Optimization
+## Performance optimization
 
-### 1. Use count() Optimization
+### 1. Use count() for optimization
 
 For large datasets, use `count()` instead of `len()`:
 
 ```python
-# Not recommended: Load all data
+# Not recommended: loads all data
 total = len(await Product.all())
 
-# Recommended: Only count the number
+# Recommended: only counts the records
 total = await Product.all().count()
 ```
 
-### 2. Use only() to Select Fields
+### 2. Use only() to select fields
 
 Query only the fields you need:
 
 ```python
 @property
 def queryset(self):
-    # Query only the fields needed for the list
-    return Product.all().only('id', 'name', 'price', 'image')
+    # Only query the fields needed by the list
+    return Product.all().only("id", "name", "price", "image")
 ```
 
-### 3. Optimize Related Queries with prefetch_related
+### 3. Use prefetch_related to optimize related queries
 
 ```python
 @property
 def queryset(self):
-    # Prefetch related objects to reduce the number of queries
-    return Product.all().prefetch_related('category', 'brand')
+    # Preload related objects to reduce the number of queries
+    return Product.all().prefetch_related("category", "brand")
 ```
 
-### 4. Add Indexes
+### 4. Add indexes
 
-Add database indexes to fields frequently used for filtering and sorting:
+Add database indexes for fields commonly used in filtering and ordering:
 
 ```python
 class Product(Model):
@@ -479,26 +425,24 @@ class Product(Model):
     created_at = fields.DatetimeField(auto_now_add=True, index=True)
 ```
 
-## Best Practices
+## Best practices
 
-1. **Set a reasonable number of items per page**: Typically 10-50 items is appropriate, avoid too many
-2. **Limit the maximum number of items per page**: Subclass and set `MAX_PAGE_SIZE`
-3. **Combine with filtering**: Pagination should be used together with filtering, search, and sorting
-4. **Optimize queries**: Use `only()`, `prefetch_related()` and other optimizations
-5. **Cache the total count**: For data that doesn't change often, cache the total count
-6. **Add indexes**: Add database indexes to fields used for sorting and filtering
-7. **Return metadata**: Return additional information like total pages and current page for client usage
+1. **Choose a reasonable page size**: 10-50 items is usually appropriate; avoid overly large values
+2. **Limit the maximum page size**: subclass and set `MAX_PAGE_SIZE`
+3. **Combine with filtering**: pagination should be used together with filtering, search, and ordering
+4. **Optimize queries**: use `only()`, `prefetch_related()`, and similar techniques to optimize queries
+5. **Cache the total count**: for data that rarely changes, you can cache the total count
+6. **Add indexes**: add database indexes for ordering and filtering fields
+7. **Return metadata**: return extra information such as the total page count and current page for client convenience
 
-## Common Issues
+## FAQ
 
-### How to Disable Pagination?
+### How do I disable pagination?
 
-```python
-class ProductViewSet(BaseViewSet):
-    pagination_class = None  # Disable pagination
-```
+The built-in `list()` must use a pagination class (`pagination_class = None` causes `list()` to raise an error).
+For endpoints that should not paginate, override `list()` or add a custom action (see "Get all data" below).
 
-### How to Get All Data (Without Pagination)?
+### How do I get all data (without pagination)?
 
 ```bash
 # page_size is limited by PageNumberPagination.MAX_PAGE_SIZE (default 100)
@@ -512,38 +456,38 @@ Or add a custom action in the ViewSet:
 async def get_all(self, request):
     """Get all products (without pagination)"""
     products = await Product.all()
-    schema = self.get_schema(request, is_safe=True)
-    results = [schema.model_validate(p).model_dump() for p in products]
+    results = [ProductSchemaReader.model_validate(p).model_dump() for p in products]
     return json({"results": results})
 ```
 
-### How to Implement Offset-Based Pagination (offset/limit)?
+### How do I implement offset/limit pagination?
 
 ```python
 @action(methods=["get"], detail=False, url_path="offset-list")
 async def offset_list(self, request):
     """Use offset/limit pagination"""
-    offset = int(request.args.get('offset', 0))
-    limit = int(request.args.get('limit', 20))
-    
+    offset = int(request.args.get("offset", 0))
+    limit = int(request.args.get("limit", 20))
+
     queryset = Product.all()
     total = await queryset.count()
-    
+
     products = await queryset.offset(offset).limit(limit)
-    
-    schema = self.get_schema(request, is_safe=True)
-    results = [schema.model_validate(p).model_dump() for p in products]
-    
-    return json({
-        "total": total,
-        "offset": offset,
-        "limit": limit,
-        "results": results,
-    })
+
+    results = [ProductSchemaReader.model_validate(p).model_dump() for p in products]
+
+    return json(
+        {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "results": results,
+        }
+    )
 ```
 
-## Next Steps
+## Next steps
 
-- Learn [Filtering](filtering.md) to understand how to combine it with pagination
-- Read [Views](viewsets.md) to learn about the full features of ViewSet
-- See [Performance Optimization](../advanced/advanced-features.md) for more optimization tips
+- Study [Filtering](filtering.md) to learn how to combine it with pagination
+- Read [Views](viewsets.md) for the complete functionality of ViewSets
+- See [Performance Optimization](../advanced/advanced-features.md) for more optimization techniques

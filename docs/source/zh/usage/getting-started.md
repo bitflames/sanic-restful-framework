@@ -1,6 +1,6 @@
 # 快速开始
 
-本指南将带您从零开始创建第一个基于 Sanic RESTful Framework 的项目。
+本指南将带您从零开始创建第一个基于 Sanic RESTful framework 的项目。
 
 ## 环境要求
 
@@ -45,18 +45,14 @@ pip install sanic-restful-framework
 uv add sanic-restful-framework
 ```
 
-### 4. 安装依赖
+### 4. 核对运行依赖
 
-SRF 需要以下依赖（通常会自动安装）：
+安装 SRF 时会自动安装核心依赖，包括 Sanic `>=25.0.0,<26`、
+Tortoise ORM `>=1.1.8,<2`、Pydantic `>=2.6.1,<3`、`sanic-jwt`、`redis`
+和 `bcrypt`。
 
-```bash
-sanic
-tortoise-orm
-pydantic
-sanic-jwt
-redis
-bcrypt
-```
+`sanic-cors` 和 `python-dotenv` 是可选依赖，分别用于 CORS 集成和从 `.env`
+文件加载配置；只有使用相应示例时才需要单独安装。
 
 ## 创建第一个项目
 
@@ -69,7 +65,6 @@ bcrypt
 ```python
 from sanic import Sanic
 from tortoise.contrib.sanic import register_tortoise
-from srf.route import SanicRouter
 from srf.config import settings
 
 # 创建 Sanic 应用
@@ -86,9 +81,6 @@ register_tortoise(
     generate_schemas=True,
 )
 
-# 创建路由
-router = SanicRouter(prefix="api")
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True)
 ```
@@ -101,14 +93,16 @@ if __name__ == "__main__":
 from tortoise import fields
 from tortoise.models import Model
 
+
 class Book(Model):
     """图书模型"""
+
     id = fields.IntField(pk=True)
     title = fields.CharField(max_length=200)
     author = fields.CharField(max_length=100)
     price = fields.DecimalField(max_digits=10, decimal_places=2)
     stock = fields.IntField(default=0)
-    
+
     class Meta:
         table = "books"
 ```
@@ -118,26 +112,29 @@ class Book(Model):
 创建 `schemas.py` 文件：
 
 ```python
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
+
 
 class BookSchemaWriter(BaseModel):
     """图书写入 Schema（用于创建和更新）"""
+
     title: str = Field(..., max_length=200)
     author: str = Field(..., max_length=100)
     price: float = Field(..., gt=0)
     stock: int = Field(default=0, ge=0)
 
+
 class BookSchemaReader(BaseModel):
     """图书读取 Schema（用于序列化）"""
+
     id: int
     title: str
     author: str
     price: float
     stock: int
-    
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
 ```
 
 ### 步骤 4：创建 ViewSet
@@ -147,70 +144,51 @@ class BookSchemaReader(BaseModel):
 ```python
 from srf.views import BaseViewSet
 from srf.views.decorators import action
-from sanic.constants import SAFE_HTTP_METHODS
 from sanic.response import json
 from models import Book
 from schemas import BookSchemaWriter, BookSchemaReader
 
+
 class BookViewSet(BaseViewSet):
     """图书 ViewSet"""
-    
+
     search_fields = ["title", "author"]
+    # search_fields、filter_fields 都可以用别名映射；字典可将查询参数名映射到 ORM 字段
     filter_fields = {"author": "author"}
-    
+
     @property
     def queryset(self):
         return Book.all()
-    
-    def get_schema(self, request, *args, is_safe=False, **kwargs):
-        if request.method.upper() in SAFE_HTTP_METHODS or is_safe:
+
+    def get_schema(self):
+        # as_view 会设置 self.action；此处按 ViewSet 操作名区分读写 Schema。
+        if self.action in ("list", "retrieve"):
             return BookSchemaReader
         return BookSchemaWriter
-    
+
     @action(methods=["get"], detail=False, url_path="search")
     async def search_books(self, request):
         """搜索图书"""
-        keyword = request.args.get('q', '')
+        keyword = request.args.get("q", "")
         books = await Book.filter(title__icontains=keyword)
-        schema = self.get_schema(request, is_safe=True)
-        data = [schema.model_validate(b).model_dump() for b in books]
+        data = [BookSchemaReader.model_validate(b).model_dump() for b in books]
         return json({"results": data})
 ```
 
 ### 步骤 5：注册路由
 
-更新 `app.py`，注册 ViewSet：
+在 `app.py` 顶部补充导入，然后在 `register_tortoise(...)` 之后注册 ViewSet：
 
 ```python
-from sanic import Sanic
-from tortoise.contrib.sanic import register_tortoise
 from srf.route import SanicRouter
-from srf.config import settings
 from viewsets import BookViewSet
 
-app = Sanic("BookStore")
-
-# 应用我们的SRF框架
-settings.set_app(app)
-
-# 注册数据库
-register_tortoise(
-    app,
-    db_url="sqlite://db.sqlite3",
-    modules={"models": ["models"]},
-    generate_schemas=True,
-)
-
-# 创建路由并注册 ViewSet
-router = SanicRouter(prefix="api")
+router = SanicRouter(app, prefix="api")
 router.register("books", BookViewSet, name="books")
-
-# 将路由添加到应用
-app.blueprint(router.get_blueprint())
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
 ```
+
+`SanicRouter` 会为 ViewSet 自动生成集合路由（`/api/books`）和详情路由
+（`/api/books/<pk>`），并发现 `@action` 方法。
 
 ### 步骤 6：运行应用
 
@@ -285,6 +263,8 @@ curl http://localhost:8000/api/books
 curl http://localhost:8000/api/books/1
 ```
 
+响应体是创建接口返回的同一个图书对象。
+
 ### 4. 更新图书
 
 ```bash
@@ -298,15 +278,27 @@ curl -X PUT http://localhost:8000/api/books/1 \
   }'
 ```
 
-### 5. 搜索图书
+响应：
+
+```json
+{
+  "id": 1,
+  "title": "Python 编程（第2版）",
+  "author": "张三",
+  "price": 99.00,
+  "stock": 50
+}
+```
+
+### 5. 按字段过滤
+
+`filter_fields` 中声明的参数可以直接用于精确过滤：
 
 ```bash
-# 搜索标题包含 "Python" 的图书
-curl "http://localhost:8000/api/books?search=Python"
-
-# 按作者过滤
 curl "http://localhost:8000/api/books?author=张三"
 ```
+
+响应结构与列表接口相同，`results` 中只包含匹配的记录。
 
 ### 6. 分页
 
@@ -315,18 +307,38 @@ curl "http://localhost:8000/api/books?author=张三"
 curl "http://localhost:8000/api/books?page=1&page_size=10"
 ```
 
+响应格式同上：`count` 为总数，`results` 为当前页数据。
+
 ### 7. 使用自定义操作
 
 ```bash
-# 搜索图书
+# 自定义 action 使用 q 参数搜索标题
 curl "http://localhost:8000/api/books/search?q=Python"
+```
+
+响应：
+
+```json
+{
+  "results": [
+    {
+      "id": 1,
+      "title": "Python 编程（第2版）",
+      "author": "张三",
+      "price": 99.00,
+      "stock": 50
+    }
+  ]
+}
 ```
 
 ### 8. 删除图书
 
 ```bash
-curl -X DELETE http://localhost:8000/api/books/1
+curl -i -X DELETE http://localhost:8000/api/books/1
 ```
+
+响应：`204 No Content`（无响应体）。
 
 ## 完整的项目结构
 
@@ -336,8 +348,7 @@ bookstore/
 ├── models.py              # 数据模型
 ├── schemas.py             # Pydantic Schemas
 ├── viewsets.py            # ViewSets
-├── db.sqlite3             # 数据库文件（自动生成）
-└── requirements.txt       # 依赖列表
+└── db.sqlite3             # 数据库文件（自动生成）
 ```
 
 ## 下一步
@@ -357,13 +368,13 @@ bookstore/
 
 ```python
 # PostgreSQL
-db_url="postgres://user:password@localhost:5432/dbname"
+db_url = "postgres://user:password@localhost:5432/dbname"
 
 # MySQL
-db_url="mysql://user:password@localhost:3306/dbname"
+db_url = "mysql://user:password@localhost:3306/dbname"
 
 # SQLite
-db_url="sqlite://db.sqlite3"
+db_url = "sqlite://db.sqlite3"
 ```
 
 ### 如何禁用自动生成表结构？

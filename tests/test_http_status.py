@@ -1,7 +1,5 @@
 """Unit tests for srf.views.http_status."""
 
-import pytest
-
 from srf.views.http_status import (
     HTTPStatus,
     is_client_error,

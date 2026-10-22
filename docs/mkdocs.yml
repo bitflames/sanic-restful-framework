@@ -44,12 +44,18 @@ plugins:
         python:
           paths: ['../']
           options:
+            docstring_style: google
             show_root_heading: true
             show_root_full_path: false
             show_signature_annotations: true
-            show_source: true
+            show_source: false
             separate_signature: true
-            show_category_heading: true
+            merge_init_into_class: true
+            show_category_heading: false
+            inherited_members: true
+            show_if_no_docstring: true
+            members_order: source
+            filters: ["!^_", "^__init__$"]
   - i18n:
       docs_structure: folder
       fallback_to_default: true
@@ -82,6 +88,7 @@ plugins:
             Permissions: 权限
             Pagination: 分页
             Filtering: 过滤
+            Filters: 过滤器
             Advanced: 其他功能
             Advanced Features: 高级功能
             Health Check: 健康检查
@@ -89,7 +96,7 @@ plugins:
             Exceptions: 异常
             HTTP Status: 状态码
             API Reference: API参考
-            Configuration: 配置项
+            Configuration: 配置
             Release Notes: 发布说明
 
 # Navigation
@@ -125,7 +132,14 @@ nav:
           - Exceptions: usage/advanced/exceptions.md
           - HTTP Status: usage/advanced/http-status.md
 
-  - API Reference: api-reference.md
+  - API Reference:
+      - Views: api/views.md
+      - Routing: api/routing.md
+      - Pagination: api/pagination.md
+      - Filters: api/filters.md
+      - Permissions: api/permissions.md
+      - Exceptions: api/exceptions.md
+      - HTTP Status: api/http-status.md
   - Configuration: config.md
   - Release Notes: release-notes.md
 

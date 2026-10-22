@@ -10,6 +10,7 @@ SRF 使用 [Pydantic](https://docs.pydantic.dev/latest/) 进行数据验证和�
 from pydantic import BaseModel, Field
 from typing import Optional
 
+
 class ProductSchema(BaseModel):
     name: str = Field(..., max_length=100)
     price: float = Field(..., gt=0)
@@ -21,10 +22,12 @@ class ProductSchema(BaseModel):
 
 ```python
 from srf.views import BaseViewSet
-from pydantic import BaseModel
+from models import Product
+from schemas import ProductSchema
+
 
 class ProductViewSet(BaseViewSet):
-    schema: BaseModel = ProductSchema
+    schema = ProductSchema
 
     @property
     def queryset(self):
@@ -36,6 +39,9 @@ class ProductViewSet(BaseViewSet):
 ### 数值验证
 
 ```python
+from pydantic import BaseModel, Field
+
+
 class ProductSchema(BaseModel):
     price: float = Field(..., gt=0)           # 大于0
     stock: int = Field(..., ge=0)             # 大于等于0
@@ -49,9 +55,10 @@ class ProductSchema(BaseModel):
 ```python
 from pydantic import BaseModel, Field, EmailStr
 
+
 class ProductSchema(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    sku: str = Field(..., pattern=r'^[A-Z]{3}-\d{6}$')
+    sku: str = Field(..., pattern=r"^[A-Z]{3}-\d{6}$")
     email: EmailStr  # 邮箱验证
 ```
 
@@ -59,36 +66,40 @@ class ProductSchema(BaseModel):
 
 ```python
 from typing import List, Set
+from pydantic import BaseModel, Field
+
 
 class ProductSchema(BaseModel):
-    tags: List[str] = Field(default=[])
+    tags: List[str] = Field(default_factory=list)
     images: List[str] = Field(..., min_length=1, max_length=10)
-    categories: Set[int] = Field(default=set())
+    categories: Set[int] = Field(default_factory=set)
 ```
 
 ## 自定义验证器
 
 ```python
-from pydantic import BaseModel, field_validator
+from typing import Optional
+from pydantic import BaseModel, Field, field_validator
+
 
 class ProductSchema(BaseModel):
     name: str
     price: float
     discount_price: Optional[float] = None
-    
-    @field_validator('name')
+
+    @field_validator("name")
     @classmethod
     def validate_name(cls, value):
         if not value.strip():
-            raise ValueError('产品名称不能为空')
+            raise ValueError("产品名称不能为空")
         return value.strip()
-    
-    @field_validator('discount_price')
+
+    @field_validator("discount_price")
     @classmethod
     def validate_discount(cls, value, info):
-        if value is not None and 'price' in info.data:
-            if value >= info.data['price']:
-                raise ValueError('折扣价必须小于原价')
+        if value is not None and "price" in info.data:
+            if value >= info.data["price"]:
+                raise ValueError("折扣价必须小于原价")
         return value
 ```
 
@@ -99,6 +110,9 @@ class ProductSchema(BaseModel):
 用于创建和更新操作：
 
 ```python
+from pydantic import BaseModel, Field
+
+
 class ProductSchemaWriter(BaseModel):
     name: str = Field(..., max_length=100)
     price: float = Field(..., gt=0)
@@ -111,8 +125,9 @@ class ProductSchemaWriter(BaseModel):
 用于序列化返回数据：
 
 ```python
-from pydantic import computed_field
+from pydantic import BaseModel, ConfigDict, computed_field
 from datetime import datetime
+
 
 class ProductSchemaReader(BaseModel):
     id: int
@@ -121,33 +136,78 @@ class ProductSchemaReader(BaseModel):
     stock: int
     category_id: int
     created_at: datetime
-    
+
     @computed_field
     @property
     def is_in_stock(self) -> bool:
         return self.stock > 0
-    
+
     @computed_field
     @property
     def url(self) -> str:
         return f"/api/products/{self.id}"
-    
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
 ```
 
 ### 在 ViewSet 中使用
 
+`BaseViewSet.as_view()` 会在调用操作方法前设置 `self.request` 和 `self.action`，
+因此 `get_schema()` 不需要接收 `request` 参数。Sanic 的 `request.is_safe` 是属性，
+表示当前 HTTP 方法是否为安全方法；适合按读写请求选择 Schema：
+
 ```python
+from srf.views import BaseViewSet
+from schemas import ProductSchemaReader, ProductSchemaWriter
+
+
 class ProductViewSet(BaseViewSet):
-    def get_schema(self, request, *args, is_safe=False, **kwargs):
-        """
-        create/update 输出会传 is_safe=True；
-        list/retrieve 当前默认 is_safe=False，故同时看 method。
-        """
-        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
-        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
+    def get_schema(self):
+        return ProductSchemaReader if self.request.is_safe else ProductSchemaWriter
 ```
+
+如果要按 ViewSet 操作名选择，例如某个自定义操作需要单独的 Schema，则判断
+`self.action`：
+
+```python
+from srf.views import BaseViewSet
+from schemas import ProductSchemaReader, ProductSchemaWriter
+
+
+class ProductViewSet(BaseViewSet):
+    def get_schema(self):
+        if self.action in ("list", "retrieve"):
+            return ProductSchemaReader
+        return ProductSchemaWriter
+```
+
+也可以根据需求直接固定 schema 类属性
+
+```python
+from srf.views import BaseViewSet
+from srf.permission import SafeMethodOnly
+from schemas import ProductSchemaReader
+
+
+class ProductViewSet(BaseViewSet):
+    permission_classes = [
+        SafeMethodOnly,
+    ]
+    schema = ProductSchemaReader
+```
+
+`is_safe` 根据 HTTP 方法分类；`self.action` 根据路由绑定的 ViewSet 方法分类。选择
+哪一种取决于接口设计。内置 `create` / `update` 会用 `get_schema()` 返回的同一个
+Schema 校验输入并序列化响应。
+
+!!! warning "strict=True 与部分更新"
+    内置 `create` / `update` 使用 `schema.model_validate(request.json, strict=True)`：
+
+    - 请求体中的字符串不会被自动转换成 `datetime` / `date` / `Decimal` 等类型；
+      写入 Schema 中若包含这些字段，客户端需要发送可被严格校验的类型（通常应改用
+      `str` 或 `float` 字段，或重写 `create` / `update`）。
+    - `update` 按完整 Schema 校验请求体，且 `PUT` 与 `PATCH` 行为相同；当前没有
+      真正的部分更新。请求体需要满足 Schema 的必填字段。
 
 ## 数据类型
 
@@ -156,6 +216,7 @@ class ProductViewSet(BaseViewSet):
 ```python
 from pydantic import BaseModel
 from typing import Optional
+
 
 class ExampleSchema(BaseModel):
     name: str           # 字符串
@@ -170,6 +231,7 @@ class ExampleSchema(BaseModel):
 ```python
 from datetime import date, datetime, time
 
+
 class EventSchema(BaseModel):
     event_date: date         # 日期
     created_at: datetime     # 日期时间
@@ -182,6 +244,7 @@ class EventSchema(BaseModel):
 from pydantic import EmailStr, HttpUrl
 from decimal import Decimal
 
+
 class AdvancedSchema(BaseModel):
     email: EmailStr       # 邮箱
     website: HttpUrl      # URL
@@ -192,11 +255,16 @@ class AdvancedSchema(BaseModel):
 
 ```python
 from enum import Enum
+from pydantic import BaseModel
+from srf.views import BaseViewSet
+from models import Product
+
 
 class ProductStatus(str, Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
     ARCHIVED = "archived"
+
 
 class ProductSchema(BaseModel):
     name: str
@@ -205,56 +273,58 @@ class ProductSchema(BaseModel):
 
 ## 验证错误响应
 
-当数据验证失败时，返回 422 错误：
+当 `create` / `update` 中的 Pydantic 校验失败时，`as_view()` 会把它转换成
+`PydanticValidationException`（422）。Sanic 返回的响应体形如：
 
 ```json
 {
-  "errors": [
-    {
-      "type": "string_too_short",
-      "loc": ["name"],
-      "msg": "String should have at least 1 character"
-    },
-    {
-      "type": "greater_than",
-      "loc": ["price"],
-      "msg": "Input should be greater than 0"
-    }
-  ]
+  "description": "Unprocessable Entity",
+  "status": 422,
+  "message": "1 validation error for ProductSchemaWriter\nprice\n  Input should be greater than 0 ..."
 }
 ```
+
+`message` 是 `str(ValidationError)`，不是结构化字段列表。需要逐字段错误时，
+应注册全局异常处理器或重写 `create` / `update`，自行调用 `error.errors()`。
 
 ## 完整示例
 
 ```python
-from pydantic import BaseModel, Field, field_validator, computed_field
+from pydantic import BaseModel, Field, field_validator, computed_field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+from srf.views import BaseViewSet
+from models import Product
+
 
 class ProductStatus(str, Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
 
+
 class ProductSchemaWriter(BaseModel):
     """写入 Schema"""
+
     name: str = Field(..., min_length=1, max_length=200)
-    sku: str = Field(..., pattern=r'^[A-Z]{3}-\d{6}$')
+    sku: str = Field(..., pattern=r"^[A-Z]{3}-\d{6}$")
     price: float = Field(..., gt=0)
     stock: int = Field(default=0, ge=0)
     category_id: int
     tags: List[str] = Field(default_factory=list)
     status: ProductStatus = ProductStatus.DRAFT
-    
-    @field_validator('name')
+
+    @field_validator("name")
     @classmethod
     def validate_name(cls, value):
         if not value.strip():
-            raise ValueError('产品名称不能为空')
+            raise ValueError("产品名称不能为空")
         return value.strip()
+
 
 class ProductSchemaReader(BaseModel):
     """读取 Schema"""
+
     id: int
     name: str
     sku: str
@@ -264,24 +334,24 @@ class ProductSchemaReader(BaseModel):
     tags: List[str]
     status: ProductStatus
     created_at: datetime
-    
+
     @computed_field
     @property
     def is_in_stock(self) -> bool:
         return self.stock > 0
-    
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 # 在 ViewSet 中使用
 class ProductViewSet(BaseViewSet):
     @property
     def queryset(self):
         return Product.all()
-    
-    def get_schema(self, request, is_safe=False):
-        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
-        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
+
+    def get_schema(self):
+        # 这里按 HTTP 方法选择读写 Schema；完整选择方式见上文。
+        return ProductSchemaReader if self.request.is_safe else ProductSchemaWriter
 ```
 
 ## 最佳实践

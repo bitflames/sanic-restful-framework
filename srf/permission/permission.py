@@ -1,5 +1,13 @@
 from sanic.constants import SAFE_HTTP_METHODS
 
+__all__ = [
+    "AllowAny",
+    "BasePermission",
+    "IsAuthenticated",
+    "SafeMethodOnly",
+    "SuperuserOnly",
+]
+
 
 class BasePermission:
     """
@@ -26,6 +34,8 @@ class BasePermission:
 
 
 class AllowAny(BasePermission):
+    """Allow any request, authenticated or not. This is the default permission."""
+
     @staticmethod
     def has_permission(request, view=None) -> bool:
         return True
@@ -35,24 +45,16 @@ class AllowAny(BasePermission):
         return True
 
 
-class IsRoleAdminUser(BasePermission):
-    @staticmethod
-    def has_permission(request, view=None) -> bool:
-        user = getattr(request.ctx, "user", None)
-        if user is None:
-            return False
-        role = getattr(user, "role", None)
-        return role is not None and getattr(role, "name", None) == "admin"
-
-
 class IsAuthenticated(BasePermission):
+    """Allow only requests whose ``request.ctx.user`` exists and is active."""
+
     @staticmethod
     def has_permission(request, view=None) -> bool:
         user = getattr(request.ctx, "user", None)
         return user is not None and getattr(user, "is_active", True)
 
 
-class IsSafeMethodOnly(BasePermission):
+class SafeMethodOnly(BasePermission):
     """
     Allow only safe HTTP methods (GET, HEAD, OPTIONS). Reject unsafe methods (POST, PUT, PATCH, DELETE, etc.).
     Use for read-only endpoints: anyone can read, all write operations are denied.
@@ -61,3 +63,11 @@ class IsSafeMethodOnly(BasePermission):
     @staticmethod
     def has_permission(request, view=None) -> bool:
         return request.method.upper() in SAFE_HTTP_METHODS
+
+
+class SuperuserOnly(BasePermission):
+    """Allow only requests whose ``request.ctx.user`` is a superuser."""
+
+    @staticmethod
+    def has_permission(request, view=None) -> bool:
+        return getattr(request.ctx, "user", None) and request.ctx.user.is_superuser

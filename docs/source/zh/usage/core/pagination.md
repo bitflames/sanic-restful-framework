@@ -15,7 +15,10 @@ SRF 提供了基于页码的分页功能，用于处理大量数据的列表查�
 
 ## PageNumberPagination
 
-`PageNumberPagination` 是 SRF 的分页处理类。自定义分页应继承 `BasePagination`（或 `PageNumberPagination`），并实现基类中会 `raise NotImplementedError` 的方法（`from_queryset`、`paginate`、`num_pages`）。`to_dict` 在 `BasePagination` 上已有默认实现。
+`PageNumberPagination` 是 SRF 的分页处理类。自定义分页可以继承 `BasePagination`，
+此时必须实现 `from_queryset()`、`paginate()`、`num_pages()`；也可以继承
+`PageNumberPagination`，只覆盖需要改变的行为。`to_dict()` 在 `BasePagination`
+上已有默认实现。
 
 ### 基本用法
 
@@ -24,15 +27,15 @@ SRF 提供了基于页码的分页功能，用于处理大量数据的列表查�
 ```python
 from srf.views import BaseViewSet
 
+
 class ProductViewSet(BaseViewSet):
     @property
     def queryset(self):
         return Product.all()
-    
-    def get_schema(self, request, is_safe=False):
-        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
-        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
-    
+
+    def get_schema(self):
+        return ProductSchemaReader if self.request.is_safe else ProductSchemaWriter
+
     # list 方法会自动应用分页
 ```
 
@@ -91,16 +94,17 @@ class PageNumberPagination:
 
 **没有** `page_size` / `max_page_size` 类属性。缺少或非法的 `page_size` 时，`from_queryset` 回退为 `page=1`、`page_size=10`。请求的 `page_size` 会被限制在 `MAX_PAGE_SIZE` 以内。
 
-
 #### 创建自定义分页类
 
 ```python
 from srf.paginator import PageNumberPagination
 
+
 class CustomPagination(PageNumberPagination):
     MAX_PAGE_SIZE = 50
-    PAGE_QUERY_PARAM = 'p'
-    PAGE_SIZE_QUERY_PARAM = 'size'
+    PAGE_QUERY_PARAM = "p"
+    PAGE_SIZE_QUERY_PARAM = "size"
+
 
 class ProductViewSet(BaseViewSet):
     pagination_class = CustomPagination
@@ -116,22 +120,23 @@ from srf.views.decorators import action
 from srf.paginator import PageNumberPagination
 from sanic.response import json
 
+
 class ProductViewSet(BaseViewSet):
     @action(methods=["get"], detail=False, url_path="featured")
     async def list_featured(self, request):
         """获取推荐产品（带分页）"""
         # 获取查询集
         queryset = Product.filter(is_featured=True)
-        
+
         # 创建分页器
         paginator = PageNumberPagination.from_queryset(queryset, request)
-        
+
         # 获取 Schema
-        schema = self.get_schema(request, is_safe=True)
-        
+        schema = self.get_schema()
+
         # 执行分页并序列化
         result = await paginator.to_dict(schema)
-        
+
         return json(result)
 ```
 
@@ -145,10 +150,7 @@ class ProductViewSet(BaseViewSet):
 from srf.paginator import PageNumberPagination
 
 # 创建分页器
-paginator = PageNumberPagination.from_queryset(
-    queryset=Product.all(),
-    request=request
-)
+paginator = PageNumberPagination.from_queryset(queryset=Product.all(), request=request)
 ```
 
 ### paginate(sch_model)
@@ -202,15 +204,15 @@ class ProductViewSet(BaseViewSet):
         "price": "price",
         "name": "name",
     }
-    
+
     # 请求示例：
-    # GET /api/products?search=手机&category=1&min_price=1000&sort=-price&page=1&page_size=20
-    # 
-    # 执行顺序：
-    # 1. 应用搜索过滤
-    # 2. 应用字段过滤
-    # 3. 应用排序
-    # 4. 应用分页
+    # GET /api/products?category=1&min_price=1000&ordering=-price&page=1&page_size=20
+    # 默认 filter_class 的执行顺序：
+    # 1. SearchFilter
+    # 2. JsonLogicFilter
+    # 3. QueryParamFilter
+    # 4. OrderingFactory
+    # 5. 分页
 ```
 
 ## 自定义分页逻辑
@@ -221,6 +223,7 @@ class ProductViewSet(BaseViewSet):
 from srf.paginator import PageNumberPagination
 from sanic.response import json
 
+
 class ProductViewSet(BaseViewSet):
     async def list(self, request):
         """自定义列表方法，添加额外信息"""
@@ -228,17 +231,17 @@ class ProductViewSet(BaseViewSet):
         queryset = self.queryset
         for filter_class in self.filter_class:
             queryset = filter_class(self).filter_queryset(request, queryset)
-        
+
         # 分页
         paginator = PageNumberPagination.from_queryset(queryset, request)
-        schema = self.get_schema(request, is_safe=True)
+        schema = self.get_schema()
         result = await paginator.to_dict(schema)
-        
+
         # 添加额外信息
-        result['total_pages'] = (result['count'] + paginator.page_size - 1) // paginator.page_size
-        result['current_page'] = paginator.page
-        result['page_size'] = paginator.page_size
-        
+        result["total_pages"] = (result["count"] + paginator.page_size - 1) // paginator.page_size
+        result["current_page"] = paginator.page
+        result["page_size"] = paginator.page_size
+
         return json(result)
 ```
 
@@ -263,99 +266,41 @@ class ProductViewSet(BaseViewSet):
 ```python
 from sanic.response import json
 
+
 class ProductViewSet(BaseViewSet):
     @action(methods=["get"], detail=False, url_path="cursor-list")
     async def cursor_list(self, request):
         """使用游标分页"""
-        cursor = request.args.get('cursor', 0)  # 上一页的最后一个 ID
-        limit = int(request.args.get('limit', 20))
-        
+        cursor = request.args.get("cursor", 0)  # 上一页的最后一个 ID
+        limit = int(request.args.get("limit", 20))
+
         # 查询大于 cursor 的记录
         queryset = Product.filter(id__gt=cursor).limit(limit + 1)
         products = await queryset
-        
+
         # 检查是否有下一页
         has_next = len(products) > limit
         if has_next:
             products = products[:limit]
-        
+
         # 序列化
-        schema = self.get_schema(request, is_safe=True)
-        results = [schema.model_validate(p).model_dump() for p in products]
-        
+        results = [ProductSchemaReader.model_validate(p).model_dump() for p in products]
+
         # 返回结果
         next_cursor = products[-1].id if products and has_next else None
-        
-        return json({
-            "results": results,
-            "next_cursor": next_cursor,
-            "has_next": has_next,
-        })
+
+        return json(
+            {
+                "results": results,
+                "next_cursor": next_cursor,
+                "has_next": has_next,
+            }
+        )
 ```
 
-## 完整示例
+## 客户端使用示例
 
-```python
-from srf.views import BaseViewSet
-from srf.views.decorators import action
-from srf.permission.permission import IsAuthenticated
-from srf.paginator import PageNumberPagination
-from sanic.response import json
-from models import Product
-from schemas import ProductSchemaReader, ProductSchemaWriter
-
-class ProductViewSet(BaseViewSet):
-    """产品 ViewSet - 分页示例"""
-    
-    permission_classes = (IsAuthenticated,)
-    search_fields = ["name", "description", "sku"]
-    filter_fields = {
-        "category": "category_id",
-        "min_price": "price__gte",
-        "max_price": "price__lte",
-    }
-    ordering_fields = {
-        "price": "price",
-        "name": "name",
-        "created": "created_at",
-    }
-
-
-    @property
-    def queryset(self):
-        return Product.all().prefetch_related("category")
-    
-    def get_schema(self, request, is_safe=False):
-        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
-        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
-    
-    # list 方法自动应用分页
-    
-    @action(methods=["get"], detail=False, url_path="search")
-    async def search_products(self, request):
-        """自定义搜索（带分页）"""
-        keyword = request.args.get('q', '')
-        
-        if not keyword:
-            return json({"error": "请提供搜索关键词"}, status=400)
-        
-        # 搜索
-        queryset = Product.filter(name__icontains=keyword)
-        
-        # 分页
-        paginator = PageNumberPagination.from_queryset(queryset, request)
-        schema = self.get_schema(request, is_safe=True)
-        result = await paginator.to_dict(schema)
-        
-        # 添加搜索关键词到响应
-        result['keyword'] = keyword
-        
-        return json(result)
-```
-
-### 客户端使用示例
-
-#### 基本分页
+### 基本分页
 
 ```javascript
 // 获取第1页
@@ -368,7 +313,7 @@ fetch('/api/products?page=1&page_size=20')
   });
 ```
 
-#### 分页导航
+### 分页导航
 
 ```javascript
 let currentPage = 1;
@@ -400,7 +345,7 @@ document.getElementById('next-btn').onclick = () => {
 };
 ```
 
-#### 无限滚动
+### 无限滚动
 
 ```javascript
 let currentPage = 1;
@@ -457,7 +402,7 @@ total = await Product.all().count()
 @property
 def queryset(self):
     # 只查询列表需要的字段
-    return Product.all().only('id', 'name', 'price', 'image')
+    return Product.all().only("id", "name", "price", "image")
 ```
 
 ### 3. 使用 prefetch_related 优化关联查询
@@ -466,7 +411,7 @@ def queryset(self):
 @property
 def queryset(self):
     # 预加载关联对象，减少查询次数
-    return Product.all().prefetch_related('category', 'brand')
+    return Product.all().prefetch_related("category", "brand")
 ```
 
 ### 4. 添加索引
@@ -494,10 +439,8 @@ class Product(Model):
 
 ### 如何禁用分页？
 
-```python
-class ProductViewSet(BaseViewSet):
-    pagination_class = None  # 禁用分页
-```
+内置 `list()` 必须使用分页类（`pagination_class = None` 会导致 `list()` 报错）。
+需要不分页的接口时，请自定义 `list()` 或添加自定义 action（见下方"获取所有数据"）。
 
 ### 如何获取所有数据（不分页）？
 
@@ -513,8 +456,7 @@ GET /api/products?page_size=100
 async def get_all(self, request):
     """获取所有产品（不分页）"""
     products = await Product.all()
-    schema = self.get_schema(request, is_safe=True)
-    results = [schema.model_validate(p).model_dump() for p in products]
+    results = [ProductSchemaReader.model_validate(p).model_dump() for p in products]
     return json({"results": results})
 ```
 
@@ -524,23 +466,24 @@ async def get_all(self, request):
 @action(methods=["get"], detail=False, url_path="offset-list")
 async def offset_list(self, request):
     """使用 offset/limit 分页"""
-    offset = int(request.args.get('offset', 0))
-    limit = int(request.args.get('limit', 20))
-    
+    offset = int(request.args.get("offset", 0))
+    limit = int(request.args.get("limit", 20))
+
     queryset = Product.all()
     total = await queryset.count()
-    
+
     products = await queryset.offset(offset).limit(limit)
-    
-    schema = self.get_schema(request, is_safe=True)
-    results = [schema.model_validate(p).model_dump() for p in products]
-    
-    return json({
-        "total": total,
-        "offset": offset,
-        "limit": limit,
-        "results": results,
-    })
+
+    results = [ProductSchemaReader.model_validate(p).model_dump() for p in products]
+
+    return json(
+        {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "results": results,
+        }
+    )
 ```
 
 ## 下一步

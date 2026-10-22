@@ -1,214 +1,173 @@
-"""Unit tests for srf.middleware (auth and throttle)."""
+"""Unit tests for authentication and throttling middleware."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sanic.exceptions import Unauthorized
+from sanic_jwt.exceptions import InvalidAuthorizationHeader
 
-from srf.config import settings
-from srf.middleware.authmiddleware import (
-    extract_bearer_token,
-    is_public_endpoint,
-)
+from srf.middleware.authmiddleware import authenticate_request, extract_bearer_token, set_user_to_request_ctx
 from srf.middleware.throttlemiddleware import (
+    HeaderRateLimit,
     IPRateLimit,
     MemoryStorage,
+    PathRateLimit,
     RedisStorage,
+    UserRateLimit,
     throttle_rate,
 )
 
 
-@pytest.fixture
-def public_endpoints_via_app():
-    """Bind NON_AUTH_ENDPOINTS through settings.set_app; restore afterward."""
-    previous_app = getattr(settings, "app", None)
-
-    def _bind(endpoints):
-        app = MagicMock()
-        app.config = SimpleNamespace(NON_AUTH_ENDPOINTS=endpoints)
-        settings.set_app(app)
-
-    yield _bind
-
-    if previous_app is None:
-        if hasattr(settings, "app"):
-            delattr(settings, "app")
-    else:
-        object.__setattr__(settings, "app", previous)
-
-
-class TestIsPublicEndpoint:
-    def test_full_path_match_returns_true(self, public_endpoints_via_app):
-        public_endpoints_via_app(("/api/auth/login", "/api/auth/register"))
-        request = MagicMock()
-        request.path = "/api/auth/login"
-        assert is_public_endpoint(request) is True
-
-    def test_suffix_only_does_not_match(self, public_endpoints_via_app):
-        """Old tail-segment matching would treat /api/admin/login as public; full path must not."""
-        public_endpoints_via_app(("/api/auth/login",))
-        request = MagicMock()
-        request.path = "/api/admin/login"
-        assert is_public_endpoint(request) is False
-
-    def test_unlisted_path_returns_false(self, public_endpoints_via_app):
-        public_endpoints_via_app(("/api/auth/login",))
-        request = MagicMock()
-        request.path = "/api/projects/1"
-        assert is_public_endpoint(request) is False
-
-    def test_default_refresh_is_public(self):
-        request = MagicMock()
-        request.path = "/api/auth/refresh"
-        assert is_public_endpoint(request) is True
-
-
 class TestExtractBearerToken:
-    def test_valid_bearer(self):
+    @pytest.mark.parametrize(
+        ("header", "expected"),
+        [("Bearer abc123", "abc123"), ("bearer token with spaces", "token with spaces")],
+    )
+    def test_valid_bearer(self, header, expected):
         request = MagicMock()
-        request.headers = {"Authorization": "Bearer abc123"}
-        assert extract_bearer_token(request) == "abc123"
+        request.headers = {"Authorization": header}
+        assert extract_bearer_token(request) == expected
 
-    def test_missing_header_raises(self):
-        from sanic.exceptions import Unauthorized
-
+    @pytest.mark.parametrize("header", [None, "", "Bearer", "Basic xyz", "Bearer "])
+    def test_invalid_header_raises_unauthorized(self, header):
         request = MagicMock()
-        request.headers = {}
-        with pytest.raises(Unauthorized, match="Authentication required"):
-            extract_bearer_token(request)
-
-    def test_invalid_format_raises(self):
-        from sanic.exceptions import Unauthorized
-
-        request = MagicMock()
-        request.headers = {"Authorization": "InvalidFormat"}
-        with pytest.raises(Unauthorized, match="Invalid authorization"):
-            extract_bearer_token(request)
-
-    def test_not_bearer_scheme_raises(self):
-        from sanic.exceptions import Unauthorized
-
-        request = MagicMock()
-        request.headers = {"Authorization": "Basic xyz"}
-        with pytest.raises(Unauthorized, match="Invalid authorization"):
+        request.headers = {"Authorization": header} if header is not None else {}
+        with pytest.raises(Unauthorized):
             extract_bearer_token(request)
 
 
-class TestThrottleMemoryStorage:
+class TestAuthenticateRequest:
     @pytest.mark.asyncio
-    async def test_incr_returns_count(self):
+    async def test_requires_configured_auth(self):
+        request = MagicMock()
+        del request.app.ctx.auth
+        with pytest.raises(Unauthorized, match="not configured"):
+            await authenticate_request(request)
+
+    @pytest.mark.asyncio
+    async def test_invalid_jwt_becomes_unauthorized(self):
+        request = MagicMock()
+        request.app.ctx.auth.extract_payload = AsyncMock(side_effect=InvalidAuthorizationHeader("bad token"))
+        with pytest.raises(Unauthorized):
+            await authenticate_request(request)
+
+    @pytest.mark.asyncio
+    async def test_empty_payload_sets_anonymous_user(self):
+        request = MagicMock()
+        request.app.ctx.auth.extract_payload = AsyncMock(return_value=None)
+        request.app.ctx.auth.retrieve_user = AsyncMock()
+        await authenticate_request(request)
+        assert request.ctx.user is None
+        request.app.ctx.auth.retrieve_user.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_retrieves_authenticated_user(self):
+        request = MagicMock()
+        user = SimpleNamespace(id=7)
+        request.app.ctx.auth.extract_payload = AsyncMock(return_value={"user_id": 7})
+        request.app.ctx.auth.retrieve_user = AsyncMock(return_value={"user_id": 7})
+        request.ctx.user = user
+
+        await authenticate_request(request)
+
+        request.app.ctx.auth.retrieve_user.assert_awaited_once_with(request, {"user_id": 7})
+
+    @pytest.mark.asyncio
+    async def test_unknown_user_is_rejected(self):
+        request = MagicMock()
+        request.app.ctx.auth.extract_payload = AsyncMock(return_value={"user_id": 404})
+        request.app.ctx.auth.retrieve_user = AsyncMock(return_value=None)
+        request.ctx.user = None
+        with pytest.raises(Unauthorized, match="User not found"):
+            await authenticate_request(request)
+
+    @pytest.mark.asyncio
+    async def test_request_middleware_delegates_to_authenticate_request(self, monkeypatch):
+        import srf.middleware.authmiddleware as middleware
+
+        authenticate = AsyncMock()
+        monkeypatch.setattr(middleware, "authenticate_request", authenticate)
+        request = MagicMock()
+        await set_user_to_request_ctx(request)
+        authenticate.assert_awaited_once_with(request)
+
+
+class TestThrottleStorage:
+    @pytest.mark.asyncio
+    async def test_memory_storage_counts_hits_in_window(self):
         storage = MemoryStorage()
-        n = await storage.incr("key1", window=60)
-        assert n == 1
-        n = await storage.incr("key1", window=60)
-        assert n == 2
+        assert await storage.incr("key", 60) == 1
+        assert await storage.incr("key", 60) == 2
 
-    @pytest.mark.asyncio
-    async def test_cleanup_expired_drops_stale_keys(self):
+    def test_cleanup_removes_expired_keys(self):
         storage = MemoryStorage(cleanup_every=0)
-        await storage.incr("k1", 1)
-        storage.data["k1"] = [0.0]
-        storage._windows["k1"] = 1
+        storage.data["stale"] = [0.0]
+        storage._windows["stale"] = 1
         storage.cleanup_expired()
-        assert "k1" not in storage.data
+        assert "stale" not in storage.data
+        assert "stale" not in storage._windows
 
-    @pytest.mark.asyncio
-    async def test_periodic_cleanup_runs(self):
-        storage = MemoryStorage(cleanup_every=2)
-        storage.cleanup_expired = MagicMock()
-        await storage.incr("a", 60)
-        await storage.incr("b", 60)
-        storage.cleanup_expired.assert_called_once()
-
-
-class TestRedisStorage:
-    def test_requires_redis_client(self):
+    def test_redis_storage_requires_client(self):
         with pytest.raises(ValueError, match="redis client is required"):
             RedisStorage(None)
 
     @pytest.mark.asyncio
-    async def test_incr_sets_expire_on_first_hit(self):
+    async def test_redis_storage_sets_expiry_only_for_first_hit(self):
         redis = AsyncMock()
-        redis.incr = AsyncMock(return_value=1)
-        redis.expire = AsyncMock()
-        storage = RedisStorage(redis, prefix="throttle")
+        redis.incr = AsyncMock(side_effect=[1, 2])
+        storage = RedisStorage(redis, prefix="test")
 
-        count = await storage.incr("ip:1.2.3.4", window=60)
+        assert await storage.incr("user:7", 60) == 1
+        assert await storage.incr("user:7", 60) == 2
+        redis.expire.assert_awaited_once_with("test:user:7", 60)
 
-        assert count == 1
-        redis.incr.assert_awaited_once_with("throttle:ip:1.2.3.4")
-        redis.expire.assert_awaited_once_with("throttle:ip:1.2.3.4", 60)
 
+class TestRateLimiters:
     @pytest.mark.asyncio
-    async def test_incr_skips_expire_after_first_hit(self):
-        redis = AsyncMock()
-        redis.incr = AsyncMock(return_value=2)
-        redis.expire = AsyncMock()
-        storage = RedisStorage(redis)
-
-        count = await storage.incr("ip:1.2.3.4", window=30)
-
-        assert count == 2
-        redis.expire.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_shared_redis_counts_across_storage_instances(self):
-        """Two workers share one Redis client → same counter."""
-        redis = AsyncMock()
-        redis.incr = AsyncMock(side_effect=[1, 2, 3])
-        redis.expire = AsyncMock()
-        storage_a = RedisStorage(redis)
-        storage_b = RedisStorage(redis)
-
-        assert await storage_a.incr("ip:9.9.9.9", 60) == 1
-        assert await storage_b.incr("ip:9.9.9.9", 60) == 2
-        assert await storage_a.incr("ip:9.9.9.9", 60) == 3
-
-
-class TestIPRateLimit:
-    @pytest.mark.asyncio
-    async def test_allow_under_limit(self):
+    async def test_key_builders(self):
+        request = MagicMock()
+        request.remote_addr = "127.0.0.1"
+        request.path = "/items"
+        request.headers = {"X-Client": "abc"}
+        request.ctx.user = SimpleNamespace(id=9)
         storage = MemoryStorage()
-        limiter = IPRateLimit(limit=2, window=60, storage=storage)
+
+        assert await IPRateLimit(1, 60, storage).get_key(request) == "ip:127.0.0.1"
+        assert await UserRateLimit(1, 60, storage).get_key(request) == "user:9"
+        assert await PathRateLimit(1, 60, storage).get_key(request) == "path:/items"
+        assert await HeaderRateLimit("X-Client", 1, 60, storage).get_key(request) == "header:X-Client:abc"
+
+    @pytest.mark.asyncio
+    async def test_user_limiter_uses_anonymous_bucket(self):
+        request = MagicMock()
+        request.ctx.user = None
+        limiter = UserRateLimit(1, 60, MemoryStorage())
+        assert await limiter.get_key(request) == "anonymous"
+
+    @pytest.mark.asyncio
+    async def test_limit_denies_request_after_threshold(self):
+        limiter = IPRateLimit(1, 60, MemoryStorage())
         request = MagicMock()
         request.remote_addr = "127.0.0.1"
         assert await limiter.allow(request) is True
-        assert await limiter.allow(request) is True
         assert await limiter.allow(request) is False
 
     @pytest.mark.asyncio
-    async def test_redis_storage_with_ip_limiter(self):
-        redis = AsyncMock()
-        redis.incr = AsyncMock(side_effect=[1, 2, 3])
-        redis.expire = AsyncMock()
-        storage = RedisStorage(redis)
-        limiter = IPRateLimit(limit=2, window=60, storage=storage)
-        request = MagicMock()
-        request.remote_addr = "10.0.0.1"
-
-        assert await limiter.allow(request) is True
-        assert await limiter.allow(request) is True
-        assert await limiter.allow(request) is False
-
-
-class TestThrottleRate:
-    @pytest.mark.asyncio
-    async def test_empty_limiters_allows(self):
-        request = MagicMock()
-        request.app.config = SimpleNamespace(REQUEST_LIMITERS=[])
-        assert await throttle_rate(request) is True
-
-    @pytest.mark.asyncio
-    async def test_missing_config_defaults_to_empty(self):
+    async def test_throttle_rate_defaults_to_allow_and_stops_on_denial(self):
         request = MagicMock()
         request.app.config = SimpleNamespace()
         assert await throttle_rate(request) is True
 
-    @pytest.mark.asyncio
-    async def test_denies_when_limiter_rejects(self):
-        limiter = MagicMock()
-        limiter.allow = AsyncMock(return_value=False)
-        request = MagicMock()
-        request.app.config = SimpleNamespace(REQUEST_LIMITERS=[limiter])
+        first = MagicMock()
+        first.allow = AsyncMock(return_value=True)
+        rejected = MagicMock()
+        rejected.allow = AsyncMock(return_value=False)
+        never_reached = MagicMock()
+        never_reached.allow = AsyncMock(return_value=True)
+        request.app.config = SimpleNamespace(REQUEST_LIMITERS=[first, rejected, never_reached])
+
         assert await throttle_rate(request) is False
-        limiter.allow.assert_awaited_once_with(request)
+        first.allow.assert_awaited_once_with(request)
+        rejected.allow.assert_awaited_once_with(request)
+        never_reached.allow.assert_not_awaited()

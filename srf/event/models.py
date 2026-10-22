@@ -5,11 +5,10 @@ from tortoise.models import Model as TorModel
 class Event(TorModel):
     """Audit / activity event log."""
 
-    id = fields.BigIntField(pk=True, generated=True)
     user = fields.ForeignKeyField("models.User", related_name="events", null=True, on_delete=fields.SET_NULL)
 
     action = fields.CharField(max_length=128, null=True, description="action of the event")
-    obj_id = fields.BigIntField(null=True, description="id of the object")
+    obj_id = fields.IntField(null=True, description="id of the object")
     obj_name = fields.CharField(max_length=128, null=True, description="name of the object")
 
     req_data = fields.JSONField(null=True, description="request data of the event")

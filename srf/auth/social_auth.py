@@ -1,3 +1,4 @@
+import asyncio
 import hmac
 import secrets
 from functools import wraps
@@ -8,19 +9,26 @@ import aiohttp
 from sanic import Request
 from sanic.exceptions import BadRequest, NotFound
 from sanic.log import error_logger
-from sanic.response import JSONResponse
-from sanic.response import redirect as RedirectResponse
+from sanic.response import JSONResponse, html as html_response, redirect as RedirectResponse
 
 from srf.config import settings
+from srf.exceptions import TargetObjectAlreadyExist
+from srf.templates.template import templates
 from srf.tools.signing import sign_state, unsign_state
 from srf.views.http_status import HTTPStatus
 
 from . import models
-from .auth import gen_user_access_token, update_user_last_login
+from .auth import check_active, gen_user_access_token, update_user_last_login
 
 DEFAULT_EXCHANGE_CODE_TTL = 300
 DEFAULT_EXCHANGE_CODE_PREFIX = "social-login"
 GITHUB_REQUEST_TIMEOUT = 10
+
+__all__ = [
+    "github_login_access",
+    "github_login_by_code",
+    "github_login_callback",
+]
 
 
 def _state_secret(request: Request) -> str:
@@ -70,7 +78,7 @@ async def _github_request_json(
     **kwargs,
 ) -> dict[str, Any] | list[Any]:
     """Send a GitHub API request, validate its status, and decode its JSON body."""
-    async with session.request(method, url, **kwargs) as response:
+    async with session.request(method, url, timeout=GITHUB_REQUEST_TIMEOUT, **kwargs) as response:
         response.raise_for_status()
         data = await response.json(content_type=None)
         if not isinstance(data, (dict, list)):
@@ -86,6 +94,14 @@ def _verified_email(emails: list[dict]) -> str | None:
     return selected["email"] if selected else None
 
 
+def _mask_email(email: str | None) -> str:
+    """Mask an email for logs (PII): keep the first local char and the domain."""
+    if not email:
+        return "<none>"
+    local, _, domain = email.partition("@")
+    return f"{local[:1]}***@{domain}" if domain else "***"
+
+
 async def _store_exchange_code(request: Request, user_id: int) -> str:
     """Create a short-lived code that the frontend can exchange for a JWT.
 
@@ -94,16 +110,15 @@ async def _store_exchange_code(request: Request, user_id: int) -> str:
     """
     _, ttl = _exchange_code_settings(request)
 
-    for _ in range(3):
-        code = secrets.token_urlsafe(32)
-        created = await request.app.ctx.redis.set(
-            _exchange_code_key(request, code),
-            user_id,
-            ex=ttl,
-            nx=True,
-        )
-        if created:
-            return code
+    code = secrets.token_urlsafe(32)
+    created = await request.app.ctx.redis.set(
+        _exchange_code_key(request, code),
+        user_id,
+        ex=ttl,
+        nx=True,
+    )
+    if created:
+        return code
 
     raise RuntimeError("Could not allocate a unique social login exchange code")
 
@@ -134,11 +149,11 @@ async def github_login_access(request: Request):
     response.add_cookie(
         key=cookie_name,
         value=signed_state,
-        httponly=True,
-        secure=secure,
-        samesite="Lax",
+        httponly=True,  # prevent javascript access to the cookie
+        secure=secure,  # only send the cookie over HTTPS
+        samesite="Lax",  # allow the cookie to be sent to the callback URL
         max_age=max_age,
-        path=_callback_cookie_path(github_config),
+        path=_callback_cookie_path(github_config),  # the cookie will only be sent to the callback URL
     )
     return response
 
@@ -146,8 +161,16 @@ async def github_login_access(request: Request):
 def clear_oauth_state_cookie(func):
     @wraps(func)
     async def wrapper(request: Request):
-        resp = await func(request)
-        _delete_state_cookie(resp, request, request.app.config.SOCIAL_CONFIG["github"])
+        config = request.app.config.SOCIAL_CONFIG["github"]
+        try:
+            resp = await func(request)
+        except Exception:  # noqa: BLE001
+            error_logger.exception("Failed to social login")
+            template = templates.get_template("oauth_error.html")
+            render = template.render(redirect_uri=config['OAUTH_SUCCESS_REDIRECT_URI'], delay=5)
+            resp = html_response(render, status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        _delete_state_cookie(resp, request, config)
         return resp
 
     return wrapper
@@ -201,60 +224,78 @@ async def github_login_callback(request: Request):
                 "Accept": "application/vnd.github+json",
                 "Authorization": f"Bearer {access_token}",
             }
-            user = await _github_request_json(
-                session,
-                "GET",
-                github_config["GITHUB_USER"],
-                headers=github_headers,
+            # return_exceptions=True: both requests run to completion (no orphaned task,
+            # no "exception was never retrieved" noise); re-raise the first failure below.
+            results = await asyncio.gather(
+                _github_request_json(session, "GET", github_config["GITHUB_USER"], headers=github_headers),
+                _github_request_json(session, "GET", github_config["GITHUB_USER_EMAIL"], headers=github_headers),
+                return_exceptions=True,
             )
-            emails = await _github_request_json(
-                session,
-                "GET",
-                github_config["GITHUB_USER_EMAIL"],
-                headers=github_headers,
-            )
+            for result in results:
+                if isinstance(result, BaseException):
+                    raise result
+            github_user, emails = results
     except (aiohttp.ClientError, TimeoutError, ValueError, TypeError):
+        error_logger.exception("GitHub OAuth failed: provider=github stage=api-request")
         return JSONResponse({"error": "GitHub is temporarily unavailable"}, status=HTTPStatus.HTTP_502_BAD_GATEWAY)
-    except Exception:  # noqa: BLE001
-        error_logger.exception("Unexpected error during GitHub OAuth requests")
+    except Exception:  # noqa: BLE001 - log and sanitize unexpected failures
+        error_logger.exception("Unexpected error: provider=github stage=api-request")
         return JSONResponse({"error": "Could not complete social login"}, status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR)
 
     primary_email = _verified_email(emails) if isinstance(emails, list) else None
     if not primary_email:
         return JSONResponse({"error": "GitHub did not provide a verified email address"}, status=HTTPStatus.HTTP_400_BAD_REQUEST)
+    primary_email = primary_email.lower()  # users are stored lowercase; keep lookups consistent
 
     fallback_username = primary_email.split("@", 1)[0]
-    if isinstance(user, dict):
-        username = user.get("name") or user.get("login") or fallback_username
+    if isinstance(github_user, dict):
+        github_username = github_user.get("name") or github_user.get("login") or fallback_username
     else:
-        username = fallback_username
+        github_username = fallback_username
     try:
-        role = await models.Role.filter(name="user").first()
-        if role is None:
-            raise RuntimeError("The default user role is not configured")
-        user_db, _ = await models.User.get_or_create(
-            email=primary_email,
-            defaults={
-                "name": username,
-                "role": role,
-            },
-        )
+        oauth = await models.OAuthAccount.get_or_none(
+            provider="github",
+            provider_user_id=github_user['id'],
+        ).prefetch_related("user")
+
+        if oauth is not None:
+            user_db = oauth.user
+        else:
+            user_db = await models.User.filter(email=primary_email).first()
+            if user_db is None:
+                user_db = await models.User.create_user(
+                    user_info={
+                        "email": primary_email,
+                        "username": github_username,
+                    }
+                )
+            await models.OAuthAccount.create(
+                provider="github",
+                provider_user_id=github_user['id'],
+                user=user_db,
+            )
         # Redirect with a temporary code so the JWT is never exposed in a URL.
         one_time_code = await _store_exchange_code(request, user_db.id)
-    except Exception:  # noqa: BLE001 - Catch all to log and sanitize 500 response
-        error_logger.exception("Could not complete GitHub user login for email=%s", primary_email)
+    except TargetObjectAlreadyExist:
+        raise
+    except Exception:  # noqa: BLE001 - log and sanitize 500 response
+        error_logger.exception("GitHub OAuth failed: provider=github stage=user-provisioning email=%s", _mask_email(primary_email))
         return JSONResponse({"error": "Could not complete social login"}, status=HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    separator = "&" if "?" in github_config["OAUTHCALLBACK"] else "?"
-    return RedirectResponse(f"{github_config['OAUTHCALLBACK']}{separator}{urlencode({'code': one_time_code})}")
+    separator = "&" if "?" in github_config["OAUTH_SUCCESS_REDIRECT_URI"] else "?"
+    return RedirectResponse(f"{github_config['OAUTH_SUCCESS_REDIRECT_URI']}{separator}{urlencode({'code': one_time_code})}")
 
 
 async def github_login_by_code(request: Request):
     """Consume a one-time social login code and return the application's JWT."""
-    code = request.args.get("code")
-    if not code:
+    body = request.json
+    if not isinstance(body, dict):
+        raise BadRequest("JSON request body must be an object")
+
+    code = body.get("code")
+    if code is None or code == "":
         raise BadRequest("Missing authorization code")
-    if len(code) > 256:
+    if not isinstance(code, str) or not code.strip() or len(code) > 256:
         raise BadRequest("Invalid authorization code")
 
     user_id = await request.app.ctx.redis.getdel(_exchange_code_key(request, code))
@@ -266,9 +307,9 @@ async def github_login_by_code(request: Request):
     except (TypeError, ValueError, UnicodeDecodeError):
         raise NotFound("Invalid authorization code") from None
 
-    user_db = await models.User.filter(pk=user_id).select_related("role").first()
-    if user_db is None:
-        raise NotFound("User not found")
+    user_db = await models.User.filter(pk=user_id).prefetch_related("roles").first()
+    if user_db is None or not check_active(user_db):
+        raise NotFound("User not found or inactive")
 
     await update_user_last_login(user_db)
     user_return_data = await gen_user_access_token(request, user_db)

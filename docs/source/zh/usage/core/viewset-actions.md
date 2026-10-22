@@ -9,33 +9,56 @@ ViewSet 装饰器用于扩展和定制 ViewSet 的行为，其中最重要的是
 ### 基本用法
 
 ```python
+from datetime import datetime
+from sanic.response import json
+from srf.route import SanicRouter
 from srf.views import BaseViewSet
 from srf.views.decorators import action
-from sanic.response import json
+from models import Product
+from schemas import ProductSchemaReader
+
 
 class ProductViewSet(BaseViewSet):
     @action(methods=["get"], detail=False, url_path="featured")
     async def list_featured(self, request):
         """获取推荐产品（集合级操作）"""
         products = await Product.filter(is_featured=True)
-        schema = self.get_schema(request, is_safe=True)
-        data = [schema.model_validate(p).model_dump() for p in products]
+        data = [ProductSchemaReader.model_validate(p).model_dump(mode="json") for p in products]
         return json({"results": data})
-    
+
     @action(methods=["post"], detail=True, url_path="publish")
     async def publish(self, request, pk):
         """发布产品（详情级操作）"""
-        product = await self.get_object(request, pk)
+        product = await self.get_object(pk)
         product.is_published = True
         product.published_at = datetime.now()
         await product.save()
-        
+
         return json({"message": "产品已发布"})
 ```
 
-### 装饰器参数
+将 ViewSet 注册到路由后，可用 `curl` 调用这些操作。以下示例假设 `app` 是已经
+创建并完成数据库配置的 Sanic 应用：
 
 ```python
+router = SanicRouter(app, prefix="api")
+router.register("products", ProductViewSet, name="products")
+```
+
+```bash
+# 集合级操作：查询推荐产品
+curl http://localhost:8000/api/products/featured
+
+# 详情级操作：发布 ID 为 42 的产品
+curl -X POST http://localhost:8000/api/products/42/publish
+```
+
+### @action 装饰器参数
+
+```python
+from collections.abc import Sequence
+from srf.views.decorators import action
+
 action(
     *,
     detail: bool = False,                 # True 为详情级；False 为集合级
@@ -49,7 +72,7 @@ action(
 **参数说明**：
 
 | 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
+| ------ | ------ | -------- | ------ |
 | `methods` | Sequence[str] | `("GET",)` | HTTP 方法列表，如 `["get"]`, `["post"]`, `["get", "post"]`（注册时大小写不敏感） |
 | `detail` | bool | `False` | `True` 为详情级操作（需要 pk），`False` 为集合级操作 |
 | `url_path` | str \| None | `/<方法名>` | 自定义 URL 路径段 |
@@ -62,17 +85,22 @@ action(
 不需要资源 ID，作用于整个集合。
 
 **特点**：
+
 - 不需要 pk 参数
 - URL 格式：`/api/products/action-name`
 - 适用于批量操作、统计、搜索等
 
 **示例**：
 
+以下代码片段均为 `ProductViewSet` 的方法；继续使用前面示例中的导入。
+
 ```python
+from tortoise.functions import Count, Avg, Sum
+
+
 @action(methods=["get"], detail=False, url_path="statistics")
 async def get_statistics(self, request):
-    """获取产品统计信息"""
-    from tortoise.functions import Count, Avg, Sum
+    """获取产品统计信息"""    
     
     stats = await Product.all().annotate(
         total=Count("id"),
@@ -82,50 +110,63 @@ async def get_statistics(self, request):
     
     return json(stats[0] if stats else {})
 
+
 @action(methods=["post"], detail=False, url_path="bulk-update")
 async def bulk_update(self, request):
     """批量更新产品"""
     ids = request.json.get("ids", [])
     updates = request.json.get("updates", {})
-    
+
     if not ids:
         return json({"error": "请提供产品 ID 列表"}, status=400)
-    
+
     await Product.filter(id__in=ids).update(**updates)
-    
+
     return json({"message": f"成功更新 {len(ids)} 个产品"})
+
 
 @action(methods=["get"], detail=False, url_path="search")
 async def advanced_search(self, request):
     """高级搜索"""
     keyword = request.args.get("q", "")
     category = request.args.get("category")
-    
+
     queryset = Product.all()
-    
+
     if keyword:
         queryset = queryset.filter(name__icontains=keyword)
-    
+
     if category:
         queryset = queryset.filter(category_id=category)
-    
+
     products = await queryset
-    schema = self.get_schema(request, is_safe=True)
-    data = [schema.model_validate(p).model_dump() for p in products]
-    
+    data = [ProductSchemaReader.model_validate(p).model_dump(mode="json") for p in products]
+
     return json({"results": data})
 ```
 
 **生成的路由**：
+
 - `GET /api/products/statistics`
 - `POST /api/products/bulk-update`
 - `GET /api/products/search`
+
+对应的 `curl` 调用示例：
+
+```bash
+curl "http://localhost:8000/api/products/statistics"
+curl "http://localhost:8000/api/products/search?q=keyboard&category=2"
+curl -X POST http://localhost:8000/api/products/bulk-update \
+  -H "Content-Type: application/json" \
+  -d '{"ids":[1,2],"updates":{"is_active":false}}'
+```
 
 #### 详情级操作 (`detail=True`)
 
 需要资源 ID，作用于单个资源。
 
 **特点**：
+
 - 需要 pk 参数
 - URL 格式：`/api/products/<pk>/action-name`
 - 适用于状态变更、关联操作等
@@ -136,21 +177,22 @@ async def advanced_search(self, request):
 @action(methods=["post"], detail=True, url_path="activate")
 async def activate(self, request, pk):
     """激活产品"""
-    product = await self.get_object(request, pk)
-    
+    product = await self.get_object(pk)
+
     if product.is_active:
         return json({"error": "产品已激活"}, status=400)
-    
+
     product.is_active = True
     await product.save()
-    
+
     return json({"message": "产品已激活"})
+
 
 @action(methods=["post"], detail=True, url_path="duplicate")
 async def duplicate(self, request, pk):
     """复制产品"""
-    product = await self.get_object(request, pk)
-    
+    product = await self.get_object(pk)
+
     # 复制产品
     new_product = await Product.create(
         name=f"{product.name} (副本)",
@@ -158,48 +200,57 @@ async def duplicate(self, request, pk):
         description=product.description,
         category_id=product.category_id
     )
-    
-    schema = self.get_schema(request, is_safe=True)
-    data = schema.model_validate(new_product).model_dump()
-    
+
+    data = ProductSchemaReader.model_validate(new_product).model_dump()
+
     return json(data, status=201)
+
 
 @action(methods=["get"], detail=True, url_path="related")
 async def get_related(self, request, pk):
     """获取相关产品"""
-    product = await self.get_object(request, pk)
-    
+    product = await self.get_object(pk)
+
     # 同类别的其他产品
-    related = await Product.filter(
-        category_id=product.category_id
-    ).exclude(id=product.id).limit(5)
-    
-    schema = self.get_schema(request, is_safe=True)
-    data = [schema.model_validate(p).model_dump() for p in related]
-    
+    related = await Product.filter(category_id=product.category_id).exclude(id=product.id).limit(5)
+
+    data = [ProductSchemaReader.model_validate(p).model_dump(mode="json") for p in related]
+
     return json({"results": data})
 ```
 
 **生成的路由**：
+
 - `POST /api/products/<pk>/activate`
 - `POST /api/products/<pk>/duplicate`
 - `GET /api/products/<pk>/related`
+
+对应的 `curl` 调用示例：
+
+```bash
+curl -X POST http://localhost:8000/api/products/42/activate
+curl -X POST http://localhost:8000/api/products/42/duplicate
+curl http://localhost:8000/api/products/42/related
+```
 
 ### 多 HTTP 方法
 
 一个 action 可以支持多个 HTTP 方法：
 
 ```python
+from models import Comment
+
+
 @action(methods=["get", "post"], detail=True, url_path="comments")
 async def handle_comments(self, request, pk):
     """处理评论（GET 获取，POST 添加）"""
-    product = await self.get_object(request, pk)
-    
+    product = await self.get_object(pk)
+
     if request.method == "GET":
         # 获取评论
         comments = await product.comments.all()
-        return json({"results": [c.to_dict() for c in comments]})
-    
+        return json({"results": [{"id": c.id, "content": c.content} for c in comments]})
+
     elif request.method == "POST":
         # 添加评论
         content = request.json.get("content")
@@ -208,7 +259,20 @@ async def handle_comments(self, request, pk):
             user=request.ctx.user,
             content=content
         )
-        return json(comment.to_dict(), status=201)
+        return json({"id": comment.id, "content": comment.content}, status=201)
+```
+
+同一个 URL 可按 HTTP 方法执行不同操作：
+
+```bash
+# 获取 ID 为 42 的产品评论
+curl http://localhost:8000/api/products/42/comments
+
+# 添加评论（请求中间件需已设置 request.ctx.user）
+curl -X POST http://localhost:8000/api/products/42/comments \
+  -H "Authorization: Bearer <access-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"content":"很实用"}'
 ```
 
 ### 自定义 URL 路径
@@ -219,7 +283,7 @@ async def handle_comments(self, request, pk):
 @action(methods=["post"], detail=True, url_path="change-status")
 async def change_status(self, request, pk):
     """更改状态"""
-    product = await self.get_object(request, pk)
+    product = await self.get_object(pk)
     new_status = request.json.get("status")
     
     product.status = new_status
@@ -229,6 +293,12 @@ async def change_status(self, request, pk):
 ```
 
 URL：`POST /api/products/<pk>/change-status`
+
+```bash
+curl -X POST http://localhost:8000/api/products/42/change-status \
+  -H "Content-Type: application/json" \
+  -d '{"status":"archived"}'
+```
 
 省略 `url_path` 时默认为 `/<方法名>`（下划线不会转换）：
 
@@ -251,8 +321,9 @@ async def featured(self, request):
     """推荐列表"""
     pass
 
-# 反向解析；默认 prefix="api" 时 Blueprint 名称为 api
-url = request.app.url_for("api.featured_list")
+
+# 反向解析；直接注册到 Sanic 应用时，名称为 products-featured_list
+url = request.app.url_for("products-featured_list")
 ```
 
 ### 权限控制
@@ -260,139 +331,28 @@ url = request.app.url_for("api.featured_list")
 可以在 action 中进行权限检查：
 
 ```python
-from srf.permission.permission import IsRoleAdminUser
+from srf.permission.permission import SuperuserOnly
 from sanic.exceptions import Forbidden
+
 
 @action(methods=["post"], detail=True, url_path="approve")
 async def approve(self, request, pk):
     """审核产品（仅管理员）"""
     # 检查管理员权限
-    if not IsRoleAdminUser.has_permission(request, self):
-        raise Forbidden("需要管理员权限")
-    
-    product = await self.get_object(request, pk)
+    if not SuperuserOnly.has_permission(request, self):
+        raise Forbidden("需要超级用户权限")
+
+    product = await self.get_object(pk)
     product.is_approved = True
     await product.save()
-    
+
     return json({"message": "审核通过"})
 ```
 
 ### 完整示例
 
-```python
-from srf.views import BaseViewSet
-from srf.views.decorators import action
-from srf.permission.permission import IsAuthenticated, IsRoleAdminUser
-from sanic.response import json
-from sanic.exceptions import Forbidden
-from sanic.constants import SAFE_HTTP_METHODS
-from datetime import datetime
-from models import Product, Comment
-from schemas import ProductSchemaReader, ProductSchemaWriter
-
-class ProductViewSet(BaseViewSet):
-    """产品 ViewSet - 装饰器示例"""
-    
-    permission_classes = (IsAuthenticated,)
-    
-    @property
-    def queryset(self):
-        return Product.all()
-    
-    def get_schema(self, request, is_safe=False):
-        if request.method.upper() in SAFE_HTTP_METHODS or is_safe:
-            return ProductSchemaReader
-        return ProductSchemaWriter
-    
-    # 集合级操作
-    @action(methods=["get"], detail=False, url_path="featured")
-    async def list_featured(self, request):
-        """获取推荐产品"""
-        products = await Product.filter(is_featured=True, is_active=True)
-        schema = self.get_schema(request, is_safe=True)
-        data = [schema.model_validate(p).model_dump() for p in products]
-        return json({"results": data})
-    
-    @action(methods=["get"], detail=False, url_path="statistics")
-    async def get_statistics(self, request):
-        """获取统计信息"""
-        from tortoise.functions import Count, Avg
-        
-        stats = await Product.all().annotate(
-            total=Count("id"),
-            avg_price=Avg("price")
-        ).values("total", "avg_price")
-        
-        return json(stats[0] if stats else {})
-    
-    @action(methods=["post"], detail=False, url_path="bulk-delete")
-    async def bulk_delete(self, request):
-        """批量删除（仅管理员）"""
-        # 检查管理员权限
-        user = self.get_current_user(request)
-        if not user.role or user.role.name != 'admin':
-            raise Forbidden("需要管理员权限")
-        
-        ids = request.json.get("ids", [])
-        count = await Product.filter(id__in=ids).delete()
-        
-        return json({"message": f"成功删除 {count} 个产品"})
-    
-    # 详情级操作
-    @action(methods=["post"], detail=True, url_path="publish")
-    async def publish(self, request, pk):
-        """发布产品"""
-        product = await self.get_object(request, pk)
-        
-        if product.is_published:
-            return json({"error": "产品已发布"}, status=400)
-        
-        product.is_published = True
-        product.published_at = datetime.now()
-        await product.save()
-        
-        return json({"message": "产品已发布"})
-    
-    @action(methods=["post"], detail=True, url_path="duplicate")
-    async def duplicate(self, request, pk):
-        """复制产品"""
-        product = await self.get_object(request, pk)
-        
-        new_product = await Product.create(
-            name=f"{product.name} (副本)",
-            price=product.price,
-            description=product.description,
-            category_id=product.category_id
-        )
-        
-        schema = self.get_schema(request, is_safe=True)
-        data = schema.model_validate(new_product).model_dump()
-        
-        return json(data, status=201)
-    
-    @action(methods=["get", "post"], detail=True, url_path="comments")
-    async def handle_comments(self, request, pk):
-        """处理评论"""
-        product = await self.get_object(request, pk)
-        
-        if request.method == "GET":
-            # 获取评论
-            comments = await product.comments.all()
-            return json({"results": [c.to_dict() for c in comments]})
-        
-        elif request.method == "POST":
-            # 添加评论
-            content = request.json.get("content")
-            if not content:
-                return json({"error": "评论内容不能为空"}, status=400)
-            
-            comment = await Comment.create(
-                product=product,
-                user=request.ctx.user,
-                content=content
-            )
-            return json(comment.to_dict(), status=201)
-```
+把上面的 action 方法与 ViewSet 的常规配置组合即可；CRUD 与 Schema 的完整配置见
+[ViewSet](viewsets.md)。
 
 ## 最佳实践
 
@@ -412,7 +372,7 @@ class ProductViewSet(BaseViewSet):
 @action(methods=["post"], detail=True, url_path="archive")
 async def archive(self, request, pk):
     """归档"""
-    obj = await self.get_object(request, pk)
+    obj = await self.get_object(pk)
     obj.status = "archived"
     await obj.save()
     return json({"message": "已归档"})
@@ -424,9 +384,9 @@ async def archive(self, request, pk):
 @action(methods=["get"], detail=True, url_path="reviews")
 async def get_reviews(self, request, pk):
     """获取评论"""
-    obj = await self.get_object(request, pk)
+    obj = await self.get_object(pk)
     reviews = await obj.reviews.all()
-    return json({"results": [r.to_dict() for r in reviews]})
+    return json({"results": [{"id": review.id} for review in reviews]})
 ```
 
 ### 批量操作
@@ -437,7 +397,7 @@ async def bulk_update(self, request):
     """批量更新"""
     ids = request.json.get("ids", [])
     updates = request.json.get("updates", {})
-    await Model.filter(id__in=ids).update(**updates)
+    await Product.filter(id__in=ids).update(**updates)
     return json({"message": "更新成功"})
 ```
 

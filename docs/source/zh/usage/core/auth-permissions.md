@@ -23,37 +23,14 @@ class ProductViewSet(BaseViewSet):
 
 请求进入 ViewSet 前，`BaseViewSet.check_permissions()` 会在类上调用
 `has_permission(request, view)`（不实例化）。失败时抛出 Forbidden。
-如果认证中间件先发现 Bearer Token 缺失或无效，则会返回 401。
+没有认证信息时，中间件将 `request.ctx.user` 设为 `None`；例如
+`IsAuthenticated` 会拒绝该用户（403）。认证中间件只在请求头格式错误、JWT 未配置
+或用户不存在时返回 401；Token 缺失或签名/有效期校验失败会按匿名请求处理。
 
 ## 按 HTTP 方法设置权限
 
-当前框架没有 `self.action` 或 `get_permissions()`。需要按操作区分时，应重写
-`check_permissions()`：
-
-```python
-import asyncio
-
-from sanic.exceptions import Forbidden
-from srf.permission.permission import IsAuthenticated, IsRoleAdminUser
-
-
-class ProductViewSet(BaseViewSet):
-    async def check_permissions(self, request):
-        if request.method.upper() in ("GET", "HEAD", "OPTIONS"):
-            return
-
-        classes = (
-            (IsAuthenticated,)
-            if request.method.upper() == "POST"
-            else (IsAuthenticated, IsRoleAdminUser)
-        )
-        for permission_class in classes:
-            result = permission_class.has_permission(request, self)
-            if asyncio.iscoroutine(result):
-                result = await result
-            if not result:
-                raise Forbidden(message="Forbidden")
-```
+按操作区分权限时，重写 `check_permissions()` 即可；完整写法见
+[权限：按请求方法设置权限](permissions.md)（权限参考页中有完整示例）。
 
 ## 对象级权限
 
@@ -63,7 +40,9 @@ class ProductViewSet(BaseViewSet):
 action 都会执行。自定义对象权限时使用 `@staticmethod`：
 
 ```python
+from models import Order
 from srf.permission.permission import BasePermission, IsAuthenticated
+from srf.views import BaseViewSet
 
 
 class IsOwner(BasePermission):
@@ -74,34 +53,16 @@ class IsOwner(BasePermission):
 
 class OrderViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated, IsOwner)
-
+```
 
 列表接口仍需通过过滤 `queryset` 限制可见数据。
 
 ## 自定义 action
 
-自定义 action 同样会先执行 ViewSet 的全局 `check_permissions()`，不能通过
-“手动实现 action”跳过权限。若某个 action 需要额外权限，可在 action 内
-再次调用权限类：
-
-```python
-from sanic.exceptions import Forbidden
-from srf.permission.permission import IsRoleAdminUser
-from srf.views.decorators import action
-
-
-@action(detail=True, methods=["post"], url_path="publish")
-async def publish(self, request, pk):
-    if not IsRoleAdminUser.has_permission(request, self):
-        raise Forbidden(message="需要管理员权限")
-    product = await self.get_object(request, pk)
-    # ...
-```
+所有 action 都会先执行 ViewSet 的全局 `check_permissions()`；需要在 action 内
+追加检查时，按[权限](permissions.md)中“自定义 action 的权限”一节处理即可。
 
 ## 注意事项
 
-- `NON_AUTH_ENDPOINTS` 只按 URL 最后一段匹配，详见
-  [认证中间件](../advanced/middleware/auth-middleware.md)。
 - 自定义权限应使用 `@staticmethod`，签名为 `has_permission(request, view=None)` / `has_object_permission(request, view=None, obj=None)`。
 - 列表接口的对象可见性仍需通过 `get_queryset()`（或 `queryset`）限定范围。
-- 对公开接口，认证豁免与 ViewSet 权限都需要正确配置。

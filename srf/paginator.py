@@ -3,7 +3,9 @@ from math import ceil
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, TypeAdapter, field_validator
+from sanic.exceptions import BadRequest
 from sanic.request import Request
+from tortoise.exceptions import ValidationError
 from tortoise.queryset import QuerySet
 
 T = TypeVar("T")
@@ -81,6 +83,17 @@ class PageNumberPagination(BasePagination):
 
     /api/users/?page=1
     /api/users/?page=2&page_size=100
+
+    Invalid or missing parameters fall back to ``page=1`` / ``page_size=10``.
+
+    Attributes:
+        MAX_PAGE_SIZE: Upper bound accepted for the ``page_size`` query parameter.
+        PAGE_QUERY_PARAM: Name of the query parameter carrying the page number.
+        PAGE_SIZE_QUERY_PARAM: Name of the query parameter carrying the page size.
+        queryset: The Tortoise QuerySet being paginated.
+        page: Current page number (1-based).
+        page_size: Items per page.
+        max_page_size: Effective page-size cap for this instance.
     """
 
     MAX_PAGE_SIZE: int = 100
@@ -122,8 +135,11 @@ class PageNumberPagination(BasePagination):
 
     async def paginate(self, sch_model: type[BaseModel] | None = None) -> PaginationResult:
         offset = (self.page - 1) * self.page_size
-        total_count = await self.queryset.count()
-        items = await self.queryset.offset(offset).limit(self.page_size)
+        try:
+            total_count = await self.queryset.count()
+            items = await self.queryset.offset(offset).limit(self.page_size)
+        except (ValidationError, ValueError) as e:
+            raise BadRequest(message=str(e))
         if sch_model is not None:
             items = self.serialize_list(sch_model, list(items))
         else:

@@ -2,6 +2,9 @@ import asyncio
 from collections.abc import Callable, Sequence
 from functools import wraps
 
+from pydantic import ValidationError
+from sanic.exceptions import BadRequest
+
 
 def action(
     *,
@@ -44,6 +47,35 @@ def action(
             "url_name": url_name if url_name else fun.__name__,
             **kwargs,
         }
+
+        return wrapper
+
+    return decorator
+
+
+def validate_request(show_errors: bool = False):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(request, *args, **kwargs):
+            try:
+                return await func(request, *args, **kwargs)
+            except ValidationError as exc:
+                if not show_errors:
+                    message = "Invalid request parameters."
+                else:
+                    errors = [
+                        {
+                            "field": ".".join(str(part) for part in error["loc"]),
+                            "reason": error["msg"],
+                        }
+                        for error in exc.errors()
+                    ]
+                    message = {
+                        "message": "Request validation failed.",
+                        "errors": errors,
+                    }
+
+                raise BadRequest(message) from None
 
         return wrapper
 

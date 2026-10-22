@@ -14,33 +14,28 @@ SRF 的路由系统通过 `SanicRouter` 类自动为 ViewSet 生成 RESTful 路�
 ### 基本用法
 
 ```python
+from sanic import Sanic
 from srf.route import SanicRouter
 from viewsets import ProductViewSet
 
-# 创建路由器
-router = SanicRouter(prefix="api")
+app = Sanic("ShopApp")
+router = SanicRouter(app, prefix="api")
 
 # 注册 ViewSet
 router.register("products", ProductViewSet, name="products")
-
-# 获取 Blueprint 并添加到应用
-app.blueprint(router.get_blueprint())
 ```
 
 ## 初始化参数
 
-### SanicRouter(bp=None, prefix="")
+### `SanicRouter(instance, prefix="")`
 
 ```python
-router = SanicRouter(
-    bp=None,          # 可选：现有的 Blueprint 对象
-    prefix="api"      # 可选：URL 前缀
-)
+router = SanicRouter(app, prefix="api")
 ```
 
 **参数说明**：
 
-- `bp`: 可选的 Sanic Blueprint 对象。如果不提供，会自动创建
+- `instance`: 必填的 Sanic `Sanic` 或 `Blueprint` 实例。传入 Sanic 实例时，路由直接注册到应用；传入 Blueprint 时，路由注册到该 Blueprint。
 - `prefix`: URL 前缀，会添加到所有路由前面
 
 ## 注册 ViewSet
@@ -70,20 +65,20 @@ router.register(
 假设注册代码为：
 
 ```python
-router = SanicRouter(prefix="api")
+router = SanicRouter(app, prefix="api")
 router.register("products", ProductViewSet, name="products")
 ```
 
 生成的路由：
 
 | HTTP 方法 | URL 路径 | 操作 | ViewSet 方法 | 路由名称 |
-|-----------|----------|------|--------------|----------|
+| ----------- | ---------- | ------ | -------------- | ---------- |
 | GET | `/api/products` | 列表 | `list()` | `products-list` |
 | POST | `/api/products` | 创建 | `create()` | `products-list` |
-| GET | `/api/products/<pk:int>` | 详情 | `retrieve()` | `products-detail` |
-| PUT | `/api/products/<pk:int>` | 完整更新 | `update()` | `products-detail` |
-| PATCH | `/api/products/<pk:int>` | 部分更新 | `update()` | `products-detail` |
-| DELETE | `/api/products/<pk:int>` | 删除 | `destroy()` | `products-detail` |
+| GET | `/api/products/<pk>` | 详情 | `retrieve()` | `products-detail` |
+| PUT | `/api/products/<pk>` | 完整更新 | `update()` | `products-detail` |
+| PATCH | `/api/products/<pk>` | 部分更新 | `update()` | `products-detail` |
+| DELETE | `/api/products/<pk>` | 删除 | `destroy()` | `products-detail` |
 
 ### 自定义操作路由
 
@@ -101,7 +96,7 @@ async def list_featured(self, request):
 
 - URL: `/api/products/featured`
 - 方法: GET
-- 路由名称: `list_featured`
+- 路由名称: `products-list_featured`（默认 `url_name` 为方法名）
 
 **详情级操作** (`detail=True`)：
 
@@ -113,9 +108,9 @@ async def publish(self, request, pk):
 
 生成路由：
 
-- URL: `/api/products/<pk:int>/publish`
+- URL: `/api/products/<pk>/publish`
 - 方法: POST
-- 路由名称: `publish`
+- 路由名称: `products-publish`（默认 `url_name` 为方法名）
 
 ## URL 前缀
 
@@ -124,7 +119,7 @@ URL 前缀用于为所有路由添加统一的前缀。
 ### 单一前缀
 
 ```python
-router = SanicRouter(prefix="api")
+router = SanicRouter(app, prefix="api")
 router.register("products", ProductViewSet)
 # 生成: /api/products, /api/products/<pk>
 ```
@@ -133,32 +128,25 @@ router.register("products", ProductViewSet)
 
 ```python
 # v1 API
-router_v1 = SanicRouter(prefix="api/v1")
+router_v1 = SanicRouter(app, prefix="api/v1")
 router_v1.register("products", ProductViewSetV1)
 # 生成: /api/v1/products
 
 # v2 API
-router_v2 = SanicRouter(prefix="api/v2")
+router_v2 = SanicRouter(app, prefix="api/v2")
 router_v2.register("products", ProductViewSetV2)
 # 生成: /api/v2/products
-
-# 注册到应用
-app.blueprint(router_v1.get_blueprint())
-app.blueprint(router_v2.get_blueprint())
 ```
 
 ### 嵌套资源
 
-```python
-# 产品路由
-product_router = SanicRouter(prefix="api/products")
-product_router.register("", ProductViewSet)
-# 生成: /api/products, /api/products/<pk>
+`SanicRouter.register()` 会在资源名后添加集合和详情路径。嵌套路由可把父资源 ID 放在前缀中，并将子资源名作为 `path` 注册。子资源 ViewSet 需在 `get_queryset()` 中按父资源 ID 限定数据：
 
-# 评论路由（嵌套在产品下）
-review_router = SanicRouter(prefix="api/products/<product_id:int>/reviews")
-review_router.register("", ReviewViewSet)
-# 生成: /api/products/<product_id>/reviews
+```python
+review_router = SanicRouter(app, prefix="api/products/<product_id:int>")
+review_router.register("reviews", ReviewViewSet)
+# 集合: /api/products/<product_id:int>/reviews
+# 详情: /api/products/<product_id:int>/reviews/<pk>
 ```
 
 ## 多个 ViewSet 注册
@@ -166,7 +154,7 @@ review_router.register("", ReviewViewSet)
 ### 在同一个 Router 中注册
 
 ```python
-router = SanicRouter(prefix="api")
+router = SanicRouter(app, prefix="api")
 
 # 注册多个 ViewSet
 router.register("products", ProductViewSet)
@@ -174,45 +162,41 @@ router.register("categories", CategoryViewSet)
 router.register("orders", OrderViewSet)
 router.register("reviews", ReviewViewSet)
 
-# 一次性添加到应用
-app.blueprint(router.get_blueprint())
 ```
 
 ### 使用多个 Router
 
 ```python
 # 公开 API 路由
-public_router = SanicRouter(prefix="api/public")
+public_router = SanicRouter(app, prefix="api/public")
 public_router.register("products", ProductViewSet)
 public_router.register("categories", CategoryViewSet)
 
 # 管理员 API 路由
-admin_router = SanicRouter(prefix="api/admin")
+admin_router = SanicRouter(app, prefix="api/admin")
 admin_router.register("users", UserViewSet)
 admin_router.register("orders", OrderViewSet)
-
-# 注册到应用
-app.blueprint(public_router.get_blueprint())
-app.blueprint(admin_router.get_blueprint())
 ```
 
 ## 自定义 Blueprint
 
-您可以传入自己的 Blueprint 对象：
+需要按模块组织路由或为路由添加 Blueprint 中间件时，可以传入自己的 Blueprint 对象。
+`SanicRouter` 会将路由直接注册到该 Blueprint；注册完成后，再用 `app.blueprint(bp)`
+将 Blueprint 挂载到 Sanic 应用。URL 前缀由 `SanicRouter` 的 `prefix` 统一设置：
 
 ```python
 from sanic import Blueprint
 from srf.route import SanicRouter
 
 # 创建自定义 Blueprint
-my_blueprint = Blueprint("my_api", url_prefix="/api")
+my_blueprint = Blueprint("my_api")
 
 # 使用自定义 Blueprint
-router = SanicRouter(bp=my_blueprint, prefix="")
+router = SanicRouter(my_blueprint, prefix="api")
 router.register("products", ProductViewSet)
 
-# 注册到应用
-app.blueprint(router.get_blueprint())
+# Blueprint 完成路由注册后，再挂载到 Sanic 应用
+app.blueprint(my_blueprint)
 ```
 
 ## URL 反向解析
@@ -233,10 +217,10 @@ url = app.url_for("products-list")
 url = app.url_for("products-detail", pk=1)
 # 结果: /api/products/1
 
-url = app.url_for("list_featured")
+url = app.url_for("products-list_featured")
 # 结果: /api/products/featured
 
-url = app.url_for("publish", pk=1)
+url = app.url_for("products-publish", pk=1)
 # 结果: /api/products/1/publish
 ```
 
@@ -246,14 +230,11 @@ url = app.url_for("publish", pk=1)
 class ProductViewSet(BaseViewSet):
     async def create(self, request):
         # ... 创建产品 ...
-        
+
         # 生成详情 URL
         detail_url = request.app.url_for("products-detail", pk=product.id)
-        
-        return json({
-            "id": product.id,
-            "url": detail_url
-        }, status=201)
+
+        return json({"id": product.id, "url": detail_url}, status=201)
 ```
 
 ## 路由中间件
@@ -265,18 +246,20 @@ from sanic import Blueprint
 from srf.route import SanicRouter
 
 # 创建 Blueprint
-bp = Blueprint("api", url_prefix="/api")
+bp = Blueprint("api")
+
 
 # 添加中间件
 @bp.middleware("request")
 async def add_custom_header(request):
     request.ctx.custom_data = "value"
 
+
 # 使用 Blueprint
-router = SanicRouter(bp=bp, prefix="")
+router = SanicRouter(bp, prefix="api")
 router.register("products", ProductViewSet)
 
-app.blueprint(router.get_blueprint())
+app.blueprint(bp)
 ```
 
 ## 完整示例
@@ -292,14 +275,11 @@ from viewsets import ProductViewSet, CategoryViewSet
 app = Sanic("ShopApp")
 
 # 创建路由器
-router = SanicRouter(prefix="api")
+router = SanicRouter(app, prefix="api")
 
 # 注册 ViewSets
 router.register("products", ProductViewSet, name="products")
 router.register("categories", CategoryViewSet, name="categories")
-
-# 添加到应用
-app.blueprint(router.get_blueprint())
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
@@ -331,16 +311,14 @@ from srf.route import SanicRouter
 from viewsets.v1 import ProductViewSetV1
 from viewsets.v2 import ProductViewSetV2
 
+
 def register_routes(app):
     # v1 路由
-    router_v1 = SanicRouter(prefix="api/v1")
+    router_v1 = SanicRouter(app, prefix="api/v1")
     router_v1.register("products", ProductViewSetV1)
-    app.blueprint(router_v1.get_blueprint())
-    
-    # v2 路由
-    router_v2 = SanicRouter(prefix="api/v2")
+
+    router_v2 = SanicRouter(app, prefix="api/v2")
     router_v2.register("products", ProductViewSetV2)
-    app.blueprint(router_v2.get_blueprint())
 ```
 
 生成的路由：
@@ -387,9 +365,9 @@ for route in app.router.routes:
 
 ```
 [GET, POST] /api/products
-[GET, PUT, PATCH, DELETE] /api/products/<pk:int>
+[GET, PUT, PATCH, DELETE] /api/products/<pk>
 [GET] /api/products/featured
-[POST] /api/products/<pk:int>/publish
+[POST] /api/products/<pk>/publish
 ```
 
 ## 最佳实践
@@ -412,6 +390,7 @@ class ProductViewSet(BaseViewSet):
     async def destroy(self, request, pk):
         """禁用删除操作"""
         from sanic.response import json
+
         return json({"error": "不支持删除操作"}, status=405)
 ```
 
@@ -420,8 +399,8 @@ class ProductViewSet(BaseViewSet):
 使用 Sanic 的路径参数语法：
 
 ```python
-# 默认使用 int
-# /api/products/<pk:int>
+# SanicRouter 生成的 pk 参数不指定类型；调用 get_object(pk) 时 SRF 会规范化主键
+# /api/products/<pk>
 
 # 可以在自定义操作中使用其他类型
 @action(methods=["get"], detail=True, url_path="by-slug/<slug:str>")
@@ -438,7 +417,7 @@ async def get_by_slug(self, request, pk, slug):
 router.register("products", ProductViewSet)
 
 # 产品下的评论（需要在 ViewSet 中处理 product_id）
-review_router = SanicRouter(prefix="api/products/<product_id:int>")
+review_router = SanicRouter(app, prefix="api/products/<product_id:int>")
 review_router.register("reviews", ReviewViewSet)
 ```
 

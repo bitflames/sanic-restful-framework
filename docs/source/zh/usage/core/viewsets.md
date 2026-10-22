@@ -16,6 +16,8 @@ ViewSet 是一个基于类的视图，它将相关的 API 操作组织在一起�
 ## BaseViewSet
 
 `BaseViewSet` 是所有 ViewSet 的基类，它继承了所有 CRUD Mixin。
+下文中未重复导入的代码块是添加到已有 ViewSet 的方法片段，继续使用基本用法
+中的 `BaseViewSet`、`Product` 和 Schema 导入。
 
 ### 基本用法
 
@@ -24,25 +26,18 @@ from srf.views import BaseViewSet
 from models import Product
 from schemas import ProductSchemaReader, ProductSchemaWriter
 
+
 class ProductViewSet(BaseViewSet):
     """产品 ViewSet"""
-    
+
     @property
     def queryset(self):
         """返回查询集"""
         return Product.all()
-    
-    def get_schema(self, request, *args, is_safe=False, **kwargs):
-        """返回 Schema
-        
-        Args:
-            request: 请求对象
-            is_safe: 见下方 Mixin 实际传参说明；默认 False
-        """
-        # 注意：内置 list/retrieve 调用时 is_safe 默认为 False
-        if request.method in ("GET", "HEAD", "OPTIONS") or is_safe:
-            return ProductSchemaReader
-        return ProductSchemaWriter
+
+    def get_schema(self):
+        """按 HTTP 方法选择读写 Schema；self.request 已由 as_view 设置。"""
+        return ProductSchemaReader if self.request.is_safe else ProductSchemaWriter
 ```
 
 ### 必需属性和方法
@@ -57,34 +52,26 @@ class ProductViewSet(BaseViewSet):
 # 类属性
 queryset = Product.all()
 
+
 # 或 property（仍由 get_queryset 读取）
 @property
 def queryset(self):
     """只返回已发布的产品"""
     return Product.filter(is_published=True)
 
+
 # 或重写 get_queryset，按请求限定范围
 def get_queryset(self):
-    return Product.filter(owner_id=self.request.ctx.user.id).prefetch_related(
-        "category", "tags"
-    )
+    return Product.filter(owner_id=self.request.ctx.user.id).prefetch_related("category", "tags")
 ```
 
 #### 2. `get_schema` 方法
 
 返回用于数据验证和序列化的 Pydantic Schema。
 
-```python
-def get_schema(self, request, *args, is_safe=False, **kwargs):
-    """
-    在同一个请求中可能使用不同的schema，比如输入或输出要控制不同的字段，输入就使用不安全的schema
-
-    is_safe=True: 读取操作（GET），使用 Reader Schema
-    is_safe=False: 写入操作（POST/PUT/PATCH），使用 Writer Schema
-    """
-    is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
-    return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
-```
+固定使用一个 Schema 时，设置类属性 `schema` 即可。需要按请求或操作选择时，重写
+`get_schema()`；选择方式和内置 `create` / `update` 如何使用返回的 Schema，见
+[Schema 选择说明](schema.md)。
 
 **为什么要分离读写 Schema？**
 
@@ -95,18 +82,22 @@ def get_schema(self, request, *args, is_safe=False, **kwargs):
 示例：
 
 ```python
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
+
 
 class ProductSchemaWriter(BaseModel):
     """写入 Schema - 用于创建和更新"""
+
     name: str = Field(..., max_length=100)
     price: float = Field(..., gt=0)
     description: Optional[str] = None
     category_id: int
 
+
 class ProductSchemaReader(BaseModel):
     """读取 Schema - 用于序列化"""
+
     id: int
     name: str
     price: float
@@ -114,9 +105,8 @@ class ProductSchemaReader(BaseModel):
     category_id: int
     category_name: str  # 额外的关联字段
     created_at: str
-    
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
 ```
 
 ## CRUD 操作
@@ -128,9 +118,9 @@ BaseViewSet 通过 Mixin 提供了标准的 CRUD 操作。
 **路由**: `GET /api/products`
 
 **功能**：
+
 - 获取资源列表
 - 支持分页
-- 支持过滤和搜索
 - 支持排序
 
 **响应格式**：
@@ -153,28 +143,29 @@ BaseViewSet 通过 Mixin 提供了标准的 CRUD 操作。
 **自定义 list 方法**：
 
 ```python
+from sanic.response import json
+from srf.paginator import PageNumberPagination
+
+
 class ProductViewSet(BaseViewSet):
     async def list(self, request):
         """自定义列表逻辑"""
         # 获取查询集
         queryset = self.queryset
-        
+
         # 应用过滤
         if "category" in request.args:
             category_id = request.args.get("category")
             queryset = queryset.filter(category_id=category_id)
-        
+
         # 应用过滤器类
         for filter_class in self.filter_class:
             queryset = filter_class(self).filter_queryset(request, queryset)
-        
-        # 分页
-        from srf.paginator import PageNumberPagination
+
         paginator = PageNumberPagination.from_queryset(queryset, request)
-        schema = self.get_schema(request, is_safe=True)
+        schema = self.get_schema()
         result = await paginator.to_dict(schema)
-        
-        from sanic.response import json
+
         return json(result)
 ```
 
@@ -260,18 +251,19 @@ class ProductViewSet(BaseViewSet):
     async def retrieve(self, request, pk):
         """自定义获取逻辑"""
         # 获取对象
-        obj = await self.get_object(request, pk)
-        
+        obj = await self.get_object(pk)
+
         # 记录访问
         await self.log_view(obj, request.ctx.user)
-        
+
         # 序列化
-        schema = self.get_schema(request, is_safe=True)
+        schema = self.get_schema()
         data = schema.model_validate(obj).model_dump()
-        
+
         from sanic.response import json
+
         return json(data)
-    
+
     async def log_view(self, product, user):
         """记录浏览"""
         # 实现浏览记录逻辑
@@ -289,9 +281,17 @@ class ProductViewSet(BaseViewSet):
 ```json
 {
   "name": "更新后的产品名",
-  "price": 109.99
+  "price": 109.99,
+  "description": "产品描述",
+  "category_id": 1
 }
 ```
+
+!!! warning "当前不是部分更新"
+    `update()` 会用 `get_schema()` 返回的 Schema 以 `strict=True` 校验完整请求体，
+    并且 `PUT` 与 `PATCH` 映射到同一个方法。请求体必须满足该 Schema 的必填字段；
+    `perform_update()` 中的 `exclude_unset=True` 只决定“校验通过后哪些字段写回数据库”，
+    不代表可以省略必填字段。
 
 **响应**：
 
@@ -376,95 +376,25 @@ class ProductViewSet(BaseViewSet):
 
 ## 自定义操作 - @action 装饰器
 
-`@action` 装饰器用于添加自定义操作到 ViewSet。
-
-### 基本用法
-
-```python
-from srf.views.decorators import action
-from sanic.response import json
-
-class ProductViewSet(BaseViewSet):
-    @action(methods=["get"], detail=False, url_path="featured")
-    async def list_featured(self, request):
-        """获取推荐产品（集合级操作）"""
-        products = await Product.filter(is_featured=True)
-        schema = self.get_schema(request, is_safe=True)
-        data = [schema.model_validate(p).model_dump() for p in products]
-        return json({"results": data})
-    
-    @action(methods=["post"], detail=True, url_path="publish")
-    async def publish(self, request, pk):
-        """发布产品（详情级操作）"""
-        product = await self.get_object(request, pk)
-        product.is_published = True
-        product.published_at = datetime.now()
-        await product.save()
-        
-        return json({"message": "产品已发布"})
-```
-
-### 装饰器参数
-
-| 参数 | 类型 | 说明 | 默认值 |
-|------|------|------|--------|
-| `methods` | list | HTTP 方法列表 | `["get"]` |
-| `detail` | bool 或 None | 是否为详情级操作 | `None`（按集合级处理） |
-| `url_path` | str | URL 路径 | 方法名 |
-| `url_name` | str | 路由名称 | 方法名 |
-
-### 集合级 vs 详情级操作
-
-**集合级操作** (`detail=False`)：
-
-- 不需要 pk 参数
-- URL: `/api/products/featured`
-- 示例：获取推荐列表、批量操作
-
-```python
-@action(detail=False, methods=["get"], url_path="featured")
-async def featured(self, request):
-    """集合级操作"""
-    # 不需要 pk
-    pass
-```
-
-**详情级操作** (`detail=True`)：
-
-- 需要 pk 参数
-- URL: `/api/products/<pk>/publish`
-- 示例：发布、激活、归档
-
-```python
-@action(detail=True, methods=["post"], url_path="publish")
-async def publish(self, request, pk):
-    """详情级操作"""
-    # 需要 pk 参数
-    product = await self.get_object(request, pk)
-    pass
-```
-
-### 高级示例
-
-#### 参考[视图装饰器](viewset-actions.md) 
+`@action` 用来添加 CRUD 之外的端点：`detail=False` 注册为
+`/api/products/<url_path>`，`detail=True` 注册为 `/api/products/<pk>/<url_path>`。
+参数、示例、权限检查等完整说明见 [ViewSet 装饰器](viewset-actions.md)。
 
 ## ViewSet 配置选项
 
 ### 权限控制
 
 ```python
-from srf.permission.permission import IsAuthenticated, IsRoleAdminUser
+from srf.permission.permission import IsAuthenticated, SuperuserOnly
+
 
 class ProductViewSet(BaseViewSet):
-    permission_classes = (IsAuthenticated, IsRoleAdminUser)
+    permission_classes = (IsAuthenticated, SuperuserOnly)
 ```
 
 ### 搜索字段
 
-```python
-class ProductViewSet(BaseViewSet):
-    search_fields = ["name", "description", "sku"]
-```
+三个字段配置默认均为空列表 `[]`，也接受字典。列表中的字段名直接映射到同名 ORM 字段；字典值指定 ORM 字段名，`filter_fields` 和 `ordering_fields` 的键分别作为查询参数名和排序名。详见[过滤](filtering.md)。
 
 ### 过滤字段
 
@@ -492,69 +422,62 @@ class ProductViewSet(BaseViewSet):
 ### 过滤器类
 
 ```python
-from srf.filters.filter import SearchFilter, JsonLogicFilter, QueryParamFilter, OrderingFactory
-
 class ProductViewSet(BaseViewSet):
     filter_class = [
-            SearchFilter,
-            JsonLogicFilter,
-            QueryParamFilter,
-            OrderingFactory,
-        ]
+        SearchFilter,
+        QueryParamFilter,
+        OrderingFactory,
+    ]
 ```
 
 ## 完整示例
 
 ```python
 from srf.views import BaseViewSet
-from srf.views.decorators import action
-from srf.permission.permission import IsAuthenticated, IsRoleAdminUser
-from sanic.response import json
+from srf.permission.permission import IsAuthenticated
 from models import Product
 from schemas import ProductSchemaReader, ProductSchemaWriter
-from datetime import datetime
+
 
 class ProductViewSet(BaseViewSet):
     """产品 ViewSet - 完整示例"""
-    
+
     # 权限配置
     permission_classes = (IsAuthenticated,)
-    
+
     # 搜索配置
     search_fields = ["name", "description", "sku"]
-    
+
     # 过滤配置
     filter_fields = {
         "category": "category_id",
         "min_price": "price__gte",
         "max_price": "price__lte",
     }
-    
+
     # 排序配置
     ordering_fields = {
         "price": "price",
         "name": "name",
         "created": "created_at",
     }
-    
+
     @property
     def queryset(self):
         """返回查询集"""
         return Product.all().prefetch_related("category")
-    
-    def get_schema(self, request, *args, is_safe=False, **kwargs):
-        """返回 Schema（list/retrieve 默认 is_safe=False，勿仅依赖 is_safe）"""
-        if request.method in ("GET", "HEAD", "OPTIONS") or is_safe:
-            return ProductSchemaReader
-        return ProductSchemaWriter
-    
+
+    def get_schema(self):
+        """根据 HTTP 方法选择 Schema。"""
+        return ProductSchemaReader if self.request.is_safe else ProductSchemaWriter
+
     # 自定义创建逻辑
     async def perform_create(self, sch_model):
         """创建产品；需要 request 时用 self.request"""
         data = sch_model.model_dump(exclude_unset=True)
         data["created_by"] = self.request.ctx.user.id
         return await Product.create(**data)
-    
+
     # 自定义更新逻辑
     async def perform_update(self, sch_model, orm_model):
         """更新产品"""
@@ -565,30 +488,6 @@ class ProductViewSet(BaseViewSet):
         orm_model.updated_by = self.request.ctx.user.id
         await orm_model.save()
         return orm_model
-    
-    # 集合级自定义操作
-    @action(methods=["get"], detail=False, url_path="featured")
-    async def list_featured(self, request):
-        """获取推荐产品"""
-        products = await Product.filter(is_featured=True)
-        schema = self.get_schema(request, is_safe=True)
-        data = [schema.model_validate(p).model_dump() for p in products]
-        return json({"results": data})
-    
-    # 详情级自定义操作
-    @action(methods=["post"], detail=True, url_path="publish")
-    async def publish(self, request, pk):
-        """发布产品"""
-        product = await self.get_object(request, pk)
-        
-        if product.is_published:
-            return json({"error": "产品已发布"}, status=400)
-        
-        product.is_published = True
-        product.published_at = datetime.now()
-        await product.save()
-        
-        return json({"message": "产品已发布"})
 ```
 
 ## 最佳实践

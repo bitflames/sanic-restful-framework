@@ -10,15 +10,15 @@ from srf.permission.permission import (
     AllowAny,
     BasePermission,
     IsAuthenticated,
-    IsRoleAdminUser,
-    IsSafeMethodOnly,
+    SuperuserOnly,
+    SafeMethodOnly,
 )
 ```
 
 - `AllowAny`：始终允许（`settings.DEFAULT_PERMISSION_CLASSES` 默认值）。
 - `IsAuthenticated`：`request.ctx.user` 存在，且用户的 `is_active` 为真。
-- `IsRoleAdminUser`：当前用户关联角色的 `name` 等于 `"admin"`。
-- `IsSafeMethodOnly`：只允许 GET、HEAD、OPTIONS。
+- `SuperuserOnly`：`request.ctx.user.is_superuser` 为真。
+- `SafeMethodOnly`：只允许 GET、HEAD、OPTIONS。
 
 在 ViewSet 上声明权限类：
 
@@ -33,7 +33,9 @@ class OrderViewSet(BaseViewSet):
 
 `BaseViewSet.check_permissions()` 会按顺序在**类上**调用
 `has_permission(request, view)` 同步和异步返回值都受支持。任一结果为假时抛出
-403 Forbidden。认证中间件因 Token 缺失或无效而拒绝请求时则是 401。
+403 Forbidden。没有认证信息时，认证中间件会将 `request.ctx.user` 设为 `None`，由
+权限类决定是否允许请求；请求头格式错误、JWT 未配置或用户不存在时认证中间件返回
+401，而 Token 缺失或签名/有效期校验失败会按匿名请求处理。
 
 权限方法是 `@staticmethod`：推荐继承 `BasePermission`，但不强制；只要提供同名静态方法即可（鸭式）。
 
@@ -47,8 +49,8 @@ class IsEditor(BasePermission):
     @staticmethod
     def has_permission(request, view=None):
         user = getattr(request.ctx, "user", None)
-        role = getattr(user, "role", None)
-        return role is not None and role.name == "editor"
+        # is_editor 是应用自定义字段；SRF 内置 User 只有 is_superuser 和 roles 关系。
+        return user is not None and getattr(user, "is_editor", False)
 ```
 
 `view` 为可选参数；`BaseViewSet` 会传入当前 View 实例。
@@ -56,25 +58,26 @@ class IsEditor(BasePermission):
 异步检查同样可用：
 
 ```python
+from models import Subscription
+from srf.permission.permission import BasePermission
+
+
 class HasActiveSubscription(BasePermission):
     @staticmethod
     async def has_permission(request, view=None):
         user = getattr(request.ctx, "user", None)
-        return user is not None and await Subscription.filter(
-            user_id=user.id, active=True
-        ).exists()
+        return user is not None and await Subscription.filter(user_id=user.id, active=True).exists()
 ```
 
 ## 按请求方法设置权限
 
-当前框架没有 `self.action`、`get_permissions()` 或 action 级权限参数。需要
-按操作区分时，可重写 `check_permissions()`：
+按操作区分权限时，可在 `check_permissions()` 中根据 `self.action` 选择权限类：
 
 ```python
 import asyncio
 
 from sanic.exceptions import Forbidden
-from srf.permission.permission import IsAuthenticated, IsRoleAdminUser
+from srf.permission.permission import IsAuthenticated, SuperuserOnly
 from srf.views import BaseViewSet
 
 
@@ -83,11 +86,7 @@ class ProductViewSet(BaseViewSet):
         if request.method.upper() in ("GET", "HEAD", "OPTIONS"):
             return
 
-        classes = (
-            (IsAuthenticated,)
-            if request.method.upper() == "POST"
-            else (IsAuthenticated, IsRoleAdminUser)
-        )
+        classes = (IsAuthenticated,) if request.method.upper() == "POST" else (IsAuthenticated, SuperuserOnly)
         for permission_class in classes:
             result = permission_class.has_permission(request, self)
             if asyncio.iscoroutine(result):
@@ -99,13 +98,19 @@ class ProductViewSet(BaseViewSet):
 ## 对象级权限
 
 `BasePermission.has_object_permission(request, view, obj)` 定义对象级接口。
-`get_object()` 会调用 `check_object_permissions()`，后者在类上调用
+`get_object()` 会调用 `check_object_permissions()`，后者在权限类上调用
+`has_object_permission(request, view, obj)`，结果为假时抛出 `Forbidden`。
 
 对象级检查不会逐条应用于列表结果。列表接口应在 `queryset` 中限制数据。
 
 ### 基本用法
 
 ```python
+from models import Order
+from srf.permission.permission import BasePermission, IsAuthenticated
+from srf.views import BaseViewSet
+
+
 class IsOwner(BasePermission):
     """对象级权限：检查是否是所有者"""
 
@@ -122,12 +127,16 @@ class OrderViewSet(BaseViewSet):
 列表侧通过 `queryset` 限制可见数据：
 
 ```python
+from models import Order
+from srf.permission.permission import IsAuthenticated
+from srf.views import BaseViewSet
+
+
 class OrderViewSet(BaseViewSet):
     @property
     def queryset(self):
         user = self.get_current_user(self.request)
-        role = getattr(user, "role", None)
-        if role is not None and role.name == "admin":
+        if user.is_superuser:
             return Order.all()
         return Order.filter(user_id=user.id)
 ```
@@ -141,18 +150,22 @@ class OrderViewSet(BaseViewSet):
 
 ```python
 from sanic.exceptions import Forbidden
-from srf.permission.permission import IsRoleAdminUser
+from sanic.response import json
+from models import Product
+from srf.permission.permission import SuperuserOnly
+from srf.views import BaseViewSet
 from srf.views.decorators import action
 
 
-@action(methods=["post"], detail=True, url_path="approve")
-async def approve(self, request, pk):
-    if not IsRoleAdminUser.has_permission(request, self):
-        raise Forbidden(message="需要管理员权限")
-    product = await self.get_object(request, pk)
-    product.is_approved = True
-    await product.save()
-    return json({"message": "审核通过"})
+class ProductViewSet(BaseViewSet):
+    @action(methods=["post"], detail=True, url_path="approve")
+    async def approve(self, request, pk):
+        if not SuperuserOnly.has_permission(request, self):
+            raise Forbidden(message="需要超级用户权限")
+        product = await self.get_object(pk)
+        product.is_approved = True
+        await product.save()
+        return json({"message": "审核通过"})
 ```
 
 ## 最佳实践
@@ -165,10 +178,8 @@ async def approve(self, request, pk):
 6. **清晰的错误消息**：提供友好的权限错误提示
 7. **测试权限**：为权限类编写单元测试
 
-
-
 ## 下一步
 
 - 阅读[认证](authentication.md)了解 JWT 身份验证。
 - 阅读[认证与权限配合](auth-permissions.md)查看组合示例。
-- 查看[认证中间件](../advanced/middleware/auth-middleware.md)了解公开端点规则。
+- 查看[认证中间件](../advanced/middleware/auth-middleware.md)了解 `request.ctx.user` 的设置方式。

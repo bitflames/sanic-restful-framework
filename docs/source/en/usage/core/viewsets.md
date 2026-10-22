@@ -1,55 +1,50 @@
 # Views (ViewSet)
 
-ViewSet is one of the core concepts of SRF, providing an elegant way to organize and manage RESTful API endpoints.
+ViewSet is one of the core concepts of SRF. It provides an elegant way to organize and manage RESTful API endpoints.
 
 ## What is a ViewSet?
 
-A ViewSet is a class-based view that organizes related API operations. A ViewSet typically corresponds to a resource type (such as products, orders, etc.) and provides CRUD (Create, Read, Update, Delete) operations for that resource.
+A ViewSet is a class-based view that groups related API operations together. A ViewSet usually corresponds to one resource type (such as products or orders) and provides CRUD (Create, Read, Update, Delete) operations for that resource.
 
-### Basic Concepts
+### Basic concepts
 
-- **Resource-oriented**: Each ViewSet corresponds to a resource type
-- **Automatic routing**: Automatically generates RESTful routes
-- **Mixin pattern**: Combines functionality through Mixin
-- **Flexible extension**: Supports custom operations
+- **Resource-oriented**: Each ViewSet corresponds to one resource type
+- **Automatic routing**: RESTful routes are generated automatically
+- **Mixin pattern**: Functionality is composed through mixins
+- **Flexible extension**: Custom actions are supported
 
 ## BaseViewSet
 
-`BaseViewSet` is the base class for all ViewSets, inheriting all CRUD Mixins.
+`BaseViewSet` is the base class for all ViewSets and inherits all CRUD mixins.
+Code blocks below that do not repeat imports are method snippets to add to an existing ViewSet and continue to use
+the `BaseViewSet`, `Product`, and schema imports from the basic usage section.
 
-### Basic Usage
+### Basic usage
 
 ```python
 from srf.views import BaseViewSet
 from models import Product
 from schemas import ProductSchemaReader, ProductSchemaWriter
 
+
 class ProductViewSet(BaseViewSet):
     """Product ViewSet"""
-    
+
     @property
     def queryset(self):
-        """Returns the query set"""
+        """Return the queryset"""
         return Product.all()
-    
-    def get_schema(self, request, *args, is_safe=False, **kwargs):
-        """Returns Schema
-        
-        Args:
-            request: Request object
-            is_safe: See the actual parameter passing explanation of the Mixin; default False
-        """
-        # Note: When calling list/retrieve internally, is_safe defaults to False
-        if request.method in ("GET", "HEAD", "OPTIONS") or is_safe:
-            return ProductSchemaReader
-        return ProductSchemaWriter
+
+    def get_schema(self):
+        """Choose the read/write schema by HTTP method; self.request is set by as_view."""
+        return ProductSchemaReader if self.request.is_safe else ProductSchemaWriter
 ```
 
-### Required Properties and Methods
+### Required attributes and methods
 
 #### 1. `queryset` / `get_queryset`
 
-Provide a Tortoise ORM query set. Prefer overriding `get_queryset()` for per-request scoping; you may also set a class attribute or `@property` named `queryset`, which the default `get_queryset()` reads (and clones with `.all()` when it is a `QuerySet`).
+Provides the Tortoise ORM queryset. To limit the data scope per request, prefer overriding `get_queryset()`; you can also set a class attribute or `@property` named `queryset`, which the default `get_queryset()` reads (cloning it with `.all()` if it is a `QuerySet`).
 
 `list()` uses `filter_queryset(self.get_queryset())`. `get_object()` and `perform_create()` also go through `get_queryset()`.
 
@@ -57,56 +52,52 @@ Provide a Tortoise ORM query set. Prefer overriding `get_queryset()` for per-req
 # Class attribute
 queryset = Product.all()
 
-# Or a property (still consumed by get_queryset)
+
+# Or a property (still read by get_queryset)
 @property
 def queryset(self):
     """Return only published products"""
     return Product.filter(is_published=True)
 
-# Or override get_queryset for request-aware scoping
+
+# Or override get_queryset to limit the scope per request
 def get_queryset(self):
-    return Product.filter(owner_id=self.request.ctx.user.id).prefetch_related(
-        "category", "tags"
-    )
+    return Product.filter(owner_id=self.request.ctx.user.id).prefetch_related("category", "tags")
 ```
 
-#### 2. `get_schema` Method
+#### 2. The `get_schema` method
 
-Returns the Pydantic Schema used for data validation and serialization.
+Returns the Pydantic schema used for validation and serialization.
 
-```python
-def get_schema(self, request, *args, is_safe=False, **kwargs):
-    """
-    Different schemas may be used in the same request, such as controlling different fields for input or output. Use unsafe schema for input.
-    
-    is_safe=True: Read operation (GET), use Reader Schema
-    is_safe=False: Write operation (POST/PUT/PATCH), use Writer Schema
-    """
-    is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
-    return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
-```
+To always use one schema, just set the `schema` class attribute. To choose based on the request or action, override
+`get_schema()`; see [Schema selection](schema.md) for how to choose and how the built-in `create` / `update`
+use the returned schema.
 
 **Why separate read and write schemas?**
 
-- **Security**: Exclude read-only fields (like id, created_at) when writing
-- **Flexibility**: Include computed fields and related data when reading
-- **Validation**: Have stricter validation rules when writing
+- **Security**: exclude read-only fields on write (such as id, created_at)
+- **Flexibility**: include computed fields and related data on read
+- **Validation**: use stricter validation rules on write
 
 Example:
 
 ```python
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 
+
 class ProductSchemaWriter(BaseModel):
-    """Write Schema - For creating and updating"""
+    """Write schema - used for create and update"""
+
     name: str = Field(..., max_length=100)
     price: float = Field(..., gt=0)
     description: Optional[str] = None
     category_id: int
 
+
 class ProductSchemaReader(BaseModel):
-    """Read Schema - For serialization"""
+    """Read schema - used for serialization"""
+
     id: int
     name: str
     price: float
@@ -114,26 +105,25 @@ class ProductSchemaReader(BaseModel):
     category_id: int
     category_name: str  # Additional related field
     created_at: str
-    
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
 ```
 
-## CRUD Operations
+## CRUD operations
 
-BaseViewSet provides standard CRUD operations through Mixin.
+BaseViewSet provides standard CRUD operations through mixins.
 
-### ListModelMixin - List Operations
+### ListModelMixin - list operation
 
 **Route**: `GET /api/products`
 
-**Functionality**:
-- Get a list of resources
-- Support pagination
-- Support filtering and searching
-- Support sorting
+**Features**:
 
-**Response Format**:
+- Get a resource list
+- Supports pagination
+- Supports sorting
+
+**Response format**:
 
 ```json
 {
@@ -150,45 +140,46 @@ BaseViewSet provides standard CRUD operations through Mixin.
 }
 ```
 
-**Customizing the list method**:
+**Custom list method**:
 
 ```python
+from sanic.response import json
+from srf.paginator import PageNumberPagination
+
+
 class ProductViewSet(BaseViewSet):
     async def list(self, request):
         """Custom list logic"""
-        # Get the query set
+        # Get the queryset
         queryset = self.queryset
-        
-        # Apply filters
+
+        # Apply filtering
         if "category" in request.args:
             category_id = request.args.get("category")
             queryset = queryset.filter(category_id=category_id)
-        
+
         # Apply filter classes
         for filter_class in self.filter_class:
             queryset = filter_class(self).filter_queryset(request, queryset)
-        
-        # Pagination
-        from srf.paginator import PageNumberPagination
+
         paginator = PageNumberPagination.from_queryset(queryset, request)
-        schema = self.get_schema(request, is_safe=True)
+        schema = self.get_schema()
         result = await paginator.to_dict(schema)
-        
-        from sanic.response import json
+
         return json(result)
 ```
 
-### CreateModelMixin - Create Operation
+### CreateModelMixin - create operation
 
 **Route**: `POST /api/products`
 
-**Functionality**: Create a new resource
+**Feature**: Create a new resource
 
-**Request Body**:
+**Request body**:
 
 ```json
 {
-  "name": "New Product",
+  "name": "New product",
   "price": 99.99,
   "description": "Product description",
   "category_id": 1
@@ -200,7 +191,7 @@ class ProductViewSet(BaseViewSet):
 ```json
 {
   "id": 1,
-  "name": "New Product",
+  "name": "New product",
   "price": 99.99,
   "description": "Product description",
   "category_id": 1,
@@ -208,7 +199,7 @@ class ProductViewSet(BaseViewSet):
 }
 ```
 
-**Customizing the create logic**:
+**Custom create logic**:
 
 ```python
 class ProductViewSet(BaseViewSet):
@@ -216,9 +207,9 @@ class ProductViewSet(BaseViewSet):
         """Custom create logic
 
         Args:
-            sch_model: Validated Pydantic Schema instance
+            sch_model: The validated Pydantic schema instance
 
-        Use self.request when you need request (as_view will assign it).
+        Use self.request when the request is needed (as_view assigns it).
         """
         data = sch_model.model_dump(exclude_unset=True)
         data["created_by"] = self.request.ctx.user.id
@@ -228,16 +219,16 @@ class ProductViewSet(BaseViewSet):
         return obj
 
     async def send_notification(self, product):
-        """Send notification"""
+        """Send a notification"""
         # Implement notification logic
         pass
 ```
 
-### RetrieveModelMixin - Detail Operation
+### RetrieveModelMixin - retrieve operation
 
 **Route**: `GET /api/products/<pk>`
 
-**Functionality**: Retrieve a single resource
+**Feature**: Get a single resource
 
 **Response**:
 
@@ -253,45 +244,54 @@ class ProductViewSet(BaseViewSet):
 }
 ```
 
-**Customizing the retrieval logic**:
+**Custom retrieve logic**:
 
 ```python
 class ProductViewSet(BaseViewSet):
     async def retrieve(self, request, pk):
-        """Custom retrieval logic"""
+        """Custom retrieve logic"""
         # Get the object
-        obj = await self.get_object(request, pk)
-        
-        # Record access
+        obj = await self.get_object(pk)
+
+        # Log the access
         await self.log_view(obj, request.ctx.user)
-        
-        # Serialization
-        schema = self.get_schema(request, is_safe=True)
+
+        # Serialize
+        schema = self.get_schema()
         data = schema.model_validate(obj).model_dump()
-        
+
         from sanic.response import json
+
         return json(data)
-    
+
     async def log_view(self, product, user):
-        """Log view"""
+        """Log a view"""
         # Implement view logging logic
         pass
 ```
 
-### UpdateModelMixin - Update Operation
+### UpdateModelMixin - update operation
 
 **Route**: `PUT /api/products/<pk>` or `PATCH /api/products/<pk>`
 
-**Functionality**: Update a resource
+**Feature**: Update a resource
 
-**Request Body**:
+**Request body**:
 
 ```json
 {
   "name": "Updated product name",
-  "price": 109.99
+  "price": 109.99,
+  "description": "Product description",
+  "category_id": 1
 }
 ```
+
+!!! warning "This is not a partial update currently"
+    `update()` validates the full request body with the schema returned by `get_schema()` using `strict=True`,
+    and `PUT` and `PATCH` map to the same method. The request body must satisfy the schema's required fields;
+    `exclude_unset=True` in `perform_update()` only controls "which validated fields are written back to the database",
+    and does not mean required fields can be omitted.
 
 **Response**:
 
@@ -304,7 +304,7 @@ class ProductViewSet(BaseViewSet):
 }
 ```
 
-**Customizing the update logic**:
+**Custom update logic**:
 
 ```python
 class ProductViewSet(BaseViewSet):
@@ -312,13 +312,13 @@ class ProductViewSet(BaseViewSet):
         """Custom update logic
         
         Args:
-            sch_model: Validated Pydantic Schema instance
-            orm_model: ORM model instance to update
+            sch_model: The validated Pydantic schema instance
+            orm_model: The ORM model instance to update
         
         Returns:
-            Updated model instance
+            The updated model instance
         """
-        # Record changes
+        # Record the change
         old_price = orm_model.price
         
         # Update the object
@@ -328,27 +328,27 @@ class ProductViewSet(BaseViewSet):
                 setattr(orm_model, field, value)
         await orm_model.save()
         
-        # If the price has changed, send a notification
+        # If the price changed, send a notification
         if old_price != orm_model.price:
             await self.notify_price_change(orm_model, old_price)
         
         return orm_model
     
     async def notify_price_change(self, product, old_price):
-        """Notify about price change"""
+        """Notify about a price change"""
         # Implement notification logic
         pass
 ```
 
-### DestroyModelMixin - Delete Operation
+### DestroyModelMixin - delete operation
 
 **Route**: `DELETE /api/products/<pk>`
 
-**Functionality**: Delete a resource
+**Feature**: Delete a resource
 
 **Response**: HTTP 204 No Content
 
-**Customizing the delete logic**:
+**Custom delete logic**:
 
 ```python
 class ProductViewSet(BaseViewSet):
@@ -356,7 +356,7 @@ class ProductViewSet(BaseViewSet):
         """Custom delete logic
         
         Args:
-            orm_model: ORM model instance to delete
+            orm_model: The ORM model instance to delete
         """
         # Soft delete
         orm_model.is_deleted = True
@@ -374,99 +374,29 @@ class ProductViewSet(BaseViewSet):
         pass
 ```
 
-## Custom Actions - @action Decorator
+## Custom actions - the @action decorator
 
-The `@action` decorator is used to add custom actions to a ViewSet.
+`@action` is used to add endpoints beyond CRUD: `detail=False` registers
+`/api/products/<url_path>`, while `detail=True` registers `/api/products/<pk>/<url_path>`.
+See [ViewSet Decorators](viewset-actions.md) for complete details on parameters, examples, permission checks, and more.
 
-### Basic Usage
+## ViewSet configuration options
+
+### Permission control
 
 ```python
-from srf.views.decorators import action
-from sanic.response import json
+from srf.permission.permission import IsAuthenticated, SuperuserOnly
+
 
 class ProductViewSet(BaseViewSet):
-    @action(methods=["get"], detail=False, url_path="featured")
-    async def list_featured(self, request):
-        """Get featured products (collection-level action)"""
-        products = await Product.filter(is_featured=True)
-        schema = self.get_schema(request, is_safe=True)
-        data = [schema.model_validate(p).model_dump() for p in products]
-        return json({"results": data})
-    
-    @action(methods=["post"], detail=True, url_path="publish")
-    async def publish(self, request, pk):
-        """Publish product (detail-level action)"""
-        product = await self.get_object(request, pk)
-        product.is_published = True
-        product.published_at = datetime.now()
-        await product.save()
-        
-        return json({"message": "Product has been published"})
+    permission_classes = (IsAuthenticated, SuperuserOnly)
 ```
 
-### Decorator Parameters
+### Search fields
 
-| Parameter | Type | Description | Default Value |
-|---------|------|-------------|---------------|
-| `methods` | list | List of HTTP methods | `["get"]` |
-| `detail` | bool or None | Whether it is a detail-level action | `None` (treated as collection-level) |
-| `url_path` | str | URL path | Method name |
-| `url_name` | str | Route name | Method name |
+All three field configurations default to an empty list `[]` and also accept dictionaries. Field names in a list map directly to same-named ORM fields; dictionary values specify the ORM field name, while the keys of `filter_fields` and `ordering_fields` are used as query parameter names and ordering names respectively. See [Filtering](filtering.md) for details.
 
-### Collection-Level vs Detail-Level Actions
-
-**Collection-Level Action** (`detail=False`):
-
-- Does not require a pk parameter
-- URL: `/api/products/featured`
-- Example: Get a featured list, batch operations
-
-```python
-@action(detail=False, methods=["get"], url_path="featured")
-async def featured(self, request):
-    """Collection-level action"""
-    # No need for pk
-    pass
-```
-
-**Detail-Level Action** (`detail=True`):
-
-- Requires a pk parameter
-- URL: `/api/products/<pk>/publish`
-- Example: Publish, activate, archive
-
-```python
-@action(detail=True, methods=["post"], url_path="publish")
-async def publish(self, request, pk):
-    """Detail-level action"""
-    # Requires pk parameter
-    product = await self.get_object(request, pk)
-    pass
-```
-
-### Advanced Example
-
-#### Refer to [View Decorators](viewset-actions.md) 
-
-## ViewSet Configuration Options
-
-### Permission Control
-
-```python
-from srf.permission.permission import IsAuthenticated, IsRoleAdminUser
-
-class ProductViewSet(BaseViewSet):
-    permission_classes = (IsAuthenticated, IsRoleAdminUser)
-```
-
-### Search Fields
-
-```python
-class ProductViewSet(BaseViewSet):
-    search_fields = ["name", "description", "sku"]
-```
-
-### Filter Fields
+### Filter fields
 
 ```python
 class ProductViewSet(BaseViewSet):
@@ -478,7 +408,7 @@ class ProductViewSet(BaseViewSet):
     }
 ```
 
-### Ordering Fields
+### Ordering fields
 
 ```python
 class ProductViewSet(BaseViewSet):
@@ -489,75 +419,68 @@ class ProductViewSet(BaseViewSet):
     }
 ```
 
-### Filterer Classes
+### Filter classes
 
 ```python
-from srf.filters.filter import SearchFilter, JsonLogicFilter, QueryParamFilter, OrderingFactory
-
 class ProductViewSet(BaseViewSet):
     filter_class = [
-            SearchFilter,
-            JsonLogicFilter,
-            QueryParamFilter,
-            OrderingFactory,
-        ]
+        SearchFilter,
+        QueryParamFilter,
+        OrderingFactory,
+    ]
 ```
 
-## Complete Example
+## Complete example
 
 ```python
 from srf.views import BaseViewSet
-from srf.views.decorators import action
-from srf.permission.permission import IsAuthenticated, IsRoleAdminUser
-from sanic.response import json
+from srf.permission.permission import IsAuthenticated
 from models import Product
 from schemas import ProductSchemaReader, ProductSchemaWriter
-from datetime import datetime
+
 
 class ProductViewSet(BaseViewSet):
-    """Product ViewSet - Complete Example"""
-    
+    """Product ViewSet - complete example"""
+
     # Permission configuration
     permission_classes = (IsAuthenticated,)
-    
+
     # Search configuration
     search_fields = ["name", "description", "sku"]
-    
+
     # Filter configuration
     filter_fields = {
         "category": "category_id",
         "min_price": "price__gte",
         "max_price": "price__lte",
     }
-    
+
     # Ordering configuration
     ordering_fields = {
         "price": "price",
         "name": "name",
         "created": "created_at",
     }
-    
+
     @property
     def queryset(self):
-        """Returns the query set"""
+        """Return the queryset"""
         return Product.all().prefetch_related("category")
-    
-    def get_schema(self, request, *args, is_safe=False, **kwargs):
-        """Returns Schema (list/retrieve defaults to is_safe=False, do not rely solely on is_safe)"""
-        if request.method in ("GET", "HEAD", "OPTIONS") or is_safe:
-            return ProductSchemaReader
-        return ProductSchemaWriter
-    
+
+    def get_schema(self):
+        """Choose the schema by HTTP method."""
+        return ProductSchemaReader if self.request.is_safe else ProductSchemaWriter
+
     # Custom create logic
     async def perform_create(self, sch_model):
-        """Create product; use self.request when you need request"""
+        """Create a product; use self.request when the request is needed"""
         data = sch_model.model_dump(exclude_unset=True)
         data["created_by"] = self.request.ctx.user.id
         return await Product.create(**data)
-    
+
     # Custom update logic
     async def perform_update(self, sch_model, orm_model):
-        """Update product"""
+        """Update a product"""
         update_data = sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"])
         for field, value in update_data.items():
             if hasattr(orm_model, field):
@@ -565,43 +488,19 @@ class ProductViewSet(BaseViewSet):
         orm_model.updated_by = self.request.ctx.user.id
         await orm_model.save()
         return orm_model
-    
-    # Collection-level custom action
-    @action(methods=["get"], detail=False, url_path="featured")
-    async def list_featured(self, request):
-        """Get featured products"""
-        products = await Product.filter(is_featured=True)
-        schema = self.get_schema(request, is_safe=True)
-        data = [schema.model_validate(p).model_dump() for p in products]
-        return json({"results": data})
-    
-    # Detail-level custom action
-    @action(methods=["post"], detail=True, url_path="publish")
-    async def publish(self, request, pk):
-        """Publish product"""
-        product = await self.get_object(request, pk)
-        
-        if product.is_published:
-            return json({"error": "Product already published"}, status=400)
-        
-        product.is_published = True
-        product.published_at = datetime.now()
-        await product.save()
-        
-        return json({"message": "Product has been published"})
 ```
 
-## Best Practices
+## Best practices
 
-1. **Keep ViewSet simple**: Complex logic should be placed in the Service layer or Manager
-2. **Use perform_* methods**: Override `perform_create`, `perform_update`, etc., to customize logic
-3. **Use @action wisely**: Add custom endpoints for specific business operations
-4. **Permission checks**: Always add permission checks for sensitive operations
-5. **Exception handling**: Catch and handle possible exceptions
-6. **Docstrings**: Add clear docstrings for methods
+1. **Keep ViewSets concise**: complex logic should live in a service layer or manager
+2. **Use perform_* methods**: override `perform_create`, `perform_update`, and similar methods for custom logic
+3. **Use @action sensibly**: add custom endpoints for specific business operations
+4. **Permission checks**: always add permission checks for sensitive operations
+5. **Exception handling**: catch and handle possible exceptions
+6. **Docstrings**: add clear docstrings to methods
 
-## Next Steps
+## Next steps
 
-- Learn [Routing](routing.md) to understand how to register ViewSet
-- Read [Permissions](permissions.md) to understand the permission system
-- View [Filtering](filtering.md) to understand data filtering
+- See [Routing](routing.md) to learn how to register ViewSets
+- Read [Permissions](permissions.md) to learn about the permission system
+- See [Filtering](filtering.md) to learn about data filtering

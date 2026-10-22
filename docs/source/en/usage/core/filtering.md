@@ -1,15 +1,16 @@
 # Filtering
 
-SRF provides a powerful and flexible filtering system, supporting search, complex queries, and sorting functions.
+SRF provides a flexible filtering system with search, query parameter filtering, and ordering capabilities.
 
-## Overview of Filters
+## Filtering overview
 
-The filtering system allows clients to filter and sort data through query parameters, offering various built-in filters:
+The filtering system lets clients filter and sort data through query parameters and provides several built-in filters:
 
-- **SearchFilter**: Full-text search
-- **JsonLogicFilter**: Complex JSON Logic queries
+- **SearchFilter**: Performs keyword search on configured fields
 - **QueryParamFilter**: Exact filtering based on query parameters
 - **OrderingFactory**: Sorting functionality
+
+`search_fields`, `filter_fields`, and `ordering_fields` all default to an empty list `[]`. All three accept either a list or a dictionary: field names in a list map to same-named ORM fields; a dictionary specifies ORM field names through its values, and the keys of `filter_fields` and `ordering_fields` are the request parameter names and available ordering names respectively. Use dictionaries when you need field aliases or ORM lookup expressions.
 
 ## BaseFilter
 
@@ -18,96 +19,77 @@ All filters inherit from the `BaseFilter` abstract base class:
 ```python
 from srf.filters.filter import BaseFilter
 
+
 class BaseFilter:
-    """Base filter class"""
+    """Filter base class"""
+
+    # Subclasses must set this: the name of the ViewSet attribute holding the field allowlist
+    cls_fields: str | None = None
 
     def filter_queryset(self, request, queryset):
-        """Filter the query set
+        """Filter the queryset
 
         Args:
-            request: Request object
-            queryset: Tortoise ORM query set
+            request: The request object
+            queryset: The Tortoise ORM queryset
 
         Returns:
-            Filtered query set
+            The filtered queryset
         """
         raise NotImplementedError
 ```
 
-## SearchFilter - Full-text Search
+`BaseFilter.__init_subclass__()` checks `cls_fields`: if a subclass forgets to set it, a `TypeError` is raised at class definition time. If you do not use a field allowlist, set it to `"filter_fields"` (or any existing ViewSet attribute name). `filter_fields` is normalized into `{parameter name: ORM field name}` when the filter is instantiated.
 
-`SearchFilter` provides full-text search functionality, searching for keywords in specified fields.
+## SearchFilter - full-text search
 
-### Basic Usage
+`SearchFilter` gets search fields from `search_fields` and reads the `search` parameter from the request. Field names in a list and dictionary values are both treated as ORM field names.
 
 ```python
-from srf.views import BaseViewSet
-
 class ProductViewSet(BaseViewSet):
-    # Define searchable fields
     search_fields = ["name", "description", "sku"]
-    
-    @property
-    def queryset(self):
-        return Product.all()
+    # A dictionary is also supported, with ORM field names as values:
+    # search_fields = {"product_name": "name", "product_description": "description"}
 ```
-
-### Request Examples
 
 ```bash
-# Search for products with "手机" in name, description, or SKU
-GET /api/products?search=手机
-
-# Search for multiple keywords (AND relationship)
-GET /api/products?search=苹果 手机
+GET /api/products?search=phone
+GET /api/products?search=wireless headphones
 ```
 
-### Search Logic
+Multiple search fields are combined with OR; multiple keywords are combined with AND. In other words, the result must match every keyword, but each keyword may appear in any configured field.
 
-- **Multiple Keywords**: Separated by spaces, relationship is AND
-- **Multiple Fields**: Match in any field, relationship is OR
-- **Case-insensitive**: Automatically converted to lowercase for search
+## JsonLogicFilter - expression filtering
 
-Example: `search=苹果 手机`
+`?filter=` accepts a JSON Logic expression and can combine conditions within the `filter_fields` allowlist. Common operators include `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `not in`, `like` (contains), and nested `and` / `or` / `not` are supported.
 
-```python
-# Converted to query:
-Q(name__icontains="苹果") | Q(description__icontains="苹果") | Q(sku__icontains="苹果")
-AND
-Q(name__icontains="手机") | Q(description__icontains="手机") | Q(sku__icontains="手机")
+```bash
+# Actual requests must URL-encode the JSON
+GET /api/products?filter={"and":[{"==":[{"var":"is_active"},true]},{"like":[{"var":"name"},"phone"]}]}
 ```
 
-### Customizing Search Fields
+Conditions on fields not present in `filter_fields` are ignored; if the JSON cannot be parsed, 400 is returned. See the [Filters API](../../api/filters.md#srf.filters.filter.JsonLogicFilter) for the complete operator table.
 
-```python
-class ProductViewSet(BaseViewSet):
-    search_fields = [
-        "name",           # Product name
-        "description",    # Description
-        "sku",           # SKU
-        "brand__name",   # Brand name (related field)
-    ]
-```
+## QueryParamFilter - exact filtering
 
-## QueryParamFilter - Exact Filtering
+`QueryParamFilter` performs exact matching based on query parameters.
 
-`QueryParamFilter` performs exact matching filtering based on query parameters.
-
-### Basic Usage
+### Basic usage
 
 ```python
 class ProductViewSet(BaseViewSet):
-    # Define filter field mapping
+    # Define the filter field mapping
+    # A list is also supported, e.g. filter_fields = ["category_id", "is_active", ...]
     filter_fields = {
-        "category": "category_id",      # Category ID
+        "category": "category_id",       # Category ID
         "brand": "brand_id",             # Brand ID
         "is_active": "is_active",        # Whether active
-        "min_price": "price__gte",       # Minimum price (greater than or equal to)
-        "max_price": "price__lte",       # Maximum price (less than or equal to)
+        "min_price": "price__gte",       # Minimum price (greater than or equal)
+        "max_price": "price__lte",       # Maximum price (less than or equal)
     }
 ```
 
-### Request Examples
+### Request examples
 
 ```bash
 # Filter by category
@@ -116,23 +98,23 @@ GET /api/products?category=1
 # Price range filtering
 GET /api/products?min_price=100&max_price=500
 
-# Combined conditions
+# Multiple conditions
 GET /api/products?category=1&brand=2&min_price=100&is_active=true
 ```
 
-### Mapping between `filter_fields` and Query Parameters
+### Mapping between `filter_fields` and query parameters
 
-The query parameter name must **exactly match** the **key** in `filter_fields`. The lookup suffix is written in the **value** of the mapping, not in the query parameter name.
+Query parameter names must **exactly equal** the **keys** of `filter_fields`. Lookup suffixes are written in the mapping's **values**, not in the query parameter names.
 
-| Lookup written in VALUE | Tortoise | Description | `filter_fields` Example | Request |
-|-------------------------|----------|-------------|--------------------------|---------|
-| (none)                  | `=`      | Exact match | `"category": "category_id"` | `?category=1` |
-| `__gte`                 | `>=`     | Greater than or equal to | `"min_price": "price__gte"` | `?min_price=100` |
-| `__lte`                 | `<=`     | Less than or equal to | `"max_price": "price__lte"` | `?max_price=500` |
-| `__gt`                  | `>`      | Greater than | `"min_stock": "stock__gt"` | `?min_stock=0` |
-| `__lt`                  | `<`      | Less than | `"max_price_lt": "price__lt"` | `?max_price_lt=1000` |
-| `__icontains`           | `ILIKE %x%` | Case-insensitive contains | `"name_contains": "name__icontains"` | `?name_contains=Phone` |
-| `__startswith`          | `LIKE x%` | Starts with | `"sku_starts": "sku__startswith"` | `?sku_starts=PRD` |
+| Lookup written in VALUE | Tortoise | Meaning | `filter_fields` example | Request |
+| --------------------- | ---------- | ------ | ---------------------- | ------ |
+| (none) | `=` | Exact match | `"category": "category_id"` | `?category=1` |
+| `__gte` | `>=` | Greater than or equal | `"min_price": "price__gte"` | `?min_price=100` |
+| `__lte` | `<=` | Less than or equal | `"max_price": "price__lte"` | `?max_price=500` |
+| `__gt` | `>` | Greater than | `"min_stock": "stock__gt"` | `?min_stock=0` |
+| `__lt` | `<` | Less than | `"max_price_lt": "price__lt"` | `?max_price_lt=1000` |
+| `__icontains` | `ILIKE %x%` | Case-insensitive contains | `"name_contains": "name__icontains"` | `?name_contains=Phone` |
+| `__startswith` | `LIKE x%` | Starts with | `"sku_starts": "sku__startswith"` | `?sku_starts=PRD` |
 
 ### Example
 
@@ -142,23 +124,20 @@ class ProductViewSet(BaseViewSet):
         # Exact match
         "category": "category_id",
         "status": "status",
-
-        # Range query
+        # Range queries
         "min_price": "price__gte",
         "max_price": "price__lte",
         "min_stock": "stock__gt",
-
-        # Contains query
+        # Contains queries
         "name_contains": "name__icontains",
         "sku_starts": "sku__startswith",
-
-        # Repeated same parameter names are automatically appended with __in
+        # Repeated parameters with the same name automatically get __in appended by QueryParamFilter
         "ids": "id",
         "categories": "category_id",
     }
 ```
 
-Request:
+Requests:
 
 ```bash
 # Multiple IDs (repeated key → id__in)
@@ -168,216 +147,58 @@ GET /api/products?ids=1&ids=2&ids=3&ids=4&ids=5
 GET /api/products?categories=1&categories=2&categories=3
 
 # Name contains
-GET /api/products?name_contains=手机
+GET /api/products?name_contains=phone
 
 # SKU starts with
 GET /api/products?sku_starts=PRD
 
-# Price range (key matches filter_fields; lookup in value)
+# Price range (keys match filter_fields; the lookup is in the value)
 GET /api/products?min_price=100&max_price=500
 ```
 
-## JsonLogicFilter - Complex Queries
-
-`JsonLogicFilter` supports complex queries using JSON Logic expressions.
-
-### Basic Usage
-
-```python
-class ProductViewSet(BaseViewSet):
-    filter_fields = {
-        "category": "category_id",
-        "price": "price",
-        "stock": "stock",
-        "is_active": "is_active",
-    }
-```
-
-### Request Examples
-
-Use the `filter` parameter to pass a JSON Logic expression. The standard form for comparison operations is  
-`{"<op>": [{"var": "<field>"}, <value>]}` (field names are remapped via `filter_fields`).
-
-```bash
-# Price greater than 100
-GET /api/products?filter={">": [{"var": "price"}, 100]}
-
-# Price between 100 and 500
-GET /api/products?filter={"and": [{">=": [{"var": "price"}, 100]}, {"<=": [{"var": "price"}, 500]}]}
-
-# Category is 1 and has stock
-GET /api/products?filter={"and": [{"==": [{"var": "category"}, 1]}, {">": [{"var": "stock"}, 0]}]}
-```
-
-### Supported Operators
-
-#### Comparison Operators
-
-```bash
-# Equal
-{"==": [{"var": "price"}, 100]}
-
-# Not equal
-{"!=": [{"var": "status"}, "draft"]}
-
-# Greater than
-{">": [{"var": "price"}, 100]}
-
-# Greater than or equal
-{">=": [{"var": "price"}, 100]}
-
-# Less than
-{"<": [{"var": "price"}, 500]}
-
-# Less than or equal
-{"<=": [{"var": "price"}, 500]}
-```
-
-#### IN Operator
-
-```bash
-# In a list
-{"in": [{"var": "category"}, [1, 2, 3]]}
-
-# Not in a list
-{"not in": [{"var": "status"}, ["draft", "archived"]]}
-```
-
-#### LIKE Operator
-
-```bash
-# Fuzzy match
-{"like": [{"var": "name"}, "手机"]}
-```
-
-#### Logical Operators
-
-```bash
-# AND (all conditions are satisfied)
-{"and": [
-  {">=": [{"var": "price"}, 100]},
-  {"<=": [{"var": "price"}, 500]},
-  {"==": [{"var": "is_active"}, true]}
-]}
-
-# OR (any condition is satisfied)
-{"or": [
-  {"==": [{"var": "category"}, 1]},
-  {"==": [{"var": "category"}, 2]}
-]}
-
-# NOT (condition is not met)
-{"not": {"==": [{"var": "status"}, "archived"]}}
-```
-
-### Complex Query Examples
-
-#### Example 1: Price range and category
-
-```json
-{
-  "and": [
-    {"in": [{"var": "category"}, [1, 2]]},
-    {">=": [{"var": "price"}, 100]},
-    {"<=": [{"var": "price"}, 500]},
-    {">": [{"var": "stock"}, 0]}
-  ]
-}
-```
-
-#### Example 2: Multiple OR conditions
-
-```json
-{
-  "or": [
-    {"==": [{"var": "category"}, 1]},
-    {
-      "and": [
-        {"==": [{"var": "category"}, 2]},
-        {"<": [{"var": "price"}, 200]}
-      ]
-    }
-  ]
-}
-```
-
-#### Example 3: NOT condition
-
-```json
-{
-  "and": [
-    {"==": [{"var": "is_active"}, true]},
-    {"not": {"in": [{"var": "status"}, ["draft", "archived"]]}}
-  ]
-}
-```
-
-### Python Client Example
-
-```python
-import json
-import requests
-
-# Build filter conditions
-filter_logic = {
-    "and": [
-        {"in": [{"var": "category"}, [1, 2, 3]]},
-        {">=": [{"var": "price"}, 100]},
-        {"<=": [{"var": "price"}, 500]},
-        {"==": [{"var": "is_active"}, True]},
-    ]
-}
-
-# Send request
-response = requests.get(
-    "http://localhost:8000/api/products",
-    params={"filter": json.dumps(filter_logic)}
-)
-
-products = response.json()
-```
-
-## OrderingFactory - Sorting
+## OrderingFactory - ordering
 
 `OrderingFactory` provides sorting functionality.
 
-### Basic Usage
+### Basic usage
 
 ```python
 class ProductViewSet(BaseViewSet):
+    # A list maps field names to the same ORM field names
+    # ordering_fields = ["price", "username", "created_at", "stock"]
     ordering_fields = {
         "price": "price",
-        "name": "name",
+        "name": "username",
         "created": "created_at",
         "stock": "stock",
     }
 ```
 
-### Request Examples
+### Request examples
 
 ```bash
 # Sort by price ascending
-GET /api/products?sort=price
+GET /api/products?ordering=price
 
-# Sort by price descending (add a minus sign)
-GET /api/products?sort=-price
+# Sort by price descending (prefix with a minus sign)
+GET /api/products?ordering=-price
 
-# Multi-field sorting
-GET /api/products?sort=-price,name
+# Sort by multiple fields
+GET /api/products?ordering=-price,name
 
-# First by category descending, then by price ascending
-GET /api/products?sort=-category,price
+# Sort by category descending first, then by price ascending
+GET /api/products?ordering=-category,price
 ```
 
-### Sorting Rules
+### Ordering rules
 
-- **Ascending**: Field name
-- **Descending**: Add `-` before the field name
-- **Multi-field**: Separate with commas
+- **Ascending**: the field name
+- **Descending**: prefix the field name with `-`
+- **Multiple fields**: separate with commas
 
-## Using Filters Together
+## Combining filters
 
-All filters can be used simultaneously:
+All filters can be used at the same time:
 
 ```python
 class ProductViewSet(BaseViewSet):
@@ -392,7 +213,7 @@ class ProductViewSet(BaseViewSet):
         "is_active": "is_active",
     }
     
-    # Define sort fields
+    # Define ordering fields
     ordering_fields = {
         "price": "price",
         "name": "name",
@@ -400,63 +221,68 @@ class ProductViewSet(BaseViewSet):
     }
 ```
 
-### Combined Query Example
+### Combined query example
 
 ```bash
-# Search + Filter + Sort + Pagination
-GET /api/products?search=手机&category=1&min_price=1000&max_price=5000&sort=-price&page=1&page_size=20
+# Search + filter + order + paginate
+GET /api/products?search=phone&category=1&min_price=1000&max_price=5000&ordering=-price&page=1&page_size=20
 ```
 
-Execution order:
+With the default `filter_class`, the execution order is:
 
-1. Apply search (SearchFilter)
-2. Apply JSON filter (JsonLogicFilter)
-3. Apply exact filter (QueryParamFilter)
-4. Apply sorting (OrderingFactory)
+1. Apply search filtering (SearchFilter)
+2. Apply JSON Logic filtering (JsonLogicFilter)
+3. Apply exact filtering (QueryParamFilter)
+4. Apply ordering (OrderingFactory)
 5. Apply pagination (PageNumberPagination)
 
-## Custom Filters
+If the ViewSet customizes `filter_class`, the order of your custom list is used entirely.
 
-### Creating a Custom Filter
+## Custom filters
+
+### Creating a custom filter
 
 ```python
 from srf.filters.filter import BaseFilter
 from tortoise.expressions import Q
 
+
 class PriceRangeFilter(BaseFilter):
     """Price range filter"""
 
+    # BaseFilter requires subclasses to declare cls_fields; this example does not read the allowlist, so any existing attribute name works
+    cls_fields = "filter_fields"
+
     def filter_queryset(self, request, queryset):
         """Filter by price range (synchronous)"""
-        price_range = request.args.get('price_range')
+        price_range = request.args.get("price_range")
 
         if not price_range:
             return queryset
 
-        # Parse price range: "100-500"
+        # Parse the price range: "100-500"
         try:
-            min_price, max_price = map(float, price_range.split('-'))
-            queryset = queryset.filter(
-                Q(price__gte=min_price) & Q(price__lte=max_price)
-            )
+            min_price, max_price = map(float, price_range.split("-"))
+            queryset = queryset.filter(Q(price__gte=min_price) & Q(price__lte=max_price))
         except ValueError:
             pass
 
         return queryset
 ```
 
-### Using a Custom Filter
+### Using a custom filter
 
 ```python
 from filters import PriceRangeFilter
 
+
 class ProductViewSet(BaseViewSet):
     filter_class = [
-            PriceRangeFilter,
-            SearchFilter,
-            QueryParamFilter,
-            OrderingFactory,
-        ]
+        PriceRangeFilter,
+        SearchFilter,
+        QueryParamFilter,
+        OrderingFactory,
+    ]
 ```
 
 Request:
@@ -465,125 +291,33 @@ Request:
 GET /api/products?price_range=100-500
 ```
 
-## Complete Example
+## Combining filters in a custom action
+
+`filter_queryset()` runs automatically in `list()`; custom actions need to construct filters manually:
 
 ```python
-from srf.views import BaseViewSet
-from srf.views.decorators import action
-from srf.filters.filter import SearchFilter, JsonLogicFilter, QueryParamFilter, OrderingFactory
 from sanic.response import json
-from models import Product
-from schemas import ProductSchemaReader, ProductSchemaWriter
+
 
 class ProductViewSet(BaseViewSet):
-    """Product ViewSet - Complete filter example"""
-    
-    # Search fields
-    search_fields = [
-        "name",
-        "description",
-        "sku",
-        "brand__name",       # Related field
-        "category__name",    # Related field
-    ]
-    
-    # Filter fields
-    filter_fields = {
-        # Exact match
-        "category": "category_id",
-        "brand": "brand_id",
-        "status": "status",
-        "is_active": "is_active",
-        
-        # Range query
-        "min_price": "price__gte",
-        "max_price": "price__lte",
-        "min_stock": "stock__gte",
-
-        # Fuzzy query
-        "name_contains": "name__icontains",
-
-        # Repeated same parameter names will automatically be converted to __in
-        "ids": "id",
-        "categories": "category_id",
-    }
-
-    # Sort fields
-    ordering_fields = {
-        "price": "price",
-        "name": "name",
-        "stock": "stock",
-        "created": "created_at",
-        "updated": "updated_at",
-    }
-
-    # Specify the filter classes to use
-    filter_class = [
-            SearchFilter,
-            JsonLogicFilter,
-            QueryParamFilter,
-            OrderingFactory,
-        ]
-
-    @property
-    def queryset(self):
-        return Product.all().prefetch_related("category", "brand")
-
-    def get_schema(self, request, is_safe=False):
-        is_read = request.method.upper() in ("GET", "HEAD", "OPTIONS")
-        return ProductSchemaReader if is_read or is_safe else ProductSchemaWriter
-
     @action(methods=["get"], detail=False, url_path="popular")
     async def popular(self, request):
-        """Popular products (custom filter)"""
         queryset = Product.filter(is_active=True, stock__gt=0)
 
-        # filter_queryset is synchronous; use ViewSet instance
+        # filter_queryset is synchronous; construct it with the ViewSet instance
         for filter_cls in [SearchFilter, OrderingFactory]:
             queryset = filter_cls(self).filter_queryset(request, queryset)
 
-        queryset = queryset.limit(10)
-
-        products = await queryset
-        schema = self.get_schema(request, is_safe=True)
-        results = [schema.model_validate(p).model_dump() for p in products]
-
+        products = await queryset.limit(10)
+        results = [ProductSchemaReader.model_validate(p).model_dump() for p in products]
         return json({"results": results})
 ```
 
-### Query Examples
+## Performance optimization
 
-```bash
-# 1. Basic search
-GET /api/products?search=手机
+### 1. Add database indexes
 
-# 2. Search + Category filter
-GET /api/products?search=手机&category=1
-
-# 3. Price range + Sort
-GET /api/products?min_price=1000&max_price=5000&sort=-price
-
-# 4. Complex filter (JSON Logic)
-GET /api/products?filter={"and":[{"in":[{"var":"category"},[1,2]]},{">=":[{"var":"price"},1000]}]}
-
-# 5. Combined query
-GET /api/products?search=苹果&category=1&min_price=3000&sort=-created&page=1&page_size=20
-
-# 6. Multiple categories (repeated key)
-GET /api/products?categories=1&categories=2&categories=3&sort=price
-
-# 7. Name contains
-GET /api/products?name_contains=iPhone&is_active=true
-
-# 8. Multiple IDs (repeated key)
-GET /api/products?ids=1&ids=2&ids=3&ids=4&ids=5
-```
-
-## Performance Optimization
-
-### 1. Add Database Indexes
-
-Add indexes to commonly filtered and sorted fields:
+Add indexes for commonly used filtering and ordering fields:
 
 ```python
 class Product(Model):
@@ -593,61 +327,30 @@ class Product(Model):
     is_active = fields.BooleanField(default=True, index=True)
 ```
 
-### 2. Use Covering Indexes
+### 2. Limit search fields
 
-Create composite indexes for common query combinations:
-
-```python
-class Meta:
-    indexes = [
-        ("category_id", "is_active"),
-        ("price", "created_at"),
-    ]
-```
-
-### 3. Optimize Related Queries
-
-Optimize related field searches using `prefetch_related`:
+Select only the necessary fields to avoid full table scans:
 
 ```python
-@property
-def queryset(self):
-    return Product.all().prefetch_related("category", "brand", "tags")
-```
-
-### 4. Limit Search Fields
-
-Only enable search on necessary fields to avoid full table scans:
-
-```python
-# Not recommended: too many fields to search
+# Not recommended: searching too many fields
 search_fields = ["name", "description", "content", "notes", "metadata"]
 
-# Recommended: only search key fields
+# Recommended: search only key fields
 search_fields = ["name", "sku"]
 ```
 
-## Best Practices
+## Best practices
 
-1. **Choose filter fields wisely**: Only expose necessary filter fields
-2. **Add database indexes**: Add indexes to filter and sort fields
-3. **Limit search fields**: Avoid searching large text fields
-4. **Validate input**: Validate the validity of filter parameters
-5. **Use JSON Logic carefully**: Complex queries may affect performance
-6. **Combine filters**: Fully utilize the combination of multiple filters
-7. **Document filter parameters**: Document supported filter parameters in API documentation
+1. **Choose filter fields sensibly**: expose only the necessary filter fields
+2. **Add database indexes**: add indexes for filtering and ordering fields
+3. **Limit search fields**: avoid searching large text fields
+4. **Validate input**: validate the validity of filter parameters
+5. **Combine filters**: make full use of multiple filters together
+6. **Document filter parameters**: describe the supported filter parameters in the API documentation
 
-## Frequently Asked Questions
+## FAQ
 
-### How to implement OR queries?
-
-Use the JSON Logic Filter:
-
-```bash
-GET /api/products?filter={"or":[{"==":[{"var":"category"},1]},{"==":[{"var":"category"},2]}]}
-```
-
-### How to implement date range queries?
+### How do I implement date range queries?
 
 ```python
 class ProductViewSet(BaseViewSet):
@@ -661,34 +364,34 @@ class ProductViewSet(BaseViewSet):
 GET /api/products?start_date=2026-01-01&end_date=2026-01-31
 ```
 
-### How to implement fuzzy search?
+### How do I implement fuzzy search?
 
-Use `SearchFilter` or `QueryParamFilter`:
+Use SearchFilter or QueryParamFilter:
 
 ```python
-# Method 1: SearchFilter
+# Option 1: SearchFilter
 search_fields = ["name", "description"]
 
-# Method 2: QueryParamFilter
+# Option 2: QueryParamFilter
 filter_fields = {
     "name": "name__icontains",
 }
 ```
 
-### How to disable a specific filter?
+### How do I disable a filter?
 
 ```python
 class ProductViewSet(BaseViewSet):
-    # Use only part of the filters
+    # Use only some filters
     filter_class = [
-            SearchFilter,
-            QueryParamFilter,
-            # Do not use JsonLogicFilter and OrderingFactory
-        ]
+        SearchFilter,
+        QueryParamFilter,
+        # Do not use OrderingFactory
+    ]
 ```
 
-## Next Steps
+## Next steps
 
-- Learn [Pagination](pagination.md) to understand how it combines with filtering
-- Read [Views](viewsets.md) to learn about the full functionality of ViewSet
-- View [API Reference](../../api-reference.md) for detailed API documentation
+- Study [Pagination](pagination.md) to learn how to combine it with filtering
+- Read [Views](viewsets.md) for the complete functionality of ViewSets
+- See the [Filters API](../../api/filters.md) for detailed API documentation

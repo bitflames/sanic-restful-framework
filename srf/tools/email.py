@@ -8,68 +8,58 @@ from pydantic import BaseModel, EmailStr, Field
 from sanic.log import logger
 
 from srf.config.settings import EmailConfig
+from srf.templates.template import templates
 
 
 class EmailValidator(BaseModel):
     email: EmailStr
 
 
-class EmailCodeVerifySchema(BaseModel):
-    confirmations: str = Field(..., pattern=r"^\d{5}$")
-    email: EmailStr
-    # expire_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(minutes=10))
+class EmailCodeVerifySchema(EmailValidator):
+    confirmations: str = Field(..., pattern=r"^\d{6}$", strict=False)
 
 
-def send_email(to_email, subject="", content="") -> bool:
-    """
-    send email by SMTP
-
-    to_email:
-    subject:
-    content:
-    """
-
-    # Sender's mailbox configuration (needs to be modified to your mailbox information)
+def send_email(to_email: str, subject: str, content: str) -> bool:
     from_email = EmailConfig.from_email
-    smtp_server = EmailConfig.smtp_server  # SMTP server address
-    smtp_port = int(EmailConfig.smtp_port)  # e.g. 587 or 465
+    smtp_server = EmailConfig.smtp_server
+    smtp_port = int(EmailConfig.smtp_port)
     password = EmailConfig.password
 
-    msg = MIMEMultipart()
-    msg['From'] = from_email
-    msg['To'] = to_email
-    msg['Subject'] = Header(subject, 'utf-8')
-    msg.attach(MIMEText(content, 'plain', 'utf-8'))
+    message = MIMEMultipart("alternative")
+    message["From"] = from_email
+    message["To"] = to_email
+    message["Subject"] = Header(subject, "utf-8")
+    message.attach(MIMEText(content, "html", "utf-8"))
 
-    # Connect to the SMTP server and send mail
     server = None
+
     try:
         if smtp_port == 465:
-            # SSL connect
-            server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+            server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=15)
         else:
-            server = smtplib.SMTP(smtp_server, smtp_port)
-            server.starttls()  # TLS encryption
+            server = smtplib.SMTP(smtp_server, smtp_port, timeout=15)
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
 
         server.login(from_email, password)
-        server.sendmail(from_email, [to_email], msg.as_string())
+        server.sendmail(from_email, [to_email], message.as_string())
         return True
+
     except Exception:  # noqa: BLE001
         logger.exception("Email send failed to=%s", to_email)
         return False
+
     finally:
         if server is not None:
             try:
                 server.quit()
             except Exception:  # noqa: BLE001
-                logger.warning("Failed to cleanly quit SMTP server connection", exc_info=True)
+                logger.warning("Failed to close SMTP connection", exc_info=True)
 
 
-# async def send_email(to_email: str, subject: str = "", content: str = "") -> bool:
-#     return await asyncio.to_thread(_send_email, to_email, subject, content)
+async def send_template_email(to_email: str, subject: str, template_name: str, context: dict) -> bool:
+    template = templates.get_template(template_name)
+    content = template.render(**context)
 
-
-async def send_verify_code(to_email, verify_code) -> bool:
-    content = f"""Your verification code: {verify_code}, valid within one minute"""
-    subject = "Platform Verification Code"
     return await asyncio.to_thread(send_email, to_email, subject, content)

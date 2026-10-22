@@ -69,36 +69,28 @@ SOCIAL_CONFIG = {
     "github": {
         "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),
         "CLIENT_SECRET": os.getenv("GITHUB_CLIENT_SECRET"),
-        "REDIRECT_URI": os.getenv("GITHUB_REDIRECT_URI"),
         "AUTHORIZE_URL": os.getenv("AUTHORIZE_URL", "https://github.com/login/oauth/authorize"),
+        "REDIRECT_URI": os.getenv("GITHUB_REDIRECT_URI"),
         "ACCESS_TOKEN_URL": os.getenv("ACCESS_TOKEN_URL", "https://github.com/login/oauth/access_token"),
-        "OAUTHCALLBACK": os.getenv("OAUTHCALLBACK"),
+        "OAUTH_SUCCESS_REDIRECT_URI": os.getenv("OAUTH_SUCCESS_REDIRECT_URI"),
         "GITHUB_USER": "https://api.github.com/user",
         "GITHUB_USER_EMAIL": "https://api.github.com/user/emails",
     }
 }
 
 
-# SRF authentication-free URL paths (full path match, not last segment)
-NON_AUTH_ENDPOINTS = [
-    "/api/auth/register",
-    "/api/auth/login",
-    "/api/auth/refresh",
-    "/api/auth/send-verification-email",
-    "/api/auth/social/github/login",
-    "/api/auth/social/callback",
-    "/api/auth/social/github/login_by_code",
-]
-
 # Minimum password length
 MIN_PASSWORD_LENGTH = 8
 
 SOCIAL_LOGIN_COOKIE_KEY = "oauth_state"
 SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE = 600  # seconds
-USER_REGISTER_EMAIL_VERIFY_CODE_TTL = 60  # seconds
 
 # Redis key prefix for email verification codes
-EMAIL_CODE_REDIS = "EMAIL_CODE"
+USER_REGISTER_EMAIL_VERIFY_CODE_TTL = 60  # seconds
+USER_REGISTER_EMAIL_CODE = "USER_REGISTER:EMAIL_CODE:{email}"
+# Already tried bud failed times
+USER_REGISTER_EMAIL_CODE_TIMES = "USER_REGISTER:EMAIL_CODE_TIMES:{email}"
+USER_REGISTER_EMAIL_CODE_TIMES_LIMIT = 10
 
 # Default empty; apps can set REQUEST_LIMITERS on Sanic config
 REQUEST_LIMITERS = []

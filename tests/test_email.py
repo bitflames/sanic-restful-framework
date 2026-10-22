@@ -1,110 +1,90 @@
-"""Unit tests for srf.tools.email and auth email verification flow."""
+"""Unit tests for email delivery and email verification endpoints."""
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
-from sanic.exceptions import BadRequest
+from sanic.exceptions import BadRequest, ServerError
 
-from srf.config import settings
-from srf.tools.email import EmailCodeVerifySchema, EmailValidator, send_email, send_verify_code
+from srf.tools.email import EmailCodeVerifySchema, EmailValidator, send_email, send_template_email
 from srf.views.http_status import HTTPStatus
 
 
-class TestEmailValidator:
-    def test_valid_email(self):
-        sch = EmailValidator(email="user@example.com")
-        assert sch.email == "user@example.com"
+class TestEmailSchemas:
+    def test_valid_email_and_six_digit_code(self):
+        schema = EmailCodeVerifySchema(email="User@example.com", confirmations="001234")
+        assert schema.email == "User@example.com"
+        assert schema.confirmations == "001234"
 
-    def test_invalid_email(self):
+    @pytest.mark.parametrize("email", ["invalid", "missing-domain@", "@example.com"])
+    def test_rejects_invalid_email(self, email):
         with pytest.raises(ValidationError):
-            EmailValidator(email="not-an-email")
+            EmailValidator(email=email)
 
-
-class TestEmailCodeVerifySchema:
-    def test_valid_code(self):
-        sch = EmailCodeVerifySchema(email="u@example.com", confirmations="01234")
-        assert sch.confirmations == "01234"
-
-    def test_rejects_non_digit(self):
+    @pytest.mark.parametrize("code", ["12345", "1234567", "12ab56"])
+    def test_rejects_invalid_verification_code(self, code):
         with pytest.raises(ValidationError):
-            EmailCodeVerifySchema(email="u@example.com", confirmations="12ab3")
-
-    def test_rejects_wrong_length(self):
-        with pytest.raises(ValidationError):
-            EmailCodeVerifySchema(email="u@example.com", confirmations="1234")
-
-    def test_keeps_leading_zeros(self):
-        sch = EmailCodeVerifySchema(email="u@example.com", confirmations="00042")
-        assert sch.confirmations == "00042"
-        assert sch.confirmations != "42"
+            EmailCodeVerifySchema(email="user@example.com", confirmations=code)
 
 
 class TestSendEmail:
-    def test_send_email_success(self):
-        mock_server = MagicMock()
-        with (
-            patch("srf.tools.email.EmailConfig") as cfg,
-            patch("srf.tools.email.smtplib.SMTP") as smtp_cls,
-        ):
-            cfg.from_email = "from@example.com"
-            cfg.smtp_server = "smtp.example.com"
-            cfg.smtp_port = "587"
-            cfg.password = "secret"
-            smtp_cls.return_value = mock_server
+    def test_sends_using_starttls(self):
+        server = MagicMock()
+        with patch("srf.tools.email.EmailConfig") as config, patch("srf.tools.email.smtplib.SMTP") as smtp:
+            config.from_email = "from@example.com"
+            config.smtp_server = "smtp.example.com"
+            config.smtp_port = "587"
+            config.password = "secret"
+            smtp.return_value = server
 
-            assert send_email("to@example.com", "subj", "body") is True
-            mock_server.starttls.assert_called_once()
-            mock_server.login.assert_called_once_with("from@example.com", "secret")
-            mock_server.sendmail.assert_called_once()
-            mock_server.quit.assert_called_once()
+            assert send_email("to@example.com", "subject", "body") is True
 
-    def test_send_email_ssl_port(self):
-        mock_server = MagicMock()
-        with (
-            patch("srf.tools.email.EmailConfig") as cfg,
-            patch("srf.tools.email.smtplib.SMTP_SSL") as smtp_ssl,
-        ):
-            cfg.from_email = "from@example.com"
-            cfg.smtp_server = "smtp.example.com"
-            cfg.smtp_port = "465"
-            cfg.password = "secret"
-            smtp_ssl.return_value = mock_server
+        server.starttls.assert_called_once()
+        server.login.assert_called_once_with("from@example.com", "secret")
+        server.sendmail.assert_called_once()
+        server.quit.assert_called_once()
 
-            assert send_email("to@example.com", "subj", "body") is True
-            smtp_ssl.assert_called_once()
-            mock_server.starttls.assert_not_called()
+    def test_uses_ssl_on_port_465(self):
+        server = MagicMock()
+        with patch("srf.tools.email.EmailConfig") as config, patch("srf.tools.email.smtplib.SMTP_SSL") as smtp_ssl:
+            config.from_email = "from@example.com"
+            config.smtp_server = "smtp.example.com"
+            config.smtp_port = "465"
+            config.password = "secret"
+            smtp_ssl.return_value = server
 
-    def test_send_email_failure_returns_false(self):
-        with (
-            patch("srf.tools.email.EmailConfig") as cfg,
-            patch("srf.tools.email.smtplib.SMTP") as smtp_cls,
-        ):
-            cfg.from_email = "from@example.com"
-            cfg.smtp_server = "smtp.example.com"
-            cfg.smtp_port = "587"
-            cfg.password = "secret"
-            mock_server = MagicMock()
-            mock_server.login.side_effect = Exception("auth failed")
-            smtp_cls.return_value = mock_server
+            assert send_email("to@example.com", "subject", "body") is True
 
-            assert send_email("to@example.com", "subj", "body") is False
-            mock_server.quit.assert_called_once()
+        smtp_ssl.assert_called_once()
+        server.starttls.assert_not_called()
 
+    def test_returns_false_on_smtp_error_and_closes_connection(self):
+        server = MagicMock()
+        server.login.side_effect = OSError("connection failed")
+        with patch("srf.tools.email.EmailConfig") as config, patch("srf.tools.email.smtplib.SMTP") as smtp:
+            config.from_email = "from@example.com"
+            config.smtp_server = "smtp.example.com"
+            config.smtp_port = "587"
+            config.password = "secret"
+            smtp.return_value = server
 
-class TestSendVerifyCode:
+            assert send_email("to@example.com", "subject", "body") is False
+
+        server.quit.assert_called_once()
+
     @pytest.mark.asyncio
-    async def test_runs_send_email_in_thread(self):
-        with patch("srf.tools.email.send_email", return_value=True) as send_mock:
-            ok = await send_verify_code("u@example.com", "12345")
-            assert ok is True
-            send_mock.assert_called_once()
-            args = send_mock.call_args[0]
-            assert args[0] == "u@example.com"
-            assert "12345" in args[2]
+    async def test_template_email_renders_then_offloads_smtp(self):
+        with patch("srf.tools.email.asyncio.to_thread", new_callable=AsyncMock, return_value=True) as to_thread:
+            result = await send_template_email("to@example.com", "subject", "email_code.html", {"code": "001234", "duration": "60s"})
+        assert result is True
+        args = to_thread.await_args.args
+        assert args[0] is send_email
+        assert args[1:3] == ("to@example.com", "subject")
+        assert "001234" in args[3]
 
 
-def _make_request(json_body=None, redis=None, auth=None):
+def make_request(json_body=None, redis=None, auth=None):
     request = MagicMock()
     request.json = json_body
     request.app.ctx.redis = redis if redis is not None else AsyncMock()
@@ -112,168 +92,124 @@ def _make_request(json_body=None, redis=None, auth=None):
     return request
 
 
-class TestSendEmailWithRedisCode:
+class TestVerifyEmail:
     @pytest.mark.asyncio
-    async def test_requires_body(self):
-        from srf.auth.viewset import send_email_with_redis_code
+    async def test_requires_json_body(self):
+        from srf.auth.viewset import verify_email
 
-        request = _make_request(json_body=None)
-        with pytest.raises(BadRequest, match="Request body is required"):
-            await send_email_with_redis_code(request)
+        with pytest.raises(BadRequest, match="JSON request body is required"):
+            await verify_email(make_request())
 
     @pytest.mark.asyncio
-    async def test_rate_limits_when_code_exists(self):
-        from srf.auth.viewset import send_email_with_redis_code
+    async def test_stores_code_atomically_and_sends_template(self):
+        from srf.auth.viewset import verify_email
 
         redis = AsyncMock()
-        redis.get = AsyncMock(return_value=b"12345")
-        request = _make_request(json_body={"email": "u@example.com"}, redis=redis)
+        redis.eval = AsyncMock(return_value=1)
+        request = make_request({"email": "USER@example.com"}, redis)
+        with (
+            patch("srf.auth.viewset.generate_code", return_value="001234"),
+            patch("srf.auth.viewset.send_template_email", new_callable=AsyncMock, return_value=True) as send,
+        ):
+            response = await verify_email(request)
 
-        response = await send_email_with_redis_code(request)
+        assert response.status == HTTPStatus.HTTP_200_OK
+        args = redis.eval.await_args.args
+        assert args[0]  # Lua script
+        assert args[1:4] == (2, "USER_REGISTER:EMAIL_CODE:user@example.com", "USER_REGISTER:EMAIL_CODE_TIMES:user@example.com")
+        assert args[4:] == ("001234", 60)
+        send.assert_awaited_once()
+        assert send.await_args.kwargs["to_email"] == "user@example.com"
+        assert send.await_args.kwargs["context"]["code"] == "001234"
+
+    @pytest.mark.asyncio
+    async def test_existing_code_is_rate_limited(self):
+        from srf.auth.viewset import verify_email
+
+        redis = AsyncMock()
+        redis.eval = AsyncMock(return_value=0)
+        with patch("srf.auth.viewset.send_template_email", new_callable=AsyncMock) as send:
+            response = await verify_email(make_request({"email": "user@example.com"}, redis))
         assert response.status == HTTPStatus.HTTP_429_TOO_MANY_REQUESTS
-        redis.set.assert_not_called()
+        send.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_success_sets_redis_and_sends(self):
-        from srf.auth.viewset import send_email_with_redis_code
+    async def test_send_failure_removes_only_its_code_and_raises_server_error(self):
+        from srf.auth.viewset import verify_email
 
         redis = AsyncMock()
-        redis.get = AsyncMock(return_value=None)
-        redis.set = AsyncMock(return_value=True)
-        request = _make_request(json_body={"email": "u@example.com"}, redis=redis)
-
+        redis.eval = AsyncMock(side_effect=[1, 1])
+        request = make_request({"email": "user@example.com"}, redis)
         with (
-            patch("srf.auth.viewset.generate_code", return_value="12345"),
-            patch("srf.auth.viewset.send_verify_code", new_callable=AsyncMock, return_value=True) as send_mock,
+            patch("srf.auth.viewset.generate_code", return_value="001234"),
+            patch("srf.auth.viewset.send_template_email", new_callable=AsyncMock, return_value=False),
+            pytest.raises(ServerError),
         ):
-            response = await send_email_with_redis_code(request)
-
-        assert response.status == 200
-        key = f"{settings.EMAIL_CODE_REDIS}_u@example.com"
-        redis.set.assert_awaited_once_with(
-            key,
-            "12345",
-            ex=settings.USER_REGISTER_EMAIL_VERIFY_CODE_TTL,
-            nx=True,
-        )
-        send_mock.assert_awaited_once_with("u@example.com", "12345")
-        redis.delete.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_deletes_redis_when_send_fails(self):
-        from srf.auth.viewset import send_email_with_redis_code
-
-        redis = AsyncMock()
-        redis.get = AsyncMock(return_value=None)
-        redis.set = AsyncMock(return_value=True)
-        redis.delete = AsyncMock()
-        request = _make_request(json_body={"email": "u@example.com"}, redis=redis)
-
-        with (
-            patch("srf.auth.viewset.generate_code", return_value="12345"),
-            patch("srf.auth.viewset.send_verify_code", new_callable=AsyncMock, return_value=False),
-        ):
-            response = await send_email_with_redis_code(request)
-
-        assert response.status == HTTPStatus.HTTP_500_INTERNAL_SERVER_ERROR
-        key = f"{settings.EMAIL_CODE_REDIS}_u@example.com"
-        redis.delete.assert_awaited_once_with(key)
+            await verify_email(request)
+        assert redis.eval.await_count == 2
 
 
 class TestRegisterEmailCode:
     @pytest.mark.asyncio
-    async def test_requires_body(self):
+    async def test_requires_json_body(self):
         from srf.auth.viewset import register
 
-        request = _make_request(json_body=None)
-        with pytest.raises(BadRequest, match="Request body is required"):
+        with pytest.raises(BadRequest):
+            await register(make_request())
+
+    @pytest.mark.asyncio
+    async def test_invalid_code_returns_bad_request(self):
+        from srf.auth.viewset import register
+
+        redis = AsyncMock()
+        redis.eval = AsyncMock(return_value=0)
+        request = make_request(
+            {"email": "user@example.com", "confirmations": "123456", "username": "alice", "password1": "Secret123", "password2": "Secret123"},
+            redis,
+        )
+        with pytest.raises(BadRequest, match="invalid or has expired"):
             await register(request)
 
     @pytest.mark.asyncio
-    async def test_wrong_code_returns_400_and_deletes(self):
+    async def test_valid_code_creates_user_and_returns_tokens(self):
         from srf.auth.viewset import register
 
         redis = AsyncMock()
-        redis.get = AsyncMock(return_value=b"12345")
-        redis.delete = AsyncMock()
-        request = _make_request(
-            json_body={"email": "u@example.com", "confirmations": "99999", "username": "alice", "password1": "x"},
-            redis=redis,
+        redis.eval = AsyncMock(return_value=1)
+        request = make_request(
+            {"email": "user@example.com", "confirmations": "001234", "username": "alice", "password1": "Secret123", "password2": "Secret123"},
+            redis,
         )
-
-        response = await register(request)
-        assert response.status == HTTPStatus.HTTP_400_BAD_REQUEST
-        redis.delete.assert_awaited()
-
-    @pytest.mark.asyncio
-    async def test_missing_code_returns_400(self):
-        from srf.auth.viewset import register
-
-        redis = AsyncMock()
-        redis.get = AsyncMock(return_value=None)
-        redis.delete = AsyncMock()
-        request = _make_request(
-            json_body={"email": "u@example.com", "confirmations": "12345", "username": "alice", "password1": "x"},
-            redis=redis,
-        )
-
-        response = await register(request)
-        assert response.status == HTTPStatus.HTTP_400_BAD_REQUEST
-
-    @pytest.mark.asyncio
-    async def test_success_creates_user_and_token(self):
-        from srf.auth.viewset import register
-
-        redis = AsyncMock()
-        redis.get = AsyncMock(return_value=b"12345")
-        redis.delete = AsyncMock()
-
-        mock_user = MagicMock()
-        mock_user.id = 1
-        mock_user.name = "alice"
-        mock_user.email = "u@example.com"
-        mock_user.is_active = True
-        mock_user.is_staff = False
-        mock_user.is_superuser = False
-        mock_user.last_login = None
-        mock_user.create_time = MagicMock()
-        mock_user.update_time = MagicMock()
-        mock_role = MagicMock()
-        mock_role.name = "user"
-        mock_user.role = mock_role
-        mock_user.save = AsyncMock()
-
-        auth_inst = MagicMock()
-        auth_inst.generate_access_token = AsyncMock(return_value="tok")
-        auth_inst.generate_refresh_token = AsyncMock(return_value="rtok")
-        auth_inst.config.refresh_token_enabled = MagicMock(return_value=True)
-
-        request = _make_request(
-            json_body={
-                "email": "u@example.com",
-                "confirmations": "12345",
-                "username": "alice",
-                "password1": "Secret123",
-                "password2": "Secret123",
-            },
-            redis=redis,
-            auth=auth_inst,
-        )
-
+        user = MagicMock(id=7)
+        token_payload = {"id": 7, "username": "alice", "access_token": "access", "refresh_token": "refresh"}
         with (
-            patch("srf.auth.viewset.models.User.create_user", new_callable=AsyncMock, return_value=mock_user),
-            patch("srf.auth.auth.UserSchemaReader.model_validate") as reader_validate,
+            patch("srf.auth.viewset.models.User.create_user", new_callable=AsyncMock, return_value=user) as create_user,
+            patch("srf.auth.viewset.update_user_last_login", new_callable=AsyncMock) as update_last_login,
+            patch("srf.auth.viewset.gen_user_access_token", new_callable=AsyncMock, return_value=token_payload),
         ):
-            reader_validate.return_value.model_dump.return_value = {
-                "id": 1,
-                "username": "alice",
-                "email": "u@example.com",
-            }
             response = await register(request)
 
-        assert response.status == 200
-        redis.delete.assert_awaited()
-        auth_inst.generate_access_token.assert_awaited_once()
-        auth_inst.generate_refresh_token.assert_awaited_once()
-        refresh_user = auth_inst.generate_refresh_token.await_args.args[1]
-        assert refresh_user == {"user_id": 1, "username": "alice", "role": "user"}
+        assert response.status == HTTPStatus.HTTP_200_OK
+        assert json.loads(response.body) == token_payload
+        create_user.assert_awaited_once()
+        assert create_user.await_args.args[0]["email"] == "user@example.com"
+        assert create_user.await_args.args[0]["password"] == "Secret123"
+        update_last_login.assert_awaited_once_with(user)
+        assert redis.eval.await_args.args[1:4] == (
+            2,
+            "USER_REGISTER:EMAIL_CODE:user@example.com",
+            "USER_REGISTER:EMAIL_CODE_TIMES:user@example.com",
+        )
+
+    @pytest.mark.asyncio
+    async def test_wrong_code_increments_attempts_and_eventually_locks_out(self):
+        from srf.auth.viewset import register
+
+        redis = AsyncMock()
+        redis.eval = AsyncMock(return_value=2)
+        request = make_request(
+            {"email": "user@example.com", "confirmations": "123456", "username": "alice", "password1": "Secret123", "password2": "Secret123"},
+            redis,
+        )
+        with pytest.raises(BadRequest, match="verification code is invalid"):
+            await register(request)

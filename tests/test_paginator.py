@@ -1,8 +1,8 @@
 """Unit tests for srf.paginator."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
 from srf.paginator import (
@@ -129,9 +129,7 @@ class TestPageNumberPagination:
     async def test_paginate_returns_result(self):
         paginator = PageNumberPagination(queryset=MagicMock(), page=1, page_size=10)
         paginator.queryset.count = AsyncMock(return_value=5)
-        paginator.queryset.offset.return_value.limit = AsyncMock(
-            return_value=[_Row(1, "alice"), _Row(2, "bob")]
-        )
+        paginator.queryset.offset.return_value.limit = AsyncMock(return_value=[_Row(1, "alice"), _Row(2, "bob")])
         result = await paginator.paginate(sch_model=_Reader)
         assert result.count == 5
         assert result.next is False
