@@ -9,7 +9,7 @@
       
       
       
-        <link rel="prev" href="../api-reference/">
+        <link rel="prev" href="../api/http-status/">
       
       
         <link rel="next" href="../release-notes/">
@@ -310,17 +310,18 @@
   
   
   
-    <li class="md-tabs__item">
-      <a href="../api-reference/" class="md-tabs__link">
-        
-  
-  
     
+    
+      <li class="md-tabs__item">
+        <a href="../api/views/" class="md-tabs__link">
+          
+  
   
   API Reference
 
-      </a>
-    </li>
+        </a>
+      </li>
+    
   
 
       
@@ -1372,9 +1373,27 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../api-reference/" class="md-nav__link">
+    
+    
+    
+    
+      
+      
         
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
@@ -1388,7 +1407,219 @@
   
   
 
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/views/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Views
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/routing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Routing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/pagination/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pagination
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/filters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/permissions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Permissions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/http-status/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -1482,19 +1713,19 @@
   <a href="#default-configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Default Configuration
+        Default configuration
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Default Configuration">
+    <nav class="md-nav" aria-label="Default configuration">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#core-jwt" class="md-nav__link">
+  <a href="#pagination-filtering-permissions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Core &amp; JWT
+        Pagination / Filtering / Permissions
       
     </span>
   </a>
@@ -1502,10 +1733,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#authentication-exemptions" class="md-nav__link">
+  <a href="#serialization-and-caching" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Authentication Exemptions
+        Serialization and caching
       
     </span>
   </a>
@@ -1513,65 +1744,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#filters" class="md-nav__link">
+  <a href="#health-checks-and-rate-limiting" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Filters
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#permissions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Permissions
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pagination" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pagination
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#rate-limiting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rate Limiting
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#health-check" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Health Check
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#json-encoding" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        JSON Encoding
+        Health checks and rate limiting
       
     </span>
   </a>
@@ -1590,10 +1766,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#github-oauth" class="md-nav__link">
+  <a href="#social-login" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GitHub OAuth
+        Social login
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#registration-verification-codes-and-passwords" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registration verification codes and passwords
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jwt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JWT
       
     </span>
   </a>
@@ -1606,21 +1804,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#full-example" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Full Example
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#best-practices" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Best Practices
+        Best practices
       
     </span>
   </a>
@@ -1631,7 +1818,7 @@
   <a href="#next-steps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Next Steps
+        Next steps
       
     </span>
   </a>
@@ -1729,19 +1916,19 @@
   <a href="#default-configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Default Configuration
+        Default configuration
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Default Configuration">
+    <nav class="md-nav" aria-label="Default configuration">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#core-jwt" class="md-nav__link">
+  <a href="#pagination-filtering-permissions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Core &amp; JWT
+        Pagination / Filtering / Permissions
       
     </span>
   </a>
@@ -1749,10 +1936,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#authentication-exemptions" class="md-nav__link">
+  <a href="#serialization-and-caching" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Authentication Exemptions
+        Serialization and caching
       
     </span>
   </a>
@@ -1760,65 +1947,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#filters" class="md-nav__link">
+  <a href="#health-checks-and-rate-limiting" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Filters
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#permissions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Permissions
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pagination" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pagination
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#rate-limiting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rate Limiting
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#health-check" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Health Check
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#json-encoding" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        JSON Encoding
+        Health checks and rate limiting
       
     </span>
   </a>
@@ -1837,10 +1969,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#github-oauth" class="md-nav__link">
+  <a href="#social-login" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GitHub OAuth
+        Social login
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#registration-verification-codes-and-passwords" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registration verification codes and passwords
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jwt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JWT
       
     </span>
   </a>
@@ -1853,21 +2007,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#full-example" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Full Example
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#best-practices" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Best Practices
+        Best practices
       
     </span>
   </a>
@@ -1878,7 +2021,7 @@
   <a href="#next-steps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Next Steps
+        Next steps
       
     </span>
   </a>
@@ -1913,167 +2056,255 @@
   <h1>Configuration</h1>
 
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
-<p>SRF uses <code>srf.config.settings</code> (a <code>LazySettings</code>) to read configuration. The lookup order is:</p>
+<p>SRF reads configuration through <code>srf.config.settings</code> (<code>LazySettings</code>). The lookup order is:</p>
 <ol>
-<li><code>app.config</code> bound most recently through <code>settings.set_app(app)</code></li>
-<li>Uppercase default values in the <code>srf.config.settings</code> module</li>
+<li>The <code>app.config</code> most recently bound via <code>settings.set_app(app)</code></li>
+<li>The uppercase defaults defined in the <code>srf.config.settings</code> module</li>
 </ol>
 <h3 id="initialization">Initialization<a class="headerlink" href="#initialization" title="Permanent link">&para;</a></h3>
-<p><code>SECRET_KEY</code> / <code>JWT_SECRET</code> are <strong>no longer</strong> required when importing SRF. When enabling JWT authentication, set it in Sanic configuration and pass it to <code>setup_auth(..., secret=...)</code>:</p>
+<p>Set this up in your Sanic configuration:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sanic</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">settings</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">app</span> <span class="o">=</span> <span class="n">Sanic</span><span class="p">(</span><span class="s2">&quot;MyApp&quot;</span><span class="p">)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">JWT_SECRET</span> <span class="o">=</span> <span class="s2">&quot;Read from a secure environment variable&quot;</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">NON_AUTH_ENDPOINTS</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;login&quot;</span><span class="p">,</span> <span class="s2">&quot;health&quot;</span><span class="p">)</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">settings</span><span class="o">.</span><span class="n">set_app</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">settings</span><span class="o">.</span><span class="n">set_app</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
 </span></code></pre></div>
-<p><code>LazySettings</code> is a process-level singleton. When multiple apps share a process, the latter <code>set_app()</code> will affect all code reading configuration through <code>settings</code>.</p>
-<h3 id="default-configuration">Default Configuration<a class="headerlink" href="#default-configuration" title="Permanent link">&para;</a></h3>
-<h4 id="core-jwt">Core &amp; JWT<a class="headerlink" href="#core-jwt" title="Permanent link">&para;</a></h4>
+<p><code>LazySettings</code> is a process-level singleton. When multiple applications share a single process, a later
+<code>set_app()</code> call affects all code that reads configuration through <code>settings</code>.</p>
+<h3 id="default-configuration">Default configuration<a class="headerlink" href="#default-configuration" title="Permanent link">&para;</a></h3>
+<p>The following options are defined in <code>srf/config/settings.py</code>; the source code is authoritative.</p>
+<h4 id="pagination-filtering-permissions">Pagination / Filtering / Permissions<a class="headerlink" href="#pagination-filtering-permissions" title="Permanent link">&para;</a></h4>
+<p>Defaults used when a ViewSet does not declare the corresponding class attributes.</p>
 <table>
 <thead>
 <tr>
-<th>Name</th>
-<th>Default Value</th>
-<th>Current Usage</th>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>JWT_SECRET</code></td>
-<td>None (must be set by app)</td>
-<td>JWT signing, authentication middleware, OAuth state fallback key</td>
+<td><code>PAGINATION_CLASS</code></td>
+<td><code>PageNumberPagination</code></td>
+<td>Default pagination class</td>
 </tr>
 <tr>
-<td><code>JWT_ACCESS_TOKEN_EXPIRES</code></td>
-<td><code>timedelta(hours=24)</code></td>
-<td>Only defined; <code>setup_auth()</code> currently does not automatically read</td>
+<td><code>DEFAULT_FILTERS</code></td>
+<td><code>[SearchFilter, QueryParamFilter, OrderingFactory]</code></td>
+<td>Default filter chain</td>
+</tr>
+<tr>
+<td><code>DEFAULT_PERMISSION_CLASSES</code></td>
+<td><code>(AllowAny,)</code></td>
+<td>Default permission classes</td>
 </tr>
 </tbody>
 </table>
-<p>To control the expiration settings of <code>sanic-jwt</code>, directly pass the parameters supported by the library to <code>setup_auth()</code>, do not assume <code>JWT_ACCESS_TOKEN_EXPIRES</code> will take effect automatically.</p>
-<h4 id="authentication-exemptions">Authentication Exemptions<a class="headerlink" href="#authentication-exemptions" title="Permanent link">&para;</a></h4>
-<p><code>NON_AUTH_ENDPOINTS</code> is a set of <strong>last segments</strong> of URLs:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">NON_AUTH_ENDPOINTS</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="s2">&quot;register&quot;</span><span class="p">,</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="s2">&quot;login&quot;</span><span class="p">,</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="s2">&quot;send-verification-email&quot;</span><span class="p">,</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="s2">&quot;health&quot;</span><span class="p">,</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="o">...</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">)</span>
+<h4 id="serialization-and-caching">Serialization and caching<a class="headerlink" href="#serialization-and-caching" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BASE_DIR</code></td>
+<td><code>os.getcwd()</code></td>
+<td>Project root directory (process working directory)</td>
+</tr>
+<tr>
+<td><code>CACHE_ROOT</code></td>
+<td><code>BASE_DIR/.diskcache</code></td>
+<td>Cache directory</td>
+</tr>
+<tr>
+<td><code>DATETIME_FORMAT</code></td>
+<td><code>"%Y-%m-%d %H:%M:%S"</code></td>
+<td>Datetime string template</td>
+</tr>
+<tr>
+<td><code>JSON_ENCODER</code></td>
+<td><code>custom_dumps</code></td>
+<td>JSON serialization function (handles <code>datetime</code> / <code>Exception</code>); must be wired into Sanic by the application</td>
+</tr>
+</tbody>
+</table>
+<h4 id="health-checks-and-rate-limiting">Health checks and rate limiting<a class="headerlink" href="#health-checks-and-rate-limiting" title="Permanent link">&para;</a></h4>
+<p>The health check route actually reads <code>app.config.HEALTH_CHECK_LIST</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.health.checks</span><span class="w"> </span><span class="kn">import</span> <span class="n">RedisCheck</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">HEALTH_CHECK_LIST</span> <span class="o">=</span> <span class="p">[</span><span class="n">RedisCheck</span><span class="p">]</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">redis</span> <span class="o">=</span> <span class="n">redis_client</span>
 </span></code></pre></div>
-<p>It does not support full paths or prefix rules. For example, <code>"products"</code> will match both <code>/api/products</code> and <code>/admin/products</code>.</p>
-<h4 id="filters">Filters<a class="headerlink" href="#filters" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.filters.filter</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">JsonLogicFilter</span><span class="p">,</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">OrderingFactory</span><span class="p">,</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">QueryParamFilter</span><span class="p">,</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">SearchFilter</span><span class="p">,</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="p">)</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">DEFAULT_FILTERS</span> <span class="o">=</span> <span class="p">[</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">SearchFilter</span><span class="p">,</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">JsonLogicFilter</span><span class="p">,</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">QueryParamFilter</span><span class="p">,</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">OrderingFactory</span><span class="p">,</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="p">]</span>
-</span></code></pre></div>
-<p>Each <code>GenericAPIView</code> / <code>BaseViewSet</code> instance initializes with <code>settings.DEFAULT_FILTERS</code> if no <code>filter_class</code> is declared on the class.</p>
-<h4 id="permissions">Permissions<a class="headerlink" href="#permissions" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.permission.permission</span><span class="w"> </span><span class="kn">import</span> <span class="n">AllowAny</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">DEFAULT_PERMISSION_CLASSES</span> <span class="o">=</span> <span class="p">(</span><span class="n">AllowAny</span><span class="p">,)</span>
-</span></code></pre></div>
-<p>If a ViewSet does not declare <code>permission_classes</code>, <code>settings.DEFAULT_PERMISSION_CLASSES</code> is used; a class-level declaration takes precedence.</p>
-<h4 id="pagination">Pagination<a class="headerlink" href="#pagination" title="Permanent link">&para;</a></h4>
-<p><code>PAGINATION_CLASS = PageNumberPagination</code> is defined, but the built-in <code>list()</code> currently does not read it, instead directly using <code>PageNumberPagination</code>. There is currently no global <code>PAGE_SIZE</code> or <code>MAX_PAGE_SIZE</code> configuration; the default values are in the pagination class.</p>
-<h4 id="rate-limiting">Rate Limiting<a class="headerlink" href="#rate-limiting" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">REQUEST_LIMITERS</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># No rate limiting by default; list of limiter instances set by app</span>
-</span></code></pre></div>
-<p><code>throttle_rate()</code> reads <code>app.config.REQUEST_LIMITERS</code> (treated as <code>[]</code> if missing).</p>
-<h4 id="health-check">Health Check<a class="headerlink" href="#health-check" title="Permanent link">&para;</a></h4>
-<p><code>HEALTH_CHECK_LIST</code> defaults to an empty list. The health check route actually reads <code>app.config.HEALTH_CHECK_LIST</code>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.health.checks</span><span class="w"> </span><span class="kn">import</span> <span class="n">RedisCheck</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">HEALTH_CHECK_LIST</span> <span class="o">=</span> <span class="p">[</span><span class="n">RedisCheck</span><span class="p">]</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">redis</span> <span class="o">=</span> <span class="n">redis_client</span>
-</span></code></pre></div>
-<h4 id="json-encoding">JSON Encoding<a class="headerlink" href="#json-encoding" title="Permanent link">&para;</a></h4>
-<p><code>DATETIME_FORMAT</code> defaults to <code>"%Y-%m-%d %H:%M:%S"</code>.
-<code>JSON_ENCODER</code> points to <code>custom_dumps()</code>, which can serialize <code>datetime</code> and exception objects.
-Whether to use this encoder depends on how the app integrates with Sanic configuration; SRF will not automatically install it.</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HEALTH_CHECK_LIST</code></td>
+<td><code>[]</code></td>
+<td>List of health check classes</td>
+</tr>
+<tr>
+<td><code>REQUEST_LIMITERS</code></td>
+<td><code>[]</code></td>
+<td>List of rate limiters; <code>throttle_rate()</code> reads from <code>app.config.REQUEST_LIMITERS</code></td>
+</tr>
+<tr>
+<td><code>THROTTLE_REDIS_PREFIX</code></td>
+<td><code>"throttle"</code></td>
+<td>Redis key prefix for rate limiting (<code>RedisStorage</code>)</td>
+</tr>
+</tbody>
+</table>
 <h4 id="email">Email<a class="headerlink" href="#email" title="Permanent link">&para;</a></h4>
-<p><code>srf.tools.email.send_email()</code> directly reads <code>srf.config.settings.EmailConfig</code>:</p>
+<p><code>srf.tools.email.send_email()</code> reads <code>srf.config.settings.EmailConfig</code> directly.
+Each attribute is read from environment variables at module import time, so changing <code>app.config</code>
+afterwards does not alter the email configuration.</p>
 <table>
 <thead>
 <tr>
 <th>Attribute</th>
-<th>Environment Variable</th>
+<th>Environment variable</th>
+<th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>from_email</code></td>
+<td><code>EmailConfig.from_email</code></td>
 <td><code>FROM_EMAIL</code></td>
+<td>Sender address</td>
 </tr>
 <tr>
-<td><code>smtp_server</code></td>
+<td><code>EmailConfig.smtp_server</code></td>
 <td><code>SMTP_SERVER</code></td>
+<td>SMTP server</td>
 </tr>
 <tr>
-<td><code>smtp_port</code></td>
+<td><code>EmailConfig.smtp_port</code></td>
 <td><code>SMTP_PORT</code></td>
+<td>SMTP port</td>
 </tr>
 <tr>
-<td><code>password</code></td>
+<td><code>EmailConfig.password</code></td>
 <td><code>PASSWORD</code></td>
+<td>Email password / authorization code</td>
 </tr>
 </tbody>
 </table>
-<p>These values are read when the module is imported; subsequent modifications to <code>app.config</code> will not change the email configuration.
-Port judgment uses <code>int(smtp_port) == 465</code> to choose SSL.</p>
-<h4 id="github-oauth">GitHub OAuth<a class="headerlink" href="#github-oauth" title="Permanent link">&para;</a></h4>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">SOCIAL_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="s2">&quot;github&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>        <span class="s2">&quot;CLIENT_ID&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        <span class="s2">&quot;CLIENT_SECRET&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="s2">&quot;REDIRECT_URI&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        <span class="o">...</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="p">}</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">}</span>
-</span></code></pre></div>
-<p>The default values come from corresponding uppercase environment variables. You can override them entirely via <code>app.config.SOCIAL_CONFIG</code> before binding the app.</p>
-<h3 id="full-example">Full Example<a class="headerlink" href="#full-example" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sanic</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">srfconfig</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">app</span> <span class="o">=</span> <span class="n">Sanic</span><span class="p">(</span><span class="s2">&quot;MyApp&quot;</span><span class="p">)</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="p">{</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>        <span class="s2">&quot;JWT_SECRET&quot;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;SECRET_KEY&quot;</span><span class="p">],</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>        <span class="s2">&quot;NON_AUTH_ENDPOINTS&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;login&quot;</span><span class="p">,</span> <span class="s2">&quot;register&quot;</span><span class="p">,</span> <span class="s2">&quot;health&quot;</span><span class="p">),</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>        <span class="s2">&quot;HEALTH_CHECK_LIST&quot;</span><span class="p">:</span> <span class="p">[],</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    <span class="p">}</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="p">)</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="n">settings</span><span class="o">.</span><span class="n">set_app</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
-</span></code></pre></div>
-<h3 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h3>
+<h4 id="social-login">Social login<a class="headerlink" href="#social-login" title="Permanent link">&para;</a></h4>
+<p>See <a href="../usage/core/social-login/">Social Login</a> for a GitHub OAuth tutorial.</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SOCIAL_CONFIG</code></td>
+<td>GitHub OAuth configuration dict</td>
+<td>Fields are read from environment variables such as <code>GITHUB_CLIENT_ID</code></td>
+</tr>
+<tr>
+<td><code>SOCIAL_LOGIN_COOKIE_KEY</code></td>
+<td><code>"oauth_state"</code></td>
+<td>Cookie name for the OAuth state</td>
+</tr>
+<tr>
+<td><code>SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE</code></td>
+<td><code>600</code></td>
+<td>State cookie lifetime (seconds)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="registration-verification-codes-and-passwords">Registration verification codes and passwords<a class="headerlink" href="#registration-verification-codes-and-passwords" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MIN_PASSWORD_LENGTH</code></td>
+<td><code>8</code></td>
+<td>Minimum password length</td>
+</tr>
+<tr>
+<td><code>USER_REGISTER_EMAIL_VERIFY_CODE_TTL</code></td>
+<td><code>60</code></td>
+<td>Verification code lifetime (seconds)</td>
+</tr>
+<tr>
+<td><code>USER_REGISTER_EMAIL_CODE</code></td>
+<td><code>"USER_REGISTER:EMAIL_CODE:{email}"</code></td>
+<td>Redis key template for verification codes</td>
+</tr>
+<tr>
+<td><code>USER_REGISTER_EMAIL_CODE_TIMES</code></td>
+<td><code>"USER_REGISTER:EMAIL_CODE_TIMES:{email}"</code></td>
+<td>Redis key template for failure counts</td>
+</tr>
+<tr>
+<td><code>USER_REGISTER_EMAIL_CODE_TIMES_LIMIT</code></td>
+<td><code>10</code></td>
+<td>Maximum number of verification failures</td>
+</tr>
+</tbody>
+</table>
+<h4 id="jwt">JWT<a class="headerlink" href="#jwt" title="Permanent link">&para;</a></h4>
+<p><code>JWT_SECRET</code> (signing key) and <code>SECRET_KEY</code> (refresh token digest key) have no defaults and must be
+set explicitly in <code>app.config</code>. <code>setup_auth()</code> converts <code>JWT_ACCESS_TOKEN_EXPIRES</code> to seconds and
+passes it to <code>sanic-jwt</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>JWT_ACCESS_TOKEN_EXPIRES</code></td>
+<td><code>timedelta(hours=24)</code></td>
+<td>Access token lifetime</td>
+</tr>
+<tr>
+<td><code>JWT_REFRESH_TOKEN_EXPIRES</code></td>
+<td><code>timedelta(days=30)</code></td>
+<td>Refresh token lifetime</td>
+</tr>
+</tbody>
+</table>
+<h3 id="best-practices">Best practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong>Separate sensitive information</strong>: Use environment variables for keys and passwords</li>
-<li><strong>Multi-environment configuration</strong>: Create different configurations for development, testing, and production environments</li>
-<li><strong>Use .env files</strong>: Convenient for local development</li>
-<li><strong>Do not commit .env</strong>: Add <code>.env</code> to <code>.gitignore</code></li>
-<li><strong>Provide default values</strong>: Provide default values using the second parameter of <code>os.getenv()</code></li>
-<li><strong>Validate configuration</strong>: Verify required configuration items (e.g., <code>JWT_SECRET</code>) when the application starts</li>
-<li><strong>Document configuration</strong>: Explain all configuration items in README</li>
+<li><strong>Separate sensitive information</strong>: use environment variables for secrets and passwords</li>
+<li><strong>Multi-environment configuration</strong>: create different configurations for development, testing, and production</li>
+<li><strong>Use a .env file</strong>: convenient for local development</li>
+<li><strong>Do not commit .env</strong>: add <code>.env</code> to <code>.gitignore</code></li>
+<li><strong>Provide defaults</strong>: use the second argument of <code>os.getenv()</code> for default values</li>
+<li><strong>Validate configuration</strong>: validate required options (such as <code>JWT_SECRET</code>) at application startup</li>
+<li><strong>Document configuration</strong>: describe all options in the README</li>
 </ol>
-<h3 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h3>
+<h3 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Read <a href="../usage/core/authentication/">Authentication</a> configuration for JWT.</li>
-<li>Read <a href="../usage/project-setup/">Project Setup</a> to view the complete application structure.</li>
+<li>Read <a href="../usage/core/authentication/">Authentication</a> to configure JWT.</li>
+<li>Read <a href="../usage/project-setup/">Project Setup</a> for a complete application structure.</li>
 </ul>
 
 

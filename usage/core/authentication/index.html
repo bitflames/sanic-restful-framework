@@ -312,17 +312,18 @@
   
   
   
-    <li class="md-tabs__item">
-      <a href="../../../api-reference/" class="md-tabs__link">
-        
-  
-  
     
+    
+      <li class="md-tabs__item">
+        <a href="../../../api/views/" class="md-tabs__link">
+          
+  
   
   API Reference
 
-      </a>
-    </li>
+        </a>
+      </li>
+    
   
 
       
@@ -947,10 +948,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#register-authentication-routes" class="md-nav__link">
+  <a href="#registering-authentication-routes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Register Authentication Routes
+        Registering authentication routes
       
     </span>
   </a>
@@ -969,10 +970,21 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#password-and-token-algorithms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Password and token algorithms
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#authentication-middleware" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Authentication Middleware
+        Authentication middleware
       
     </span>
   </a>
@@ -980,10 +992,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#public-endpoints" class="md-nav__link">
+  <a href="#getting-the-current-user" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Public Endpoints
+        Getting the current user
       
     </span>
   </a>
@@ -991,32 +1003,66 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-current-user" class="md-nav__link">
+  <a href="#registration-and-email-verification-codes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Get Current User
+        Registration and email verification codes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Registration and email verification codes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#registration-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registration flow
       
     </span>
   </a>
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+        
           <li class="md-nav__item">
-  <a href="#registration-and-email-verification" class="md-nav__link">
+  <a href="#registering-the-user-resource-api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Registration and Email Verification
+        Registering the user resource API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Registering the user resource API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#user-resource-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User resource flow
       
     </span>
   </a>
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+        
           <li class="md-nav__item">
-  <a href="#security-considerations" class="md-nav__link">
+  <a href="#security-notes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Security Considerations
+        Security notes
       
     </span>
   </a>
@@ -1529,9 +1575,27 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../../api-reference/" class="md-nav__link">
+    
+    
+    
+    
+      
+      
         
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
@@ -1545,7 +1609,219 @@
   
   
 
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/views/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Views
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/routing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Routing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/pagination/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pagination
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/filters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/permissions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Permissions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/http-status/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -1652,10 +1928,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#register-authentication-routes" class="md-nav__link">
+  <a href="#registering-authentication-routes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Register Authentication Routes
+        Registering authentication routes
       
     </span>
   </a>
@@ -1674,10 +1950,21 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#password-and-token-algorithms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Password and token algorithms
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#authentication-middleware" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Authentication Middleware
+        Authentication middleware
       
     </span>
   </a>
@@ -1685,10 +1972,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#public-endpoints" class="md-nav__link">
+  <a href="#getting-the-current-user" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Public Endpoints
+        Getting the current user
       
     </span>
   </a>
@@ -1696,32 +1983,66 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-current-user" class="md-nav__link">
+  <a href="#registration-and-email-verification-codes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Get Current User
+        Registration and email verification codes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Registration and email verification codes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#registration-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registration flow
       
     </span>
   </a>
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+        
           <li class="md-nav__item">
-  <a href="#registration-and-email-verification" class="md-nav__link">
+  <a href="#registering-the-user-resource-api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Registration and Email Verification
+        Registering the user resource API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Registering the user resource API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#user-resource-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User resource flow
       
     </span>
   </a>
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+        
           <li class="md-nav__item">
-  <a href="#security-considerations" class="md-nav__link">
+  <a href="#security-notes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Security Considerations
+        Security notes
       
     </span>
   </a>
@@ -1756,111 +2077,195 @@
   <h1>JWT Authentication</h1>
 
 <h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h2>
-<p>SRF provides login and Token generation through <code>sanic-jwt</code>, and provides an independent request middleware to verify Bearer Token, load the user, and write it to <code>request.ctx.user</code>.</p>
+<p>SRF provides login and token generation through <code>sanic-jwt</code>, and provides a separate request middleware that
+validates the Bearer token, loads the user, and writes it to <code>request.ctx.user</code>.</p>
 <h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h3>
-<p>Before enabling JWT, set <code>JWT_SECRET</code> in Sanic configuration (no longer requiring the <code>SECRET_KEY</code> environment variable to be set before import):</p>
+<p>Before enabling JWT, set <code>JWT_SECRET</code> in the Sanic configuration (there is no longer a requirement to set the
+<code>SECRET_KEY</code> environment variable before import):</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sanic</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">settings</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">app</span> <span class="o">=</span> <span class="n">Sanic</span><span class="p">(</span><span class="s2">&quot;MyApp&quot;</span><span class="p">)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">JWT_SECRET</span> <span class="o">=</span> <span class="s2">&quot;Read from a secure environment variable&quot;</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">settings</span><span class="o">.</span><span class="n">set_app</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">JWT_SECRET</span> <span class="o">=</span> <span class="s2">&quot;read from a secure environment variable&quot;</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">SECRET_KEY</span> <span class="o">=</span> <span class="s2">&quot;read from another secure environment variable&quot;</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">settings</span><span class="o">.</span><span class="n">set_app</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
 </span></code></pre></div>
-<h3 id="register-authentication-routes">Register Authentication Routes<a class="headerlink" href="#register-authentication-routes" title="Permanent link">&para;</a></h3>
-<p>It is recommended to use <code>register_auth_urls()</code>. It calls <code>setup_auth()</code> and registers routes for registration, logout, verification email, and GitHub login:</p>
+<p><code>JWT_SECRET</code> is used for JWT signing; <code>SECRET_KEY</code> is used to compute the HMAC digest of refresh tokens, and the database stores only the digest, never the raw token.
+Set both to different strong random secrets. Plaintext refresh tokens already in the database before an upgrade, as well as old tokens after changing <code>SECRET_KEY</code>, will fail validation, so users need to log in again.</p>
+<h3 id="registering-authentication-routes">Registering authentication routes<a class="headerlink" href="#registering-authentication-routes" title="Permanent link">&para;</a></h3>
+<p>Using <code>register_auth_urls()</code> is recommended. It calls <code>setup_auth()</code> and registers the authentication, registration,
+logout, and email verification routes:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.auth.route</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_auth_urls</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">register_auth_urls</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/api/auth&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p><code>register_auth_urls()</code> internally uses <code>secret=app.config.JWT_SECRET</code>, so ensure it's set.</p>
-<p>Do not call <code>setup_auth()</code> before <code>register_auth_urls()</code>, otherwise it will cause duplicate initialization of <code>sanic-jwt</code>.</p>
-<p>If only the <code>sanic-jwt</code> login endpoint is needed, you can initialize directly:</p>
+<p><code>register_auth_urls()</code> reads and validates <code>JWT_SECRET</code> and <code>SECRET_KEY</code> from <code>app.config</code>.</p>
+<p>Do not call <code>setup_auth()</code> and then <code>register_auth_urls()</code>, otherwise <code>sanic-jwt</code> will be initialized
+twice.</p>
+<p>If you need to pass other <code>sanic-jwt</code> initialization arguments to <code>setup_auth()</code>, initialize it directly:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.auth.viewset</span><span class="w"> </span><span class="kn">import</span> <span class="n">setup_auth</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">jwt</span> <span class="o">=</span> <span class="n">setup_auth</span><span class="p">(</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">app</span><span class="p">,</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">secret</span><span class="o">=</span><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">JWT_SECRET</span><span class="p">,</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">url_prefix</span><span class="o">=</span><span class="s2">&quot;/api/auth&quot;</span><span class="p">,</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">login_path</span><span class="o">=</span><span class="s2">&quot;login&quot;</span><span class="p">,</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="c1"># Other keyword arguments are passed to sanic_jwt.Initialize</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">)</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">jwt</span> <span class="o">=</span> <span class="n">jwt</span>  <span class="c1"># register_auth_urls() mounts it the same way</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">url_prefix</span><span class="o">=</span><span class="s2">&quot;/api/auth&quot;</span><span class="p">,</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="c1"># Remaining keyword arguments are passed to sanic_jwt.Initialize</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
 </span></code></pre></div>
-<p><code>setup_auth()</code> has fixed usage of SRF's own <code>authenticate</code> and <code>retrieve_user</code>, do not pass these names as keyword arguments again, otherwise it will cause duplicate parameter errors. If <code>secret</code> is missing, it throws <code>ServerError("secret is required")</code>.</p>
+<p><code>setup_auth()</code> already uses SRF's own <code>authenticate</code> and <code>retrieve_user</code>; do not pass these two names as keyword arguments, or a duplicate argument error will occur.
+<code>setup_auth()</code> does not read JWT secrets from keyword arguments; if a valid <code>app.config.JWT_SECRET</code> or <code>app.config.SECRET_KEY</code> is missing, it raises <code>ServerError</code> during initialization.</p>
 <h3 id="login">Login<a class="headerlink" href="#login" title="Permanent link">&para;</a></h3>
-<p>The default login endpoint is <code>POST /api/auth/login</code>. It supports email or username:</p>
+<p>The default login endpoint is <code>POST /api/auth</code>. The request fields are <code>account</code> and <code>password</code>; <code>account</code> can be an email address or a username:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Email login</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/login<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;email&quot;:&quot;user@example.com&quot;,&quot;password&quot;:&quot;password123&quot;}&#39;</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;account&quot;:&quot;user@example.com&quot;,&quot;password&quot;:&quot;password123&quot;}&#39;</span>
 </span></code></pre></div>
-<p><code>authenticate()</code> uses <code>UserLoginSchema</code> (at least one of <code>email</code> or <code>username</code>), queries <code>srf.auth.models.User</code>, checks if the user is active and verifies the password, then puts <code>user_id</code>, <code>username</code>, and role name into the JWT payload.</p>
-<h3 id="authentication-middleware">Authentication Middleware<a class="headerlink" href="#authentication-middleware" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.middleware.authmiddleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_user_to_request_ctx</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nd">@app</span><span class="o">.</span><span class="n">middleware</span><span class="p">(</span><span class="s2">&quot;request&quot;</span><span class="p">)</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">auth_middleware</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="k">await</span> <span class="n">set_user_to_request_ctx</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+<p>Response (returned by <code>sanic-jwt</code>):</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&quot;access_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;******&quot;</span><span class="p">,</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">&quot;refresh_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;******&quot;</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">}</span>
 </span></code></pre></div>
-<p>Protected requests must carry:</p>
-<div class="language-http highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="err">Authorization: Bearer &lt;token&gt;</span>
+<p><code>authenticate()</code> uses <code>UserLoginSchema</code> (<code>account</code>, <code>password</code>),
+queries <code>srf.auth.models.User</code>, checks whether the user is enabled and verifies the password, then puts <code>user_id</code>,
+<code>username</code>, and role names into the JWT payload.</p>
+<h3 id="password-and-token-algorithms">Password and token algorithms<a class="headerlink" href="#password-and-token-algorithms" title="Permanent link">&para;</a></h3>
+<p>SRF stores passwords as <strong>bcrypt(SHA-256(password))</strong>: the password is first encoded as UTF-8 and
+hashed with SHA-256, then bcrypt generates the password hash using a random salt. Login performs the same
+preprocessing and then verifies with <code>bcrypt.checkpw()</code>.</p>
+<h3 id="authentication-middleware">Authentication middleware<a class="headerlink" href="#authentication-middleware" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.middleware.authmiddleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_user_to_request_ctx</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nd">@app</span><span class="o">.</span><span class="n">middleware</span><span class="p">(</span><span class="s2">&quot;request&quot;</span><span class="p">)</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">auth_middleware</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="k">await</span> <span class="n">set_user_to_request_ctx</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
 </span></code></pre></div>
-<p>The middleware decodes the Token using HS256 and <code>app.config.JWT_SECRET</code>, queries the user via <code>retrieve_user()</code>, and sets <code>request.ctx.user</code>. It returns 401 if the Token is missing, malformed, expired, invalid, or the user does not exist.</p>
-<h3 id="public-endpoints">Public Endpoints<a class="headerlink" href="#public-endpoints" title="Permanent link">&para;</a></h3>
-<p><code>NON_AUTH_ENDPOINTS</code> stores the last segment of the path, not the full URL:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">NON_AUTH_ENDPOINTS</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="s2">&quot;login&quot;</span><span class="p">,</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="s2">&quot;register&quot;</span><span class="p">,</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="s2">&quot;send-verification-email&quot;</span><span class="p">,</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="s2">&quot;health&quot;</span><span class="p">,</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="o">...</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="p">)</span>
+<p>When a token is included, the request header format is:</p>
+<div class="language-http highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="err">Authorization: Bearer &lt;token&gt;</span>
 </span></code></pre></div>
-<p>For example, <code>"products"</code> will exempt both <code>/api/products</code> and <code>/admin/products</code>. It does not support prefix matching, nor can it distinguish HTTP methods. For applications with high security requirements, it is recommended to modify the middleware to use explicit <code>(method, path)</code> rules.</p>
-<h3 id="get-current-user">Get Current User<a class="headerlink" href="#get-current-user" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ProductViewSet</span><span class="p">(</span><span class="n">BaseViewSet</span><span class="p">):</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">):</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>        <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_current_user</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>        <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>            <span class="k">return</span> <span class="n">json</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;Not logged in&quot;</span><span class="p">},</span> <span class="n">status</span><span class="o">=</span><span class="mi">401</span><span class="p">)</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>        <span class="c1"># ...</span>
+<p>The middleware decodes the token using HS256 and <code>app.config.JWT_SECRET</code>, looks up the user through
+<code>retrieve_user()</code>, and sets <code>request.ctx.user</code>. Specific behavior:</p>
+<ul>
+<li>When there is no authentication information, or the token's signature/expiry validation fails, <code>extract_payload()</code> returns
+  <code>None</code>, <code>request.ctx.user</code> is set to <code>None</code>, and the request continues as an anonymous request. Whether
+  to reject it is then decided by permission classes (for example, <code>IsAuthenticated</code> returns 403).</li>
+<li>When the <code>Authorization</code> header format is invalid (for example, the <code>Bearer</code> prefix is missing), JWT is not initialized,
+  or the user corresponding to the token does not exist, the middleware raises <code>Unauthorized</code> (401).</li>
+</ul>
+<p>Therefore, if you need distinct 401 and 403 semantics, do not rely solely on the authentication middleware; handle it uniformly
+in permission classes or a global exception handler.</p>
+<h3 id="getting-the-current-user">Getting the current user<a class="headerlink" href="#getting-the-current-user" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic.response</span><span class="w"> </span><span class="kn">import</span> <span class="n">json</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.views</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseViewSet</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">ProductViewSet</span><span class="p">(</span><span class="n">BaseViewSet</span><span class="p">):</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">):</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>        <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_current_user</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>        <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>            <span class="k">return</span> <span class="n">json</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;Not logged in&quot;</span><span class="p">},</span> <span class="n">status</span><span class="o">=</span><span class="mi">401</span><span class="p">)</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>        <span class="c1"># ...</span>
 </span></code></pre></div>
-<p><code>get_current_user()</code> first returns <code>request.ctx.user</code>, and if it does not exist, tries <code>request.auth</code>.</p>
-<h3 id="registration-and-email-verification">Registration and Email Verification<a class="headerlink" href="#registration-and-email-verification" title="Permanent link">&para;</a></h3>
-<p><code>register_auth_urls()</code> registers the following endpoints:</p>
+<p><code>get_current_user()</code> returns <code>request.ctx.user</code> first, and falls back to
+<code>request.auth</code> when it does not exist.</p>
+<h3 id="registration-and-email-verification-codes">Registration and email verification codes<a class="headerlink" href="#registration-and-email-verification-codes" title="Permanent link">&para;</a></h3>
+<p><code>register_auth_urls()</code> registers the following common SRF routes:</p>
 <ul>
 <li><code>POST /api/auth/register</code></li>
-<li><code>POST /api/auth/send-verification-email</code></li>
+<li><code>POST /api/auth/verify_email</code></li>
 <li><code>POST /api/auth/logout</code></li>
-<li><code>GET /api/auth/social/github/login</code></li>
-<li><code>GET /api/auth/social/callback</code></li>
-<li><code>GET /api/auth/social/github/login_by_code</code></li>
 </ul>
-<p>Registration and verification email rely on:</p>
-<ul>
-<li><code>request.app.ctx.redis</code></li>
-<li><code>settings.EMAIL_CODE_REDIS</code> (or <code>app.config.EMAIL_CODE_REDIS</code>), default is <code>"EMAIL_CODE"</code>; Redis key format is <code>EMAIL_CODE_{email}</code></li>
-<li>Environment variables <code>FROM_EMAIL</code>, <code>SMTP_SERVER</code>, <code>SMTP_PORT</code>, <code>PASSWORD</code></li>
-</ul>
-<p>Email-related APIs:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.tools.email</span><span class="w"> </span><span class="kn">import</span> <span class="n">send_email</span><span class="p">,</span> <span class="n">send_verify_code</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Send mail: synchronous SMTP (do not call it for long directly on the event loop)</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">ok</span> <span class="o">=</span> <span class="n">send_email</span><span class="p">(</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">to_email</span><span class="o">=</span><span class="s2">&quot;user@example.com&quot;</span><span class="p">,</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">subject</span><span class="o">=</span><span class="s2">&quot;Verification Code&quot;</span><span class="p">,</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="n">content</span><span class="o">=</span><span class="s2">&quot;Your verification code is: 12345&quot;</span><span class="p">,</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="p">)</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="c1"># Registration verification codes only: fixed subject/body; runs send_email via asyncio.to_thread</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="n">ok</span> <span class="o">=</span> <span class="k">await</span> <span class="n">send_verify_code</span><span class="p">(</span><span class="s2">&quot;user@example.com&quot;</span><span class="p">,</span> <span class="s2">&quot;12345&quot;</span><span class="p">)</span>
+<p>Email verification code settings are defined in <code>srf.config.settings</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>USER_REGISTER_EMAIL_VERIFY_CODE_TTL</code></td>
+<td><code>60</code></td>
+<td>Verification code lifetime in seconds</td>
+</tr>
+<tr>
+<td><code>USER_REGISTER_EMAIL_CODE</code></td>
+<td><code>USER_REGISTER:EMAIL_CODE:{email}</code></td>
+<td>Key format for the verification code in Redis; <code>{email}</code> is replaced with the email address</td>
+</tr>
+<tr>
+<td><code>USER_REGISTER_EMAIL_CODE_TIMES</code></td>
+<td><code>USER_REGISTER:EMAIL_CODE_TIMES:{email}</code></td>
+<td>Key format for the number of failed attempts in Redis</td>
+</tr>
+<tr>
+<td><code>USER_REGISTER_EMAIL_CODE_TIMES_LIMIT</code></td>
+<td><code>10</code></td>
+<td>Maximum allowed failed verification attempts</td>
+</tr>
+</tbody>
+</table>
+<h4 id="registration-flow">Registration flow<a class="headerlink" href="#registration-flow" title="Permanent link">&para;</a></h4>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># 1. Send the email verification code (repeated requests within the validity period return 429)</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/verify_email<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;email&quot;:&quot;user@example.com&quot;}&#39;</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># 2. Read the 6-digit verification code from the email and submit the registration</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/register<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;email&quot;:&quot;user@example.com&quot;,&quot;username&quot;:&quot;zhangsan&quot;,&quot;password1&quot;:&quot;Passw0rd123&quot;,&quot;password2&quot;:&quot;Passw0rd123&quot;,&quot;confirmations&quot;:&quot;123456&quot;}&#39;</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># 3. Successful registration returns access_token / refresh_token; then access with the token</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>curl<span class="w"> </span>http://localhost:8000/api/users/self<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1"># 4. Log out (revoke the current user&#39;s refresh token)</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/logout<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span>
 </span></code></pre></div>
-<h3 id="security-considerations">Security Considerations<a class="headerlink" href="#security-considerations" title="Permanent link">&para;</a></h3>
+<h3 id="registering-the-user-resource-api">Registering the user resource API<a class="headerlink" href="#registering-the-user-resource-api" title="Permanent link">&para;</a></h3>
+<p><code>register_auth_urls()</code> only registers authentication flow routes and does not automatically register the user management resource. When you need the user profile and password change APIs, explicitly import <code>UserViewSet</code> and register it with <code>SanicRouter</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.auth.viewset</span><span class="w"> </span><span class="kn">import</span> <span class="n">UserViewSet</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.route</span><span class="w"> </span><span class="kn">import</span> <span class="n">SanicRouter</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">user_router</span> <span class="o">=</span> <span class="n">SanicRouter</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;api&quot;</span><span class="p">)</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">user_router</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">&quot;users&quot;</span><span class="p">,</span> <span class="n">UserViewSet</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;users&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>This resource provides <code>GET /api/users/self</code>, <code>POST /api/users/change-password</code>, and CRUD routes for <code>/api/users</code>. Regular users can only access their own user record; superusers can manage other users. The password change request body is:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span><span class="nt">&quot;old_password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;old-password&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;password1&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;new-password&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;password2&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;new-password&quot;</span><span class="p">}</span>
+</span></code></pre></div>
+<p>After a successful change, the user's saved refresh tokens are revoked; access tokens that have already been issued remain usable until they expire.</p>
+<h4 id="user-resource-flow">User resource flow<a class="headerlink" href="#user-resource-flow" title="Permanent link">&para;</a></h4>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># 1. Log in to get a token (account supports username or email)</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;account&quot;:&quot;user@example.com&quot;,&quot;password&quot;:&quot;Passw0rd123&quot;}&#39;</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># 2. Query your own profile</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>curl<span class="w"> </span>http://localhost:8000/api/users/self<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># 3. Update your own profile</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>curl<span class="w"> </span>-X<span class="w"> </span>PATCH<span class="w"> </span>http://localhost:8000/api/users/&lt;user-id&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;username&quot;:&quot;new-name&quot;}&#39;</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1"># 4. Change the password (log in again after success)</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/users/change-password<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;old_password&quot;:&quot;Passw0rd123&quot;,&quot;password1&quot;:&quot;NewPassw0rd456&quot;,&quot;password2&quot;:&quot;NewPassw0rd456&quot;}&#39;</span>
+</span></code></pre></div>
+<h3 id="security-notes">Security notes<a class="headerlink" href="#security-notes" title="Permanent link">&para;</a></h3>
 <ul>
-<li>HTTPS must be used in production environments, and <code>JWT_SECRET</code> must be read from a key management system.</li>
-<li>The default code does not have token refresh or real logout/revocation mechanisms.</li>
-<li>GitHub OAuth uses random <code>state</code> and HMAC-signed cookies with timestamps to prevent tampering, and constant-time comparison is also performed during callback.</li>
+<li>Production environments must use HTTPS and read <code>JWT_SECRET</code> from a secret management system.</li>
+<li>SRF enables refresh token persistence; logout revokes the current user's refresh token, but access tokens that have already been issued remain valid until they expire.</li>
+<li>GitHub OAuth is an optional authentication feature; see the <a href="../social-login/">Social Login tutorial</a> for configuration and integration.</li>
 </ul>
 
 
