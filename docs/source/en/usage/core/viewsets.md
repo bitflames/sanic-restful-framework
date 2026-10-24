@@ -211,7 +211,7 @@ class ProductViewSet(BaseViewSet):
 
         Use self.request when the request is needed (as_view assigns it).
         """
-        data = sch_model.model_dump(exclude_unset=True)
+        data = sch_model.model_dump(exclude_unset=True, by_alias=False)
         data["created_by"] = self.request.ctx.user.id
 
         obj = await Product.create(**data)
@@ -288,10 +288,10 @@ class ProductViewSet(BaseViewSet):
 ```
 
 !!! warning "This is not a partial update currently"
-    `update()` validates the full request body with the schema returned by `get_schema()` using `strict=True`,
-    and `PUT` and `PATCH` map to the same method. The request body must satisfy the schema's required fields;
-    `exclude_unset=True` in `perform_update()` only controls "which validated fields are written back to the database",
-    and does not mean required fields can be omitted.
+`update()` validates the full request body with the schema returned by `get_schema()` using `strict=True`,
+and `PUT` and `PATCH` map to the same method. The request body must satisfy the schema's required fields;
+`exclude_unset=True` in `perform_update()` only controls "which validated fields are written back to the database",
+and does not mean required fields can be omitted.
 
 **Response**:
 
@@ -310,30 +310,30 @@ class ProductViewSet(BaseViewSet):
 class ProductViewSet(BaseViewSet):
     async def perform_update(self, sch_model, orm_model):
         """Custom update logic
-        
+
         Args:
             sch_model: The validated Pydantic schema instance
             orm_model: The ORM model instance to update
-        
+
         Returns:
             The updated model instance
         """
         # Record the change
         old_price = orm_model.price
-        
+
         # Update the object
-        update_data = sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"])
+        update_data = sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"], by_alias=False)
         for field, value in update_data.items():
             if hasattr(orm_model, field):
                 setattr(orm_model, field, value)
         await orm_model.save()
-        
+
         # If the price changed, send a notification
         if old_price != orm_model.price:
             await self.notify_price_change(orm_model, old_price)
-        
+
         return orm_model
-    
+
     async def notify_price_change(self, product, old_price):
         """Notify about a price change"""
         # Implement notification logic
@@ -354,20 +354,20 @@ class ProductViewSet(BaseViewSet):
 class ProductViewSet(BaseViewSet):
     async def perform_destroy(self, orm_model):
         """Custom delete logic
-        
+
         Args:
             orm_model: The ORM model instance to delete
         """
         # Soft delete
         orm_model.is_deleted = True
         await orm_model.save()
-        
+
         # Or hard delete
         # await orm_model.delete()
-        
+
         # Clean up related data
         await self.cleanup_related(orm_model)
-    
+
     async def cleanup_related(self, product):
         """Clean up related data"""
         # Delete related images, comments, etc.
@@ -481,7 +481,7 @@ class ProductViewSet(BaseViewSet):
     # Custom update logic
     async def perform_update(self, sch_model, orm_model):
         """Update a product"""
-        update_data = sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"])
+        update_data = sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"], by_alias=False)
         for field, value in update_data.items():
             if hasattr(orm_model, field):
                 setattr(orm_model, field, value)
@@ -493,7 +493,7 @@ class ProductViewSet(BaseViewSet):
 ## Best practices
 
 1. **Keep ViewSets concise**: complex logic should live in a service layer or manager
-2. **Use perform_* methods**: override `perform_create`, `perform_update`, and similar methods for custom logic
+2. **Use perform\_\* methods**: override `perform_create`, `perform_update`, and similar methods for custom logic
 3. **Use @action sensibly**: add custom endpoints for specific business operations
 4. **Permission checks**: always add permission checks for sensitive operations
 5. **Exception handling**: catch and handle possible exceptions

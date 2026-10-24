@@ -21,10 +21,10 @@ from srf.views.http_status import HTTPStatus
 
 ### 1xx - Informational responses
 
-| Status code | Constant | Description |
-|--------|------|------|
-| 100 | `HTTP_100_CONTINUE` | Continue |
-| 101 | `HTTP_101_SWITCHING_PROTOCOLS` | Switching protocols |
+| Status code | Constant                       | Description         |
+| ----------- | ------------------------------ | ------------------- |
+| 100         | `HTTP_100_CONTINUE`            | Continue            |
+| 101         | `HTTP_101_SWITCHING_PROTOCOLS` | Switching protocols |
 
 ```python
 from srf.views.http_status import is_informational
@@ -36,12 +36,12 @@ if is_informational(status_code):
 
 ### 2xx - Successful responses
 
-| Status code | Constant | Description | Use case |
-| -------- | ------ | ------ | ---------- |
-| 200 | `HTTP_200_OK` | OK | GET, PUT, PATCH succeeded |
-| 201 | `HTTP_201_CREATED` | Created | POST created a resource successfully |
-| 202 | `HTTP_202_ACCEPTED` | Accepted | Request accepted for asynchronous processing |
-| 204 | `HTTP_204_NO_CONTENT` | No content | DELETE succeeded |
+| Status code | Constant              | Description | Use case                                     |
+| ----------- | --------------------- | ----------- | -------------------------------------------- |
+| 200         | `HTTP_200_OK`         | OK          | GET, PUT, PATCH succeeded                    |
+| 201         | `HTTP_201_CREATED`    | Created     | POST created a resource successfully         |
+| 202         | `HTTP_202_ACCEPTED`   | Accepted    | Request accepted for asynchronous processing |
+| 204         | `HTTP_204_NO_CONTENT` | No content  | DELETE succeeded                             |
 
 ```python
 from sanic.response import HTTPResponse, json
@@ -58,11 +58,11 @@ return HTTPResponse(status=HTTPStatus.HTTP_204_NO_CONTENT)
 
 ### 3xx - Redirects
 
-| Status code | Constant | Description |
-| -------- | ------ | ------ |
-| 301 | `HTTP_301_MOVED_PERMANENTLY` | Permanent redirect |
-| 302 | `HTTP_302_FOUND` | Temporary redirect |
-| 304 | `HTTP_304_NOT_MODIFIED` | Not modified |
+| Status code | Constant                     | Description        |
+| ----------- | ---------------------------- | ------------------ |
+| 301         | `HTTP_301_MOVED_PERMANENTLY` | Permanent redirect |
+| 302         | `HTTP_302_FOUND`             | Temporary redirect |
+| 304         | `HTTP_304_NOT_MODIFIED`      | Not modified       |
 
 ```python
 from sanic.response import redirect
@@ -76,16 +76,16 @@ return redirect("/temp-url", status=HTTPStatus.HTTP_302_FOUND)
 
 ### 4xx - Client errors
 
-| Status code | Constant | Description | Use case |
-| -------- | ------ | ------ | ---------- |
-| 400 | `HTTP_400_BAD_REQUEST` | Bad request | Invalid parameters or format |
-| 401 | `HTTP_401_UNAUTHORIZED` | Unauthorized | Not logged in, invalid token |
-| 403 | `HTTP_403_FORBIDDEN` | Forbidden | Insufficient permissions |
-| 404 | `HTTP_404_NOT_FOUND` | Not found | Resource does not exist |
-| 405 | `HTTP_405_METHOD_NOT_ALLOWED` | Method not allowed | HTTP method is not supported |
-| 409 | `HTTP_409_CONFLICT` | Conflict | Resource conflict (such as duplicate creation) |
-| 422 | `HTTP_422_UNPROCESSABLE_ENTITY` | Unprocessable entity | Data validation failed |
-| 429 | `HTTP_429_TOO_MANY_REQUESTS` | Too many requests | Rate limit exceeded |
+| Status code | Constant                        | Description          | Use case                                       |
+| ----------- | ------------------------------- | -------------------- | ---------------------------------------------- |
+| 400         | `HTTP_400_BAD_REQUEST`          | Bad request          | Invalid parameters or format                   |
+| 401         | `HTTP_401_UNAUTHORIZED`         | Unauthorized         | Not logged in, invalid token                   |
+| 403         | `HTTP_403_FORBIDDEN`            | Forbidden            | Insufficient permissions                       |
+| 404         | `HTTP_404_NOT_FOUND`            | Not found            | Resource does not exist                        |
+| 405         | `HTTP_405_METHOD_NOT_ALLOWED`   | Method not allowed   | HTTP method is not supported                   |
+| 409         | `HTTP_409_CONFLICT`             | Conflict             | Resource conflict (such as duplicate creation) |
+| 422         | `HTTP_422_UNPROCESSABLE_ENTITY` | Unprocessable entity | Data validation failed                         |
+| 429         | `HTTP_429_TOO_MANY_REQUESTS`    | Too many requests    | Rate limit exceeded                            |
 
 ```python
 from sanic.response import HTTPResponse, json
@@ -119,12 +119,12 @@ return json({"error": "Too many requests"}, status=HTTPStatus.HTTP_429_TOO_MANY_
 
 ### 5xx - Server errors
 
-| Status code | Constant | Description | Use case |
-| -------- | ------ | ------ | ---------- |
-| 500 | `HTTP_500_INTERNAL_SERVER_ERROR` | Internal server error | Uncaught exception |
-| 501 | `HTTP_501_NOT_IMPLEMENTED` | Not implemented | Feature not implemented |
-| 502 | `HTTP_502_BAD_GATEWAY` | Bad gateway | Upstream service error |
-| 503 | `HTTP_503_SERVICE_UNAVAILABLE` | Service unavailable | Maintenance or overload |
+| Status code | Constant                         | Description           | Use case                |
+| ----------- | -------------------------------- | --------------------- | ----------------------- |
+| 500         | `HTTP_500_INTERNAL_SERVER_ERROR` | Internal server error | Uncaught exception      |
+| 501         | `HTTP_501_NOT_IMPLEMENTED`       | Not implemented       | Feature not implemented |
+| 502         | `HTTP_502_BAD_GATEWAY`           | Bad gateway           | Upstream service error  |
+| 503         | `HTTP_503_SERVICE_UNAVAILABLE`   | Service unavailable   | Maintenance or overload |
 
 ```python
 # Server error
@@ -197,7 +197,7 @@ class ProductViewSet(BaseViewSet):
             return json({"error": "SKU already exists"}, status=HTTPStatus.HTTP_409_CONFLICT)
 
         # Create
-        obj = await Product.create(**schema.model_dump())
+        obj = await Product.create(**schema.model_dump(by_alias=False))
 
         # Serialize
         data = schema_class.model_validate(obj, from_attributes=True).model_dump(mode="json")
@@ -251,13 +251,13 @@ class ProductViewSet(BaseViewSet):
 
 ### Standard RESTful API responses
 
-| Operation | Method | Success status code | Failure status codes |
-| ------ | ------ | ----------- | ----------- |
-| List | GET | 200 OK | 400 Bad Request |
-| Detail | GET | 200 OK | 404 Not Found |
-| Create | POST | 201 Created | 400 Bad Request, 409 Conflict, 422 Unprocessable Entity |
-| Update | PUT/PATCH | 200 OK | 400 Bad Request, 404 Not Found, 422 Unprocessable Entity |
-| Delete | DELETE | 204 No Content | 404 Not Found |
+| Operation | Method    | Success status code | Failure status codes                                     |
+| --------- | --------- | ------------------- | -------------------------------------------------------- |
+| List      | GET       | 200 OK              | 400 Bad Request                                          |
+| Detail    | GET       | 200 OK              | 404 Not Found                                            |
+| Create    | POST      | 201 Created         | 400 Bad Request, 409 Conflict, 422 Unprocessable Entity  |
+| Update    | PUT/PATCH | 200 OK              | 400 Bad Request, 404 Not Found, 422 Unprocessable Entity |
+| Delete    | DELETE    | 204 No Content      | 404 Not Found                                            |
 
 ### Asynchronous tasks
 

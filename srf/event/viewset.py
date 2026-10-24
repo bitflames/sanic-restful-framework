@@ -26,7 +26,7 @@ class EventViewSet(CreateAndReadOnlyModelViewSet):
         return models.Event.all()
 
     async def perform_create(self, sch_model: BaseModel) -> models.Event:
-        data = sch_model.model_dump(exclude_unset=True, exclude_none=True)
+        data = sch_model.model_dump(exclude_unset=True, exclude_none=True, by_alias=False)
         request = getattr(self, "request", None)
         user = getattr(getattr(request, "ctx", None), "user", None) if request is not None else None
         if user is not None:

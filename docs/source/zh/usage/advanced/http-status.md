@@ -21,10 +21,10 @@ from srf.views.http_status import HTTPStatus
 
 ### 1xx - 信息响应
 
-| 状态码 | 常量 | 说明 |
-|--------|------|------|
-| 100 | `HTTP_100_CONTINUE` | 继续 |
-| 101 | `HTTP_101_SWITCHING_PROTOCOLS` | 切换协议 |
+| 状态码 | 常量                           | 说明     |
+| ------ | ------------------------------ | -------- |
+| 100    | `HTTP_100_CONTINUE`            | 继续     |
+| 101    | `HTTP_101_SWITCHING_PROTOCOLS` | 切换协议 |
 
 ```python
 from srf.views.http_status import is_informational
@@ -36,12 +36,12 @@ if is_informational(status_code):
 
 ### 2xx - 成功响应
 
-| 状态码 | 常量 | 说明 | 使用场景 |
-| -------- | ------ | ------ | ---------- |
-| 200 | `HTTP_200_OK` | 成功 | GET, PUT, PATCH 成功 |
-| 201 | `HTTP_201_CREATED` | 已创建 | POST 创建资源成功 |
-| 202 | `HTTP_202_ACCEPTED` | 已接受 | 异步处理请求 |
-| 204 | `HTTP_204_NO_CONTENT` | 无内容 | DELETE 成功 |
+| 状态码 | 常量                  | 说明   | 使用场景             |
+| ------ | --------------------- | ------ | -------------------- |
+| 200    | `HTTP_200_OK`         | 成功   | GET, PUT, PATCH 成功 |
+| 201    | `HTTP_201_CREATED`    | 已创建 | POST 创建资源成功    |
+| 202    | `HTTP_202_ACCEPTED`   | 已接受 | 异步处理请求         |
+| 204    | `HTTP_204_NO_CONTENT` | 无内容 | DELETE 成功          |
 
 ```python
 from sanic.response import HTTPResponse, json
@@ -58,11 +58,11 @@ return HTTPResponse(status=HTTPStatus.HTTP_204_NO_CONTENT)
 
 ### 3xx - 重定向
 
-| 状态码 | 常量 | 说明 |
-| -------- | ------ | ------ |
-| 301 | `HTTP_301_MOVED_PERMANENTLY` | 永久重定向 |
-| 302 | `HTTP_302_FOUND` | 临时重定向 |
-| 304 | `HTTP_304_NOT_MODIFIED` | 未修改 |
+| 状态码 | 常量                         | 说明       |
+| ------ | ---------------------------- | ---------- |
+| 301    | `HTTP_301_MOVED_PERMANENTLY` | 永久重定向 |
+| 302    | `HTTP_302_FOUND`             | 临时重定向 |
+| 304    | `HTTP_304_NOT_MODIFIED`      | 未修改     |
 
 ```python
 from sanic.response import redirect
@@ -76,16 +76,16 @@ return redirect("/temp-url", status=HTTPStatus.HTTP_302_FOUND)
 
 ### 4xx - 客户端错误
 
-| 状态码 | 常量 | 说明 | 使用场景 |
-| -------- | ------ | ------ | ---------- |
-| 400 | `HTTP_400_BAD_REQUEST` | 错误请求 | 参数错误、格式错误 |
-| 401 | `HTTP_401_UNAUTHORIZED` | 未授权 | 未登录、Token 无效 |
-| 403 | `HTTP_403_FORBIDDEN` | 禁止访问 | 权限不足 |
-| 404 | `HTTP_404_NOT_FOUND` | 未找到 | 资源不存在 |
-| 405 | `HTTP_405_METHOD_NOT_ALLOWED` | 方法不允许 | HTTP 方法不支持 |
-| 409 | `HTTP_409_CONFLICT` | 冲突 | 资源冲突（如重复创建） |
-| 422 | `HTTP_422_UNPROCESSABLE_ENTITY` | 无法处理 | 数据验证失败 |
-| 429 | `HTTP_429_TOO_MANY_REQUESTS` | 请求过多 | 超过限流限制 |
+| 状态码 | 常量                            | 说明       | 使用场景               |
+| ------ | ------------------------------- | ---------- | ---------------------- |
+| 400    | `HTTP_400_BAD_REQUEST`          | 错误请求   | 参数错误、格式错误     |
+| 401    | `HTTP_401_UNAUTHORIZED`         | 未授权     | 未登录、Token 无效     |
+| 403    | `HTTP_403_FORBIDDEN`            | 禁止访问   | 权限不足               |
+| 404    | `HTTP_404_NOT_FOUND`            | 未找到     | 资源不存在             |
+| 405    | `HTTP_405_METHOD_NOT_ALLOWED`   | 方法不允许 | HTTP 方法不支持        |
+| 409    | `HTTP_409_CONFLICT`             | 冲突       | 资源冲突（如重复创建） |
+| 422    | `HTTP_422_UNPROCESSABLE_ENTITY` | 无法处理   | 数据验证失败           |
+| 429    | `HTTP_429_TOO_MANY_REQUESTS`    | 请求过多   | 超过限流限制           |
 
 ```python
 from sanic.response import HTTPResponse, json
@@ -119,12 +119,12 @@ return json({"error": "请求过多"}, status=HTTPStatus.HTTP_429_TOO_MANY_REQUE
 
 ### 5xx - 服务器错误
 
-| 状态码 | 常量 | 说明 | 使用场景 |
-| -------- | ------ | ------ | ---------- |
-| 500 | `HTTP_500_INTERNAL_SERVER_ERROR` | 服务器错误 | 未捕获的异常 |
-| 501 | `HTTP_501_NOT_IMPLEMENTED` | 未实现 | 功能未实现 |
-| 502 | `HTTP_502_BAD_GATEWAY` | 网关错误 | 上游服务错误 |
-| 503 | `HTTP_503_SERVICE_UNAVAILABLE` | 服务不可用 | 服务维护、过载 |
+| 状态码 | 常量                             | 说明       | 使用场景       |
+| ------ | -------------------------------- | ---------- | -------------- |
+| 500    | `HTTP_500_INTERNAL_SERVER_ERROR` | 服务器错误 | 未捕获的异常   |
+| 501    | `HTTP_501_NOT_IMPLEMENTED`       | 未实现     | 功能未实现     |
+| 502    | `HTTP_502_BAD_GATEWAY`           | 网关错误   | 上游服务错误   |
+| 503    | `HTTP_503_SERVICE_UNAVAILABLE`   | 服务不可用 | 服务维护、过载 |
 
 ```python
 # 服务器错误
@@ -197,7 +197,7 @@ class ProductViewSet(BaseViewSet):
             return json({"error": "SKU 已存在"}, status=HTTPStatus.HTTP_409_CONFLICT)
 
         # 创建
-        obj = await Product.create(**schema.model_dump())
+        obj = await Product.create(**schema.model_dump(by_alias=False))
 
         # 序列化
         data = schema_class.model_validate(obj, from_attributes=True).model_dump(mode="json")
@@ -251,13 +251,13 @@ class ProductViewSet(BaseViewSet):
 
 ### RESTful API 标准响应
 
-| 操作 | 方法 | 成功状态码 | 失败状态码 |
-| ------ | ------ | ----------- | ----------- |
-| 列表 | GET | 200 OK | 400 Bad Request |
-| 详情 | GET | 200 OK | 404 Not Found |
-| 创建 | POST | 201 Created | 400 Bad Request, 409 Conflict, 422 Unprocessable Entity |
-| 更新 | PUT/PATCH | 200 OK | 400 Bad Request, 404 Not Found, 422 Unprocessable Entity |
-| 删除 | DELETE | 204 No Content | 404 Not Found |
+| 操作 | 方法      | 成功状态码     | 失败状态码                                               |
+| ---- | --------- | -------------- | -------------------------------------------------------- |
+| 列表 | GET       | 200 OK         | 400 Bad Request                                          |
+| 详情 | GET       | 200 OK         | 404 Not Found                                            |
+| 创建 | POST      | 201 Created    | 400 Bad Request, 409 Conflict, 422 Unprocessable Entity  |
+| 更新 | PUT/PATCH | 200 OK         | 400 Bad Request, 404 Not Found, 422 Unprocessable Entity |
+| 删除 | DELETE    | 204 No Content | 404 Not Found                                            |
 
 ### 异步任务
 

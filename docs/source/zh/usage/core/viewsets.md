@@ -211,7 +211,7 @@ class ProductViewSet(BaseViewSet):
 
         需要 request 时使用 self.request（as_view 会赋值）。
         """
-        data = sch_model.model_dump(exclude_unset=True)
+        data = sch_model.model_dump(exclude_unset=True, by_alias=False)
         data["created_by"] = self.request.ctx.user.id
 
         obj = await Product.create(**data)
@@ -288,10 +288,10 @@ class ProductViewSet(BaseViewSet):
 ```
 
 !!! warning "当前不是部分更新"
-    `update()` 会用 `get_schema()` 返回的 Schema 以 `strict=True` 校验完整请求体，
-    并且 `PUT` 与 `PATCH` 映射到同一个方法。请求体必须满足该 Schema 的必填字段；
-    `perform_update()` 中的 `exclude_unset=True` 只决定“校验通过后哪些字段写回数据库”，
-    不代表可以省略必填字段。
+`update()` 会用 `get_schema()` 返回的 Schema 以 `strict=True` 校验完整请求体，
+并且 `PUT` 与 `PATCH` 映射到同一个方法。请求体必须满足该 Schema 的必填字段；
+`perform_update()` 中的 `exclude_unset=True` 只决定“校验通过后哪些字段写回数据库”，
+不代表可以省略必填字段。
 
 **响应**：
 
@@ -310,30 +310,30 @@ class ProductViewSet(BaseViewSet):
 class ProductViewSet(BaseViewSet):
     async def perform_update(self, sch_model, orm_model):
         """自定义更新逻辑
-        
+
         Args:
             sch_model: 已验证的 Pydantic Schema 实例
             orm_model: 要更新的 ORM 模型实例
-        
+
         Returns:
             更新后的模型实例
         """
         # 记录变更
         old_price = orm_model.price
-        
+
         # 更新对象
-        update_data = sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"])
+        update_data = sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"], by_alias=False)
         for field, value in update_data.items():
             if hasattr(orm_model, field):
                 setattr(orm_model, field, value)
         await orm_model.save()
-        
+
         # 如果价格变化，发送通知
         if old_price != orm_model.price:
             await self.notify_price_change(orm_model, old_price)
-        
+
         return orm_model
-    
+
     async def notify_price_change(self, product, old_price):
         """通知价格变化"""
         # 实现通知逻辑
@@ -354,20 +354,20 @@ class ProductViewSet(BaseViewSet):
 class ProductViewSet(BaseViewSet):
     async def perform_destroy(self, orm_model):
         """自定义删除逻辑
-        
+
         Args:
             orm_model: 要删除的 ORM 模型实例
         """
         # 软删除
         orm_model.is_deleted = True
         await orm_model.save()
-        
+
         # 或硬删除
         # await orm_model.delete()
-        
+
         # 清理关联数据
         await self.cleanup_related(orm_model)
-    
+
     async def cleanup_related(self, product):
         """清理关联数据"""
         # 删除相关的图片、评论等
@@ -474,14 +474,14 @@ class ProductViewSet(BaseViewSet):
     # 自定义创建逻辑
     async def perform_create(self, sch_model):
         """创建产品；需要 request 时用 self.request"""
-        data = sch_model.model_dump(exclude_unset=True)
+        data = sch_model.model_dump(exclude_unset=True, by_alias=False)
         data["created_by"] = self.request.ctx.user.id
         return await Product.create(**data)
 
     # 自定义更新逻辑
     async def perform_update(self, sch_model, orm_model):
         """更新产品"""
-        update_data = sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"])
+        update_data = sch_model.model_dump(exclude_unset=True, exclude_none=True, exclude=["id"], by_alias=False)
         for field, value in update_data.items():
             if hasattr(orm_model, field):
                 setattr(orm_model, field, value)
@@ -493,7 +493,7 @@ class ProductViewSet(BaseViewSet):
 ## 最佳实践
 
 1. **保持 ViewSet 简洁**：复杂逻辑应该放在 Service 层或 Manager 中
-2. **使用 perform_* 方法**：重写 `perform_create`、`perform_update` 等方法来自定义逻辑
+2. **使用 perform\_\* 方法**：重写 `perform_create`、`perform_update` 等方法来自定义逻辑
 3. **合理使用 @action**：为特定的业务操作添加自定义端点
 4. **权限检查**：始终为敏感操作添加权限检查
 5. **异常处理**：捕获并处理可能的异常

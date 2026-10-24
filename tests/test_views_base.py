@@ -107,7 +107,7 @@ class TestUpdateModelMixin:
 
         result = await mixin.perform_update(sch_model, orm_model)
 
-        sch_model.model_dump.assert_called_once_with(exclude_unset=True)
+        sch_model.model_dump.assert_called_once_with(exclude_unset=True, by_alias=False)
         orm_model.update_from_dict.assert_called_once_with({"name": "alice"})
         orm_model.save.assert_awaited_once()
         assert result is orm_model

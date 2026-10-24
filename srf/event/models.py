@@ -1,11 +1,13 @@
 from tortoise import fields
 from tortoise.models import Model as TorModel
 
+from srf.auth.models import User
+
 
 class Event(TorModel):
     """Audit / activity event log."""
 
-    user = fields.ForeignKeyField("models.User", related_name="events", null=True, on_delete=fields.SET_NULL)
+    user = fields.ForeignKeyField(User, related_name="events", null=True, on_delete=fields.SET_NULL)
 
     action = fields.CharField(max_length=128, null=True, description="action of the event")
     obj_id = fields.IntField(null=True, description="id of the object")

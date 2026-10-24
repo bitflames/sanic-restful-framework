@@ -63,17 +63,13 @@ def validate_request(show_errors: bool = False):
                 if not show_errors:
                     message = "Invalid request parameters."
                 else:
-                    errors = [
+                    message = [
                         {
                             "field": ".".join(str(part) for part in error["loc"]),
                             "reason": error["msg"],
                         }
                         for error in exc.errors()
                     ]
-                    message = {
-                        "message": "Request validation failed.",
-                        "errors": errors,
-                    }
 
                 raise BadRequest(message) from None
 

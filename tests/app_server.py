@@ -100,7 +100,7 @@ class SecretNoteViewSet(BaseViewSet):
         return SecretNoteSchemaWriter
 
     async def perform_create(self, sch_model: SecretNoteSchemaWriter):
-        data = sch_model.model_dump(exclude_unset=True)
+        data = sch_model.model_dump(exclude_unset=True, by_alias=False)
         data["owner_id"] = self.request.ctx.user.id
         try:
             return await self.get_queryset().model.create(**data)

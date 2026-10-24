@@ -79,9 +79,7 @@ class AbstractUser(TorModel):
 
 
 class User(AbstractUser, PasswordMixin):
-    roles: fields.ManyToManyRelation["Role"] = fields.ManyToManyField(
-        "models.Role", through="auth_user_roles", related_name="users", backward_key="user_id"
-    )
+    roles: fields.ManyToManyRelation[Role] = fields.ManyToManyField(Role, through="auth_user_roles", related_name="users", backward_key="user_id")
     oauth_accounts: fields.ReverseRelation["OAuthAccount"]
 
     class Meta:
@@ -139,7 +137,7 @@ class User(AbstractUser, PasswordMixin):
 class OAuthAccount(TorModel):
     provider = fields.CharField(max_length=20)  # "github" / "google" / ...
     provider_user_id = fields.CharField(max_length=100)  # user id
-    user = fields.ForeignKeyField("models.User", related_name="oauth_accounts", on_delete=fields.CASCADE)
+    user = fields.ForeignKeyField(User, related_name="oauth_accounts", on_delete=fields.CASCADE)
 
     class Meta:
         table = "auth_oauth_accounts"
@@ -149,7 +147,7 @@ class OAuthAccount(TorModel):
 class RefreshToken(TorModel):
     """Persisted JWT refresh token (one active row per user; login replaces it)."""
 
-    user = fields.ForeignKeyField("models.User", related_name="refresh_tokens", on_delete=fields.CASCADE, unique=True)
+    user = fields.ForeignKeyField(User, related_name="refresh_tokens", on_delete=fields.CASCADE, unique=True)
     token = fields.CharField(max_length=512, null=False)
     expires_at = fields.DatetimeField(null=False)
     create_time = fields.DatetimeField(auto_now_add=True)

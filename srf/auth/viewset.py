@@ -62,6 +62,19 @@ def setup_auth(app: Sanic, *args, **kwargs) -> Initialize:
 
     url_prefix = kwargs.pop("url_prefix", "/api/auth")
 
+    # setup_auth is authoritative for these; drop caller-provided values instead of
+    # forwarding them into Initialize() where they would collide.
+    for reserved in (
+        "authenticate",
+        "retrieve_user",
+        "secret",
+        "refresh_token_enabled",
+        "store_refresh_token",
+        "retrieve_refresh_token",
+        "expiration_delta",
+    ):
+        kwargs.pop(reserved, None)
+
     # TODO: sanic_jwt does not read app.config from Configuration; SRF will replace sanic_jwt in the future
 
     return Initialize(
@@ -157,7 +170,7 @@ async def register(request: Request):
     email_cache_key = settings.USER_REGISTER_EMAIL_CODE.format(email=email)
     times_key = settings.USER_REGISTER_EMAIL_CODE_TIMES.format(email=email)
 
-    user_data = sch_user_in.model_dump(exclude_unset=True, exclude_none=True, exclude={"password", "password_confirm"})
+    user_data = sch_user_in.model_dump(exclude_unset=True, exclude_none=True, exclude={"password", "password_confirm"}, by_alias=False)
     user_data["password"] = schema.unwrap_secret(sch_user_in.password)
 
     result = await redis.eval(
@@ -334,6 +347,7 @@ class UserViewSet(BaseViewSet):
             exclude_unset=True,
             exclude_none=True,
             exclude={"password", "password_confirm", "is_superuser", "is_active"},
+            by_alias=False,
         )
         user_data["password"] = schema.unwrap_secret(sch_model.password)
         return await models.User.create_user(user_data)

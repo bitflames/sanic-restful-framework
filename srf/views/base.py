@@ -39,7 +39,7 @@ class CreateModelMixin:
         sch_model: instance of BaseModel
         """
         try:
-            return await self.get_queryset().model.create(**sch_model.model_dump(exclude_unset=True, exclude_none=True))
+            return await self.get_queryset().model.create(**sch_model.model_dump(exclude_unset=True, exclude_none=True, by_alias=False))
         except IntegrityError:
             raise TargetObjectAlreadyExist(message="data conflict")
 
@@ -72,7 +72,7 @@ class UpdateModelMixin:
         sch_model: instance of BaseModel
         orm_model: instance of TorModel
         """
-        data = sch_model.model_dump(exclude_unset=True)
+        data = sch_model.model_dump(exclude_unset=True, by_alias=False)
         data.pop(orm_model._meta.pk_attr, None)
         orm_model.update_from_dict(data)
         await orm_model.save()
