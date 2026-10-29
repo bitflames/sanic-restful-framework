@@ -1970,12 +1970,13 @@
 <p>SRF 定义了多个异常类，并在 <code>GenericAPIView.as_view()</code> 内将 Pydantic / Tortoise
 的验证错误转换为 422 异常。它没有安装全局统一异常处理器。</p>
 <h3 id="srf">SRF 异常<a class="headerlink" href="#srf" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImproperlyConfigured</span><span class="p">,</span> <span class="n">PydanticValidationException</span><span class="p">,</span> <span class="n">TargetObjectAlreadyExist</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImproperlyConfigured</span><span class="p">,</span> <span class="n">PydanticValidationException</span><span class="p">,</span> <span class="n">TargetObjectAlreadyExist</span><span class="p">,</span> <span class="n">TooManyRequest</span>
 </span></code></pre></div>
 <ul>
 <li><code>TargetObjectAlreadyExist</code>：<code>HTTPException</code> 子类，状态码 409（<code>quiet=True</code>）。</li>
 <li><code>ImproperlyConfigured</code>：<code>HTTPException</code> 子类，状态码 500。</li>
 <li><code>PydanticValidationException</code>：<code>HTTPException</code> 子类，状态码 422（<code>quiet=True</code>）。</li>
+<li><code>TooManyRequest</code>：<code>HTTPException</code> 子类，状态码 429（<code>quiet=True</code>），用于验证码错误次数超限。</li>
 </ul>
 <p>它们只定义状态码，没有自定义 JSON 响应结构；最终响应格式由 Sanic 的默认
 异常处理（或应用注册的处理器）决定。</p>

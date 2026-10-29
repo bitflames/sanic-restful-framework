@@ -1940,9 +1940,11 @@ this article only explains how the two combine, to avoid duplicating the permiss
 </span></code></pre></div>
 <p>Before a request enters the ViewSet, <code>BaseViewSet.check_permissions()</code> calls
 <code>has_permission(request, view)</code> on the class (without instantiating it). It raises Forbidden on failure.
-When there is no authentication information, the middleware sets <code>request.ctx.user</code> to <code>None</code>; for example,
-<code>IsAuthenticated</code> rejects that user (403). The authentication middleware returns 401 only when the request header format is invalid, JWT is not configured,
-or the user does not exist; a missing token or a failed signature/expiry check is treated as an anonymous request.</p>
+The authentication middleware supports two modes: by default a request with no token falls back to
+<code>AnonymousUser</code>; <code>strict=True</code> enforces mandatory authentication — see
+<a href="../../advanced/middleware/auth-middleware/">Authentication Middleware</a>. Both <code>AnonymousUser</code>
+(<code>is_active=False</code>) and <code>None</code> (whitelisted paths that skip authentication) are rejected by
+<code>IsAuthenticated</code> (403).</p>
 <h3 id="setting-permissions-by-http-method">Setting permissions by HTTP method<a class="headerlink" href="#setting-permissions-by-http-method" title="Permanent link">&para;</a></h3>
 <p>To differentiate permissions by operation, simply override <code>check_permissions()</code>; see
 <a href="../permissions/">Permissions: Setting permissions by request method</a> for the full approach (the permission reference page has a complete example).</p>

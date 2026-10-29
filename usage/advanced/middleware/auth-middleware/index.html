@@ -2022,29 +2022,45 @@
 
 <h2 id="authentication-middleware">Authentication Middleware<a class="headerlink" href="#authentication-middleware" title="Permanent link">&para;</a></h2>
 <p>The authentication middleware reads the JWT from the request and writes the user object from the database into
-<code>request.ctx.user</code>. When there is no authentication information, <code>request.ctx.user</code> is set to <code>None</code> and the request continues;
-permission classes can use this to distinguish anonymous users from authenticated users.</p>
+<code>request.ctx.user</code>. <code>authenticate_request()</code> supports two modes:</p>
+<ul>
+<li><strong><code>strict=False</code> (default, optional authentication)</strong>: a request with <strong>no credentials at all</strong>
+  (no <code>Authorization</code> header) resolves to <code>request.ctx.user = AnonymousUser()</code> (see
+  <code>srf.auth.models.AnonymousUser</code>). A <em>presented</em> token that is malformed, invalid, expired, forged,
+  or whose user no longer exists still raises 401 — once the client attempts authentication, the
+  attempt must succeed.</li>
+<li><strong><code>strict=True</code> (mandatory authentication)</strong>: every request must carry a valid, non-expired access
+  token; anything else (including requests with no credentials at all) raises 401.</li>
+</ul>
+<p>Public endpoints (login, register, refresh, health checks, ...) can alternatively be filtered out by
+the caller BEFORE the function runs (whitelist), so they skip authentication entirely.</p>
 <h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.middleware.authmiddleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_user_to_request_ctx</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nd">@app</span><span class="o">.</span><span class="n">middleware</span><span class="p">(</span><span class="s2">&quot;request&quot;</span><span class="p">)</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">auth_middleware</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="k">await</span> <span class="n">set_user_to_request_ctx</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="c1"># Filter the whitelist first: public endpoints skip authentication entirely</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">path</span> <span class="o">==</span> <span class="s2">&quot;/health&quot;</span> <span class="ow">or</span> <span class="n">request</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;/api/auth/&quot;</span><span class="p">):</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        <span class="n">request</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">user</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        <span class="k">return</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="k">await</span> <span class="n">set_user_to_request_ctx</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># mandatory authentication</span>
 </span></code></pre></div>
 <p>The application must provide the same secret used to issue tokens:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">app</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">JWT_SECRET</span> <span class="o">=</span> <span class="s2">&quot;read from a secure environment variable&quot;</span>
 </span></code></pre></div>
 <h3 id="request-flow">Request flow<a class="headerlink" href="#request-flow" title="Permanent link">&para;</a></h3>
 <ol>
-<li>Extract the JWT payload from <code>request.app.ctx.auth</code>.</li>
-<li>When there is no payload, set <code>request.ctx.user</code> to <code>None</code> and continue processing the request.</li>
-<li>When there is a payload, call <code>retrieve_user(request, payload)</code> to load the user and put the ORM user into
-   <code>request.ctx.user</code>.</li>
+<li>Extract the token from <code>Authorization: Bearer &lt;token&gt;</code>. A missing header: <code>strict=True</code> raises
+   401, otherwise the request falls back to <code>request.ctx.user = AnonymousUser()</code>. A malformed header
+   always raises 401.</li>
+<li>Verify the signature and expiry via <code>request.app.ctx.auth</code>; an expired, forged, or undecodable
+   token raises 401 (in both modes).</li>
+<li>Call <code>retrieve_user(request, payload)</code> to load the user and put the ORM user into
+   <code>request.ctx.user</code>; a missing or disabled user raises 401.</li>
 </ol>
-<p>When the <code>Authorization</code> header format is invalid, JWT is not initialized, or the user corresponding to the token does not exist, it returns 401;
-when the token is missing or the signature/expiry check fails, the payload is <code>None</code> and the request continues as an anonymous request
-(<code>request.ctx.user</code> is <code>None</code>), with the permission classes deciding whether to reject it.</p>
+<p>Note: whitelisted paths skip authentication entirely — even with a valid token, <code>request.ctx.user</code>
+stays <code>None</code>.</p>
 <h3 id="core-functions">Core functions<a class="headerlink" href="#core-functions" title="Permanent link">&para;</a></h3>
 <h4 id="extract_bearer_token">extract_bearer_token<a class="headerlink" href="#extract_bearer_token" title="Permanent link">&para;</a></h4>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.middleware.authmiddleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_bearer_token</span>
@@ -2055,12 +2071,15 @@ when the token is missing or the signature/expiry check fails, the payload is <c
 <h4 id="authenticate_request">authenticate_request<a class="headerlink" href="#authenticate_request" title="Permanent link">&para;</a></h4>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.middleware.authmiddleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">authenticate_request</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="k">await</span> <span class="n">authenticate_request</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">user</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">user</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="k">await</span> <span class="n">authenticate_request</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>               <span class="c1"># optional auth (default): no token -&gt; AnonymousUser</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">await</span> <span class="n">authenticate_request</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># mandatory auth: no token -&gt; 401</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">user</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">user</span>
 </span></code></pre></div>
 <h4 id="set_user_to_request_ctx">set_user_to_request_ctx<a class="headerlink" href="#set_user_to_request_ctx" title="Permanent link">&para;</a></h4>
-<p>This function calls <code>authenticate_request(request)</code> and can be used directly as application middleware. When there is no authentication information,
-<code>request.ctx.user</code> is <code>None</code>; when a valid token is present, it is the corresponding ORM user.</p>
+<p>This function passes its arguments through to <code>authenticate_request</code> and can be used as application
+middleware. <code>strict=False</code> (default) is optional authentication: no credentials fall back to
+<code>AnonymousUser</code>; <code>strict=True</code> is mandatory authentication. A presented-but-invalid token always
+raises 401 in both modes (see <a href="#authenticaterequest">authenticate_request</a>).</p>
 <h3 id="middleware-order">Middleware order<a class="headerlink" href="#middleware-order" title="Permanent link">&para;</a></h3>
 <p>If user rate limiting, access logging, or similar logic needs to read <code>request.ctx.user</code>, make sure the authentication middleware runs
 first. The authentication context may not have been set yet, so read it with:</p>

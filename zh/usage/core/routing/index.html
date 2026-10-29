@@ -2673,6 +2673,13 @@
 <td><code>products-list</code></td>
 </tr>
 <tr>
+<td>HEAD</td>
+<td><code>/api/products</code></td>
+<td>列表（无响应体）</td>
+<td><code>list()</code></td>
+<td><code>products-list</code></td>
+</tr>
+<tr>
 <td>POST</td>
 <td><code>/api/products</code></td>
 <td>创建</td>
@@ -2683,6 +2690,13 @@
 <td>GET</td>
 <td><code>/api/products/&lt;pk&gt;</code></td>
 <td>详情</td>
+<td><code>retrieve()</code></td>
+<td><code>products-detail</code></td>
+</tr>
+<tr>
+<td>HEAD</td>
+<td><code>/api/products/&lt;pk&gt;</code></td>
+<td>详情（无响应体）</td>
 <td><code>retrieve()</code></td>
 <td><code>products-detail</code></td>
 </tr>
@@ -2928,8 +2942,8 @@
 </span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">methods</span><span class="si">}</span><span class="s2">] </span><span class="si">{</span><span class="n">route</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p>输出示例：</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>[GET, POST] /api/products
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>[GET, PUT, PATCH, DELETE] /api/products/&lt;pk&gt;
+<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>[GET, HEAD, POST] /api/products
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>[GET, HEAD, PUT, PATCH, DELETE] /api/products/&lt;pk&gt;
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>[GET] /api/products/featured
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>[POST] /api/products/&lt;pk&gt;/publish
 </span></code></pre></div>

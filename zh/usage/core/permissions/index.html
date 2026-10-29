@@ -2028,9 +2028,9 @@
 </span></code></pre></div>
 <p><code>BaseViewSet.check_permissions()</code> 会按顺序在<strong>类上</strong>调用
 <code>has_permission(request, view)</code> 同步和异步返回值都受支持。任一结果为假时抛出
-403 Forbidden。没有认证信息时，认证中间件会将 <code>request.ctx.user</code> 设为 <code>None</code>，由
-权限类决定是否允许请求；请求头格式错误、JWT 未配置或用户不存在时认证中间件返回
-401，而 Token 缺失或签名/有效期校验失败会按匿名请求处理。</p>
+403 Forbidden。认证中间件的行为（默认未携带 Token 回退 <code>AnonymousUser</code>，
+<code>strict=True</code> 强制认证）见<a href="../../advanced/middleware/auth-middleware/">认证中间件</a>；
+未认证请求由权限类决定是否放行（<code>IsAuthenticated</code> 会拒绝，返回 403）。</p>
 <p>权限方法是 <code>@staticmethod</code>：推荐继承 <code>BasePermission</code>，但不强制；只要提供同名静态方法即可（鸭式）。</p>
 <h3 id="_3">自定义视图级权限<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.permission.permission</span><span class="w"> </span><span class="kn">import</span> <span class="n">BasePermission</span>

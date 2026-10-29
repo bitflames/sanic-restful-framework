@@ -972,6 +972,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        刷新令牌
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#token" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -983,7 +994,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_5" class="md-nav__link">
+  <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         认证中间件
@@ -994,7 +1005,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_6" class="md-nav__link">
+  <a href="#_7" class="md-nav__link">
     <span class="md-ellipsis">
       
         获取当前用户
@@ -1005,7 +1016,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_7" class="md-nav__link">
+  <a href="#_8" class="md-nav__link">
     <span class="md-ellipsis">
       
         注册和邮箱验证码
@@ -1017,7 +1028,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_8" class="md-nav__link">
+  <a href="#_9" class="md-nav__link">
     <span class="md-ellipsis">
       
         注册调用流程
@@ -1045,7 +1056,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_9" class="md-nav__link">
+  <a href="#_10" class="md-nav__link">
     <span class="md-ellipsis">
       
         用户资源调用流程
@@ -1061,7 +1072,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_10" class="md-nav__link">
+  <a href="#_11" class="md-nav__link">
     <span class="md-ellipsis">
       
         安全注意事项
@@ -1952,6 +1963,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        刷新令牌
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#token" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1963,7 +1985,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_5" class="md-nav__link">
+  <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         认证中间件
@@ -1974,7 +1996,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_6" class="md-nav__link">
+  <a href="#_7" class="md-nav__link">
     <span class="md-ellipsis">
       
         获取当前用户
@@ -1985,7 +2007,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_7" class="md-nav__link">
+  <a href="#_8" class="md-nav__link">
     <span class="md-ellipsis">
       
         注册和邮箱验证码
@@ -1997,7 +2019,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_8" class="md-nav__link">
+  <a href="#_9" class="md-nav__link">
     <span class="md-ellipsis">
       
         注册调用流程
@@ -2025,7 +2047,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_9" class="md-nav__link">
+  <a href="#_10" class="md-nav__link">
     <span class="md-ellipsis">
       
         用户资源调用流程
@@ -2041,7 +2063,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#_10" class="md-nav__link">
+  <a href="#_11" class="md-nav__link">
     <span class="md-ellipsis">
       
         安全注意事项
@@ -2095,89 +2117,108 @@
 <p><code>JWT_SECRET</code> 用于 JWT 签名；<code>SECRET_KEY</code> 用于计算刷新令牌的 HMAC 摘要，数据库只保存摘要而不保存令牌原文。
 请将二者设为不同的强随机密钥。升级前数据库中的明文刷新令牌以及更换 <code>SECRET_KEY</code> 后的旧令牌均无法通过校验，用户需要重新登录。</p>
 <h3 id="_3">注册认证路由<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
-<p>推荐使用 <code>register_auth_urls()</code>。它会调用 <code>setup_auth()</code>，并注册认证、注册、
-注销和验证邮件路由：</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.auth.route</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_auth_urls</span>
+<p>推荐使用 <code>register_all_auth_urls()</code>：一次性完成 JWT 初始化并注册登录、注册、
+注销、邮件验证和 GitHub 社交登录路由：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.auth.route</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_all_auth_urls</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">register_auth_urls</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/api/auth&quot;</span><span class="p">)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">register_all_auth_urls</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/api/auth&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p><code>register_auth_urls()</code> 会从 <code>app.config</code> 读取并校验 <code>JWT_SECRET</code> 与 <code>SECRET_KEY</code>。</p>
-<p>不要先调用 <code>setup_auth()</code> 再调用 <code>register_auth_urls()</code>，否则会重复初始化
-<code>sanic-jwt</code>。</p>
-<p>如需向 <code>setup_auth()</code> 传入 <code>sanic-jwt</code> 的其他初始化参数，可直接初始化：</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.auth.viewset</span><span class="w"> </span><span class="kn">import</span> <span class="n">setup_auth</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">jwt</span> <span class="o">=</span> <span class="n">setup_auth</span><span class="p">(</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">app</span><span class="p">,</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">url_prefix</span><span class="o">=</span><span class="s2">&quot;/api/auth&quot;</span><span class="p">,</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="c1"># 其余关键字参数传给 sanic_jwt.Initialize</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
-</span></code></pre></div>
-<p><code>setup_auth()</code> 已固定使用 SRF 自带的 <code>authenticate</code> 和 <code>retrieve_user</code>，不要再通过关键字传入这两个名称，否则会发生重复参数错误。
-<code>setup_auth()</code> 不从关键字参数读取 JWT 密钥；缺少有效的 <code>app.config.JWT_SECRET</code> 或 <code>app.config.SECRET_KEY</code> 时会在初始化阶段抛出 <code>ServerError</code>。</p>
+<p>JWT 初始化会从 <code>app.config</code> 读取并校验 <code>JWT_SECRET</code> 与 <code>SECRET_KEY</code>，缺失时抛出
+<code>ServerError</code>。</p>
+<p>只需其中一部分时，可以按需组合三个细粒度函数：</p>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>注册的端点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>register_jwt_urls(app, prefix)</code></td>
+<td><code>POST {prefix}/login</code>、<code>GET {prefix}/me</code>、<code>GET {prefix}/verify</code>、<code>POST {prefix}/refresh</code>（sanic-jwt）</td>
+</tr>
+<tr>
+<td><code>register_auth_urls(instance, prefix)</code></td>
+<td><code>POST {prefix}/register</code>、<code>POST {prefix}/verify_email</code>、<code>POST {prefix}/logout</code></td>
+</tr>
+<tr>
+<td><code>register_social_auth_urls(instance, prefix)</code></td>
+<td>GitHub OAuth 三个端点</td>
+</tr>
+</tbody>
+</table>
+<p>注意：</p>
+<ul>
+<li><code>register_jwt_urls()</code> 只接受 Sanic 应用实例。在 Blueprint 上初始化 sanic-jwt 会把
+  <code>ctx.auth</code> 挂到 Blueprint 上，认证中间件读取的是 <code>request.app.ctx.auth</code>，会找不到。</li>
+<li>这三个函数都不转发 <code>sanic_jwt.Initialize</code> 的关键字参数。如需自定义 sanic-jwt 行为
+  （例如 <code>leeway</code>、<code>claim_iss</code>），请直接调用 <code>sanic_jwt.Initialize</code>。</li>
+</ul>
 <h3 id="_4">登录<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
-<p>默认登录地址是 <code>POST /api/auth</code>。请求字段为 <code>account</code> 和 <code>password</code>，<code>account</code> 可以是邮箱或用户名：</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># 邮箱登录</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;account&quot;:&quot;user@example.com&quot;,&quot;password&quot;:&quot;password123&quot;}&#39;</span>
+<p>默认登录地址是 <code>POST /api/auth/login</code>。请求字段为 <code>account</code> 和 <code>password</code>，<code>account</code> 可以是邮箱或用户名：</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># 邮箱登录</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/login<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;account&quot;:&quot;user@example.com&quot;,&quot;password&quot;:&quot;password123&quot;}&#39;</span>
 </span></code></pre></div>
 <p>响应（由 <code>sanic-jwt</code> 返回）：</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&quot;access_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;******&quot;</span><span class="p">,</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">&quot;refresh_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;******&quot;</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">&quot;access_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;******&quot;</span><span class="p">,</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">&quot;refresh_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;******&quot;</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="p">}</span>
 </span></code></pre></div>
 <p><code>authenticate()</code> 使用 <code>UserLoginSchema</code>（<code>account</code>、<code>password</code>），
-查询 <code>srf.auth.models.User</code>、检查用户是否启用并验证密码，然后把 <code>user_id</code>、
-<code>username</code> 和角色名称放入 JWT payload。</p>
+查询 <code>srf.auth.models.User</code>、检查用户是否启用并验证密码。sanic-jwt 的 <code>build_payload()</code> 只会把 <code>user_id</code> 写入 access token（另加 <code>exp</code>）；
+<code>username</code> 和角色名称由 <code>retrieve_user()</code> 在 <code>/me</code> 或 refresh 时返回，不会写进 token。</p>
+<h3 id="_5">刷新令牌<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
+<p>access token 过期后，携带 access token（过期也可以）和 refresh token 换取新的
+access token：</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/refresh<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;refresh_token&quot;:&quot;&lt;refresh-token&gt;&quot;}&#39;</span>
+</span></code></pre></div>
+<p>响应只包含新的 <code>access_token</code>；sanic-jwt 不会轮换 refresh token。refresh token 以
+HMAC 摘要形式持久化，绝对有效期为 <code>JWT_REFRESH_TOKEN_EXPIRES</code>（默认 30 天），过期或
+登出后必须重新登录。</p>
+<p>另外两个 sanic-jwt 端点：<code>GET /api/auth/me</code> 返回当前用户信息（<code>{"me": {...}}</code>），
+<code>GET /api/auth/verify</code> 校验令牌有效性。两者都受保护：缺失或失效的
+<code>Authorization: Bearer</code> 头会返回 401。</p>
 <h3 id="token">密码与 Token 的算法<a class="headerlink" href="#token" title="Permanent link">&para;</a></h3>
 <p>SRF 的密码存储方式是 <strong>bcrypt(SHA-256(密码))</strong>：密码先按 UTF-8 编码并
 计算 SHA-256 摘要，再由 bcrypt 使用随机 salt 生成密码哈希。登录时执行相同的
 预处理，再用 <code>bcrypt.checkpw()</code> 校验。</p>
-<h3 id="_5">认证中间件<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.middleware.authmiddleware</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_user_to_request_ctx</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<h3 id="_6">认证中间件<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
+<p>SRF 提供独立的请求中间件 <code>set_user_to_request_ctx</code>：校验 <code>Authorization: Bearer</code>
+Token 并把用户写入 <code>request.ctx.user</code>。默认（<code>strict=False</code>）为可选认证——未携带
+Token 的请求回退为 <code>AnonymousUser</code>，出示了无效 Token 则返回 401；<code>strict=True</code>
+为强制认证。配置示例、白名单过滤与请求流程见
+<a href="../../advanced/middleware/auth-middleware/">认证中间件</a>。</p>
+<p>由此 401（认证失败，来自中间件）与 403（授权失败，来自 <code>IsAuthenticated</code> 等权限类）的语义清晰分离。</p>
+<h3 id="_7">获取当前用户<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic.response</span><span class="w"> </span><span class="kn">import</span> <span class="n">json</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.views</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseViewSet</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nd">@app</span><span class="o">.</span><span class="n">middleware</span><span class="p">(</span><span class="s2">&quot;request&quot;</span><span class="p">)</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">auth_middleware</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="k">await</span> <span class="n">set_user_to_request_ctx</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
-</span></code></pre></div>
-<p>携带 Token 时，请求头格式为：</p>
-<div class="language-http highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="err">Authorization: Bearer &lt;token&gt;</span>
-</span></code></pre></div>
-<p>中间件使用 HS256 和 <code>app.config.JWT_SECRET</code> 解码 Token，通过
-<code>retrieve_user()</code> 查询用户，并设置 <code>request.ctx.user</code>。具体行为：</p>
-<ul>
-<li>没有认证信息，或 Token 的签名/有效期校验失败时，<code>extract_payload()</code> 返回
-  <code>None</code>，<code>request.ctx.user</code> 被设为 <code>None</code>，请求按匿名请求继续执行。此时是否
-  拒绝由权限类决定（例如 <code>IsAuthenticated</code> 会返回 403）。</li>
-<li><code>Authorization</code> 请求头格式错误（例如缺少 <code>Bearer</code> 前缀）、JWT 未初始化，
-  或 Token 对应的用户不存在时，中间件抛出 <code>Unauthorized</code>（401）。</li>
-</ul>
-<p>因此，需要 401 与 403 语义区分时，不要只依赖认证中间件；可在权限类或全局异常
-处理器中统一处理。</p>
-<h3 id="_6">获取当前用户<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sanic.response</span><span class="w"> </span><span class="kn">import</span> <span class="n">json</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.views</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseViewSet</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">ProductViewSet</span><span class="p">(</span><span class="n">BaseViewSet</span><span class="p">):</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">):</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>        <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_current_user</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>        <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>            <span class="k">return</span> <span class="n">json</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;未登录&quot;</span><span class="p">},</span> <span class="n">status</span><span class="o">=</span><span class="mi">401</span><span class="p">)</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>        <span class="c1"># ...</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">ProductViewSet</span><span class="p">(</span><span class="n">BaseViewSet</span><span class="p">):</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">):</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>        <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_current_user</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>        <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">user</span><span class="p">,</span> <span class="s2">&quot;is_anonymous&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>            <span class="k">return</span> <span class="n">json</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;未登录&quot;</span><span class="p">},</span> <span class="n">status</span><span class="o">=</span><span class="mi">401</span><span class="p">)</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="c1"># ...</span>
 </span></code></pre></div>
 <p><code>get_current_user()</code> 优先返回 <code>request.ctx.user</code>，不存在时尝试
 <code>request.auth</code>。</p>
-<h3 id="_7">注册和邮箱验证码<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h3>
-<p><code>register_auth_urls()</code> 注册以下常用 SRF 路由：</p>
+<h3 id="_8">注册和邮箱验证码<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h3>
+<p><code>register_all_auth_urls()</code> 注册以下认证路由（除 sanic-jwt 的四个 JWT 端点外）：</p>
 <ul>
 <li><code>POST /api/auth/register</code></li>
 <li><code>POST /api/auth/verify_email</code></li>
 <li><code>POST /api/auth/logout</code></li>
 </ul>
+<p><code>register</code> 成功后会直接签发 token，因此应用必须已经调用 <code>register_jwt_urls()</code>（或 <code>register_all_auth_urls()</code>）。未配置 JWT 时接口返回 500，且不会消费验证码。</p>
+<p>验证码错误次数达到 <code>USER_REGISTER_EMAIL_CODE_TIMES_LIMIT</code> 后，验证码会被删除，接口返回 429（<code>TooManyRequest</code>），需要重新获取验证码。</p>
 <p>邮箱验证码相关配置定义在 <code>srf.config.settings</code>：</p>
 <table>
 <thead>
@@ -2210,60 +2251,65 @@
 </tr>
 </tbody>
 </table>
-<h4 id="_8">注册调用流程<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># 1. 发送邮箱验证码（有效期内重复请求返回 429）</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/verify_email<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;email&quot;:&quot;user@example.com&quot;}&#39;</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># 2. 查看邮件中的 6 位数字验证码，提交注册</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/register<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;email&quot;:&quot;user@example.com&quot;,&quot;username&quot;:&quot;zhangsan&quot;,&quot;password1&quot;:&quot;Passw0rd123&quot;,&quot;password2&quot;:&quot;Passw0rd123&quot;,&quot;confirmations&quot;:&quot;123456&quot;}&#39;</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># 3. 注册成功即返回 access_token / refresh_token，之后携带 Token 访问</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>curl<span class="w"> </span>http://localhost:8000/api/users/self<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1"># 4. 登出（撤销当前用户的 refresh token）</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/logout<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span>
+<h4 id="_9">注册调用流程<a class="headerlink" href="#_9" title="Permanent link">&para;</a></h4>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># 1. 发送邮箱验证码（有效期内重复请求返回 429）</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/verify_email<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;email&quot;:&quot;user@example.com&quot;}&#39;</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># 2. 查看邮件中的 6 位数字验证码，提交注册</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/register<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;email&quot;:&quot;user@example.com&quot;,&quot;username&quot;:&quot;zhangsan&quot;,&quot;password1&quot;:&quot;Passw0rd123&quot;,&quot;password2&quot;:&quot;Passw0rd123&quot;,&quot;confirmations&quot;:&quot;123456&quot;}&#39;</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="c1"># 3. 注册成功即返回 access_token / refresh_token，之后携带 Token 访问</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>curl<span class="w"> </span>http://localhost:8000/api/users/self<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="c1"># 4. 登出（撤销当前用户的 refresh token）</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/logout<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span>
 </span></code></pre></div>
 <h3 id="api">注册用户资源 API<a class="headerlink" href="#api" title="Permanent link">&para;</a></h3>
-<p><code>register_auth_urls()</code> 只注册认证流程路由，不会自动注册用户管理资源。需要用户资料及密码修改 API 时，可显式导入 <code>UserViewSet</code> 并通过 <code>SanicRouter</code> 注册：</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.auth.viewset</span><span class="w"> </span><span class="kn">import</span> <span class="n">UserViewSet</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.route</span><span class="w"> </span><span class="kn">import</span> <span class="n">SanicRouter</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">user_router</span> <span class="o">=</span> <span class="n">SanicRouter</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;api&quot;</span><span class="p">)</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">user_router</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">&quot;users&quot;</span><span class="p">,</span> <span class="n">UserViewSet</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;users&quot;</span><span class="p">)</span>
+<p><code>register_all_auth_urls()</code> 只注册认证流程路由，不会自动注册用户管理资源。需要用户资料及密码修改 API 时，可显式导入 <code>UserViewSet</code> 并通过 <code>SanicRouter</code> 注册：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.auth.viewset</span><span class="w"> </span><span class="kn">import</span> <span class="n">UserViewSet</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.route</span><span class="w"> </span><span class="kn">import</span> <span class="n">SanicRouter</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">user_router</span> <span class="o">=</span> <span class="n">SanicRouter</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;api&quot;</span><span class="p">)</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">user_router</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">&quot;users&quot;</span><span class="p">,</span> <span class="n">UserViewSet</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;users&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p>该资源提供 <code>GET /api/users/self</code>、<code>POST /api/users/change-password</code>，以及 <code>/api/users</code> 的 CRUD 路由。普通用户只能访问自己的用户记录；超级用户可管理其他用户。修改密码请求体为：</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span><span class="nt">&quot;old_password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;old-password&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;password1&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;new-password&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;password2&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;new-password&quot;</span><span class="p">}</span>
+<p>该资源提供 <code>GET /api/users/self</code>、<code>POST /api/users/change-password</code>、<code>POST /api/users/&lt;user-id&gt;/reset-password</code>（仅超级用户），以及 <code>/api/users</code> 等等 CRUD 路由。普通用户只能访问自己的用户记录；超级用户可管理其他用户。修改密码请求体为：</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&quot;old_password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;old-password&quot;</span><span class="p">,</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">&quot;password1&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;new-password&quot;</span><span class="p">,</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nt">&quot;password2&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;new-password&quot;</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>修改成功后会撤销该用户已保存的 refresh token；已签发的 access token 在过期前仍可使用。</p>
-<h4 id="_9">用户资源调用流程<a class="headerlink" href="#_9" title="Permanent link">&para;</a></h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># 1. 登录获取 Token（account 支持用户名或邮箱）</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;account&quot;:&quot;user@example.com&quot;,&quot;password&quot;:&quot;Passw0rd123&quot;}&#39;</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># 2. 查询自己的资料</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>curl<span class="w"> </span>http://localhost:8000/api/users/self<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># 3. 修改自己的资料</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>curl<span class="w"> </span>-X<span class="w"> </span>PATCH<span class="w"> </span>http://localhost:8000/api/users/&lt;user-id&gt;<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;username&quot;:&quot;new-name&quot;}&#39;</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1"># 4. 修改密码（成功后需重新登录）</span>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/users/change-password<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;old_password&quot;:&quot;Passw0rd123&quot;,&quot;password1&quot;:&quot;NewPassw0rd456&quot;,&quot;password2&quot;:&quot;NewPassw0rd456&quot;}&#39;</span>
+<p>更新接口（PUT/PATCH <code>/api/users/&lt;user-id&gt;</code>）；提交 <code>email</code>、<code>password</code>、<code>password1</code> 或 <code>password2</code> 都会返回 400。修改邮箱暂不通过该接口提供；密码修改只走两个专用接口：<code>change-password</code> 自助改密（校验旧密码）；<code>reset-password</code> 超管重置</p>
+<h4 id="_10">用户资源调用流程<a class="headerlink" href="#_10" title="Permanent link">&para;</a></h4>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># 1. 登录获取 Token（account 支持用户名或邮箱）</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/login<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;account&quot;:&quot;user@example.com&quot;,&quot;password&quot;:&quot;Passw0rd123&quot;}&#39;</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># 2. 查询自己的资料</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>curl<span class="w"> </span>http://localhost:8000/api/users/self<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># 3. 修改自己的资料</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>curl<span class="w"> </span>-X<span class="w"> </span>PATCH<span class="w"> </span>http://localhost:8000/api/users/&lt;user-id&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;username&quot;:&quot;new-name&quot;}&#39;</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="c1"># 4. 修改密码（成功后需重新登录）</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/users/change-password<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;access-token&gt;&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;old_password&quot;:&quot;Passw0rd123&quot;,&quot;password1&quot;:&quot;NewPassw0rd456&quot;,&quot;password2&quot;:&quot;NewPassw0rd456&quot;}&#39;</span>
 </span></code></pre></div>
-<h3 id="_10">安全注意事项<a class="headerlink" href="#_10" title="Permanent link">&para;</a></h3>
+<h3 id="_11">安全注意事项<a class="headerlink" href="#_11" title="Permanent link">&para;</a></h3>
 <ul>
 <li>生产环境必须使用 HTTPS，并从密钥管理系统读取 <code>JWT_SECRET</code>。</li>
 <li>SRF 启用了 refresh token 持久化；登出会撤销当前用户的 refresh token，但已签发的 access token 在过期前仍有效。</li>

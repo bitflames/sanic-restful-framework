@@ -2091,7 +2091,7 @@
 </tr>
 <tr>
 <td><code>DEFAULT_FILTERS</code></td>
-<td><code>[SearchFilter, QueryParamFilter, OrderingFactory]</code></td>
+<td><code>[SearchFilter, QueryParamFilter, OrderingFactory, ...]</code></td>
 <td>Default filter chain</td>
 </tr>
 <tr>
@@ -2157,7 +2157,7 @@
 <tr>
 <td><code>REQUEST_LIMITERS</code></td>
 <td><code>[]</code></td>
-<td>List of rate limiters; <code>throttle_rate()</code> reads from <code>app.config.REQUEST_LIMITERS</code></td>
+<td>List of rate limiters; <code>throttle_rate()</code> reads <code>app.config.REQUEST_LIMITERS</code>, falling back to <code>settings.REQUEST_LIMITERS</code></td>
 </tr>
 <tr>
 <td><code>THROTTLE_REDIS_PREFIX</code></td>
@@ -2167,9 +2167,10 @@
 </tbody>
 </table>
 <h4 id="email">Email<a class="headerlink" href="#email" title="Permanent link">&para;</a></h4>
-<p><code>srf.tools.email.send_email()</code> reads <code>srf.config.settings.EmailConfig</code> directly.
-Each attribute is read from environment variables at module import time, so changing <code>app.config</code>
-afterwards does not alter the email configuration.</p>
+<p><code>srf.tools.email.send_email()</code> reads <code>settings.EMAIL_CONFIG</code>. <code>LazySettings</code> prefers
+<code>app.config.EMAIL_CONFIG</code>, so the application can override it at startup; when it is not
+overridden, <code>srf.config.settings.EMAIL_CONFIG</code> is used and its attributes are read from
+environment variables at module import time.</p>
 <table>
 <thead>
 <tr>
@@ -2180,22 +2181,22 @@ afterwards does not alter the email configuration.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>EmailConfig.from_email</code></td>
+<td><code>EMAIL_CONFIG.from_email</code></td>
 <td><code>FROM_EMAIL</code></td>
 <td>Sender address</td>
 </tr>
 <tr>
-<td><code>EmailConfig.smtp_server</code></td>
+<td><code>EMAIL_CONFIG.smtp_server</code></td>
 <td><code>SMTP_SERVER</code></td>
 <td>SMTP server</td>
 </tr>
 <tr>
-<td><code>EmailConfig.smtp_port</code></td>
+<td><code>EMAIL_CONFIG.smtp_port</code></td>
 <td><code>SMTP_PORT</code></td>
 <td>SMTP port</td>
 </tr>
 <tr>
-<td><code>EmailConfig.password</code></td>
+<td><code>EMAIL_CONFIG.password</code></td>
 <td><code>PASSWORD</code></td>
 <td>Email password / authorization code</td>
 </tr>
@@ -2268,8 +2269,8 @@ afterwards does not alter the email configuration.</p>
 </table>
 <h4 id="jwt">JWT<a class="headerlink" href="#jwt" title="Permanent link">&para;</a></h4>
 <p><code>JWT_SECRET</code> (signing key) and <code>SECRET_KEY</code> (refresh token digest key) have no defaults and must be
-set explicitly in <code>app.config</code>. <code>setup_auth()</code> converts <code>JWT_ACCESS_TOKEN_EXPIRES</code> to seconds and
-passes it to <code>sanic-jwt</code>.</p>
+set explicitly in <code>app.config</code>. <code>register_jwt_urls()</code> converts <code>JWT_ACCESS_TOKEN_EXPIRES</code> to seconds
+and passes it to <code>sanic-jwt</code>.</p>
 <table>
 <thead>
 <tr>

@@ -1942,9 +1942,10 @@ ViewSet。权限类的完整说明和对象级权限接线方式见<a href="../p
 </span></code></pre></div>
 <p>请求进入 ViewSet 前，<code>BaseViewSet.check_permissions()</code> 会在类上调用
 <code>has_permission(request, view)</code>（不实例化）。失败时抛出 Forbidden。
-没有认证信息时，中间件将 <code>request.ctx.user</code> 设为 <code>None</code>；例如
-<code>IsAuthenticated</code> 会拒绝该用户（403）。认证中间件只在请求头格式错误、JWT 未配置
-或用户不存在时返回 401；Token 缺失或签名/有效期校验失败会按匿名请求处理。</p>
+认证中间件支持两种模式：默认未携带 Token 的请求回退为 <code>AnonymousUser</code>，
+<code>strict=True</code> 为强制认证，详见<a href="../../advanced/middleware/auth-middleware/">认证中间件</a>。
+<code>AnonymousUser</code>（<code>is_active=False</code>）与 <code>None</code>（白名单跳过认证）都会被
+<code>IsAuthenticated</code> 拒绝（403）。</p>
 <h3 id="http">按 HTTP 方法设置权限<a class="headerlink" href="#http" title="Permanent link">&para;</a></h3>
 <p>按操作区分权限时，重写 <code>check_permissions()</code> 即可；完整写法见
 <a href="../permissions/">权限：按请求方法设置权限</a>（权限参考页中有完整示例）。</p>

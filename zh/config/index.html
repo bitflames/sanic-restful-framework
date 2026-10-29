@@ -2093,7 +2093,7 @@
 </tr>
 <tr>
 <td><code>DEFAULT_FILTERS</code></td>
-<td><code>[SearchFilter, QueryParamFilter, OrderingFactory]</code></td>
+<td><code>[SearchFilter, QueryParamFilter, OrderingFactory 等]</code></td>
 <td>默认过滤器链</td>
 </tr>
 <tr>
@@ -2159,7 +2159,7 @@
 <tr>
 <td><code>REQUEST_LIMITERS</code></td>
 <td><code>[]</code></td>
-<td>限流器列表，<code>throttle_rate()</code> 从 <code>app.config.REQUEST_LIMITERS</code> 读取</td>
+<td>限流器列表，<code>throttle_rate()</code> 优先读 <code>app.config.REQUEST_LIMITERS</code>，未设置时回退 <code>settings.REQUEST_LIMITERS</code></td>
 </tr>
 <tr>
 <td><code>THROTTLE_REDIS_PREFIX</code></td>
@@ -2169,8 +2169,9 @@
 </tbody>
 </table>
 <h4 id="_7">邮件<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h4>
-<p><code>srf.tools.email.send_email()</code> 直接读取 <code>srf.config.settings.EmailConfig</code>，
-各属性在模块导入时从环境变量读取，后续修改 <code>app.config</code> 不会改变邮件配置。</p>
+<p><code>srf.tools.email.send_email()</code> 读取 <code>settings.EMAIL_CONFIG</code>。
+<code>LazySettings</code> 会优先使用 <code>app.config.EMAIL_CONFIG</code>，因此可以在应用启动时覆盖；
+未覆盖时使用 <code>srf.config.settings.EMAIL_CONFIG</code>，其属性在模块导入时从环境变量读取。</p>
 <table>
 <thead>
 <tr>
@@ -2181,22 +2182,22 @@
 </thead>
 <tbody>
 <tr>
-<td><code>EmailConfig.from_email</code></td>
+<td><code>EMAIL_CONFIG.from_email</code></td>
 <td><code>FROM_EMAIL</code></td>
 <td>发件人地址</td>
 </tr>
 <tr>
-<td><code>EmailConfig.smtp_server</code></td>
+<td><code>EMAIL_CONFIG.smtp_server</code></td>
 <td><code>SMTP_SERVER</code></td>
 <td>SMTP 服务器</td>
 </tr>
 <tr>
-<td><code>EmailConfig.smtp_port</code></td>
+<td><code>EMAIL_CONFIG.smtp_port</code></td>
 <td><code>SMTP_PORT</code></td>
 <td>SMTP 端口</td>
 </tr>
 <tr>
-<td><code>EmailConfig.password</code></td>
+<td><code>EMAIL_CONFIG.password</code></td>
 <td><code>PASSWORD</code></td>
 <td>邮箱密码 / 授权码</td>
 </tr>
@@ -2269,7 +2270,7 @@
 </table>
 <h4 id="jwt">JWT<a class="headerlink" href="#jwt" title="Permanent link">&para;</a></h4>
 <p><code>JWT_SECRET</code>（签名密钥）与 <code>SECRET_KEY</code>（刷新令牌摘要密钥）无默认值，必须在
-<code>app.config</code> 中显式设置。<code>setup_auth()</code> 会将 <code>JWT_ACCESS_TOKEN_EXPIRES</code> 换算为
+<code>app.config</code> 中显式设置。<code>register_jwt_urls()</code> 会将 <code>JWT_ACCESS_TOKEN_EXPIRES</code> 换算为
 秒并传给 <code>sanic-jwt</code>。</p>
 <table>
 <thead>

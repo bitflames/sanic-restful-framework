@@ -1968,12 +1968,13 @@
 <p>SRF defines several exception classes and, inside <code>GenericAPIView.as_view()</code>, converts Pydantic / Tortoise
 validation errors into 422 exceptions. It does not install a global unified exception handler.</p>
 <h3 id="srf-exceptions">SRF exceptions<a class="headerlink" href="#srf-exceptions" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImproperlyConfigured</span><span class="p">,</span> <span class="n">PydanticValidationException</span><span class="p">,</span> <span class="n">TargetObjectAlreadyExist</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImproperlyConfigured</span><span class="p">,</span> <span class="n">PydanticValidationException</span><span class="p">,</span> <span class="n">TargetObjectAlreadyExist</span><span class="p">,</span> <span class="n">TooManyRequest</span>
 </span></code></pre></div>
 <ul>
 <li><code>TargetObjectAlreadyExist</code>: An <code>HTTPException</code> subclass with status code 409 (<code>quiet=True</code>).</li>
 <li><code>ImproperlyConfigured</code>: An <code>HTTPException</code> subclass with status code 500.</li>
 <li><code>PydanticValidationException</code>: An <code>HTTPException</code> subclass with status code 422 (<code>quiet=True</code>).</li>
+<li><code>TooManyRequest</code>: An <code>HTTPException</code> subclass with status code 429 (<code>quiet=True</code>), raised when verification code attempts exceed the limit.</li>
 </ul>
 <p>They only define status codes and have no custom JSON response structure; the final response format is decided by Sanic's default
 exception handling (or handlers registered by the application).</p>

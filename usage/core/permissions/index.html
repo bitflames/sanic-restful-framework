@@ -2026,9 +2026,10 @@ object-level checks run when <code>get_object()</code> calls <code>check_object_
 </span></code></pre></div>
 <p><code>BaseViewSet.check_permissions()</code> calls
 <code>has_permission(request, view)</code> <strong>on the class</strong> in order; both synchronous and asynchronous return values are supported. If any result is falsy, it raises
-403 Forbidden. When there is no authentication information, the authentication middleware sets <code>request.ctx.user</code> to <code>None</code>, and the
-permission class decides whether to allow the request; when the request header format is invalid, JWT is not configured, or the user does not exist, the authentication middleware returns
-401, while a missing token or a failed signature/expiry check is treated as an anonymous request.</p>
+403 Forbidden. For the authentication middleware behavior (by default a request with no token
+falls back to <code>AnonymousUser</code>; <code>strict=True</code> enforces mandatory authentication), see
+<a href="../../advanced/middleware/auth-middleware/">Authentication Middleware</a>; unauthenticated requests
+are decided by permission classes (<code>IsAuthenticated</code> rejects them with 403).</p>
 <p>Permission methods are <code>@staticmethod</code>s: inheriting from <code>BasePermission</code> is recommended but not required; providing a static method with the same name is enough (duck typing).</p>
 <h3 id="custom-view-level-permissions">Custom view-level permissions<a class="headerlink" href="#custom-view-level-permissions" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">srf.permission.permission</span><span class="w"> </span><span class="kn">import</span> <span class="n">BasePermission</span>

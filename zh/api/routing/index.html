@@ -1541,6 +1541,28 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#srf.route.SanicRouter.prefix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        prefix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#srf.route.SanicRouter.instance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        instance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#srf.route.SanicRouter.register" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1842,6 +1864,28 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#srf.route.SanicRouter.prefix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        prefix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#srf.route.SanicRouter.instance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        instance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#srf.route.SanicRouter.register" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1919,11 +1963,11 @@
 
 
 
-<h3 id="srf.route.SanicRouter" class="doc doc-heading">
+<h2 id="srf.route.SanicRouter" class="doc doc-heading">
             <span class="doc doc-object-name doc-class-name">SanicRouter</span>
 
 
-<a href="#srf.route.SanicRouter" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#srf.route.SanicRouter" class="headerlink" title="Permanent link">&para;</a></h2>
 <div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">SanicRouter</span><span class="p">(</span><span class="n">instance</span><span class="p">:</span> <span class="n">Sanic</span> <span class="o">|</span> <span class="n">Blueprint</span><span class="p">,</span> <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
 </span></code></pre></div>
 
@@ -2001,17 +2045,61 @@ Sanic app or Blueprint, and auto-discovers <code>@action</code> methods.</p>
 
 
 
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="srf.route.SanicRouter.prefix" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">prefix</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#srf.route.SanicRouter.prefix" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">prefix</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;/</span><span class="si">{</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span> <span class="k">if</span> <span class="n">prefix</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="srf.route.SanicRouter.instance" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">instance</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#srf.route.SanicRouter.instance" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">instance</span> <span class="o">=</span> <span class="n">instance</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+    </div>
+
+</div>
+
 
 
 
 <div class="doc doc-object doc-function">
 
 
-<h4 id="srf.route.SanicRouter.register" class="doc doc-heading">
+<h3 id="srf.route.SanicRouter.register" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">register</span>
 
 
-<a href="#srf.route.SanicRouter.register" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#srf.route.SanicRouter.register" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register</span><span class="p">(</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">view_cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">GenericAPIView</span><span class="p">],</span>
@@ -2101,8 +2189,13 @@ Sanic app or Blueprint, and auto-discovers <code>@action</code> methods.</p>
 
     </div>
 
-</div><h3 id="_1">注册结果<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
-<p><code>register(path, view_cls, name=None)</code> 只会为类中__实际存在__的视图方法注册路由：</p>
+</div><p>options:
+heading_level: 3
+members: - <strong>init</strong> - register
+show_source: false
+inherited_members: false</p>
+<h3 id="_1">注册结果<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
+<p><code>register(path, view_cls, name=None)</code> 只会为类中<strong>实际存在</strong>的视图方法注册路由：</p>
 <table>
 <thead>
 <tr>
@@ -2121,6 +2214,12 @@ Sanic app or Blueprint, and auto-discovers <code>@action</code> methods.</p>
 </tr>
 <tr>
 <td><code>{prefix}/{path}</code></td>
+<td><code>HEAD</code></td>
+<td><code>list</code></td>
+<td><code>{name}-list</code></td>
+</tr>
+<tr>
+<td><code>{prefix}/{path}</code></td>
 <td><code>POST</code></td>
 <td><code>create</code></td>
 <td><code>{name}-list</code></td>
@@ -2128,6 +2227,12 @@ Sanic app or Blueprint, and auto-discovers <code>@action</code> methods.</p>
 <tr>
 <td><code>{prefix}/{path}/&lt;pk&gt;</code></td>
 <td><code>GET</code></td>
+<td><code>retrieve</code></td>
+<td><code>{name}-detail</code></td>
+</tr>
+<tr>
+<td><code>{prefix}/{path}/&lt;pk&gt;</code></td>
+<td><code>HEAD</code></td>
 <td><code>retrieve</code></td>
 <td><code>{name}-detail</code></td>
 </tr>
@@ -2166,7 +2271,8 @@ Sanic app or Blueprint, and auto-discovers <code>@action</code> methods.</p>
 <ul>
 <li><code>name</code> 默认等于 <code>path</code>。</li>
 <li>若 ViewSet 没有定义 <code>list</code>，就不会创建集合路由；详情路由同理。</li>
-<li>只读 ViewSet 只会生成 <code>list</code> / <code>retrieve</code> 对应的路由。</li>
+<li><code>GET</code> 路由同时支持 <code>HEAD</code>，并复用同一个 <code>list</code> / <code>retrieve</code> 方法。</li>
+<li>只读 ViewSet 只会生成 <code>list</code> / <code>retrieve</code> 对应的路由（含 <code>HEAD</code>）。</li>
 </ul>
 <h3 id="action"><code>@action</code> 的发现规则<a class="headerlink" href="#action" title="Permanent link">&para;</a></h3>
 <p><code>register()</code> 用 <code>inspect.getmembers()</code> 扫描视图类（包括继承来的方法），凡是带有 <code>extra_info</code> 属性的方法都会注册为独立路由。<code>extra_info</code> 由 <a href="../views/#srf.views.decorators.action"><code>action</code></a> 写入：</p>
@@ -2203,12 +2309,12 @@ Sanic app or Blueprint, and auto-discovers <code>@action</code> methods.</p>
 </table>
 <div class="admonition tip">
 <p class="admonition-title">前缀规范化</p>
-<p><code>prefix="api/v1/"</code> 会被规范化为 <code>/api/v1</code>，<code>path</code> 两端的 <code>/</code> 会被去掉。因此 <code>SanicRouter(app, prefix="api/v1").register("/books/", BookViewSet)</code> 得到的集合地址是 <code>/api/v1/books</code>。</p>
 </div>
+<p><code>prefix="api/v1/"</code> 会被规范化为 <code>/api/v1</code>，<code>path</code> 两端的 <code>/</code> 会被去掉。因此 <code>SanicRouter(app, prefix="api/v1").register("/books/", BookViewSet)</code> 得到的集合地址是 <code>/api/v1/books</code>。</p>
 <div class="admonition warning">
 <p class="admonition-title">重名路由</p>
-<p><code>SanicRouter</code> 不检查路由名冲突。两个 ViewSet 使用同一个 <code>name</code>，或两个 action 使用同一个 <code>url_name</code> 时，需要自行保证唯一，否则 Sanic 会报重复路由名。</p>
 </div>
+<p><code>SanicRouter</code> 不检查路由名冲突。两个 ViewSet 使用同一个 <code>name</code>，或两个 action 使用同一个 <code>url_name</code> 时，需要自行保证唯一，否则 Sanic 会报重复路由名。</p>
 
 
 
