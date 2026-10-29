@@ -66,8 +66,8 @@ class TestSanicRouter:
         r = SanicRouter(bp, prefix="api")
         r.register("items", CapturingViewSet, name="items")
         assert captured == [
-            {"get": "list", "post": "create"},
-            {"get": "retrieve", "put": "update", "patch": "update", "delete": "destroy"},
+            {"get": "list", "head": "list", "post": "create"},
+            {"get": "retrieve", "head": "retrieve", "put": "update", "patch": "update", "delete": "destroy"},
         ]
 
     def test_readonly_viewset_registers_get_only(self):
@@ -81,8 +81,8 @@ class TestSanicRouter:
         SanicRouter(bp, prefix="api").register("items", ItemsViewSet, name="items")
         app.blueprint(bp)
 
-        assert _methods_for(app, "items-list") == {"GET"}
-        assert _methods_for(app, "items-detail") == {"GET"}
+        assert _methods_for(app, "items-list") == {"GET", "HEAD"}
+        assert _methods_for(app, "items-detail") == {"GET", "HEAD"}
 
     def test_create_and_readonly_viewset_registers_post_on_collection_only(self):
         class ItemsViewSet(CreateAndReadOnlyModelViewSet):
@@ -95,8 +95,8 @@ class TestSanicRouter:
         SanicRouter(bp, prefix="api").register("items", ItemsViewSet, name="items")
         app.blueprint(bp)
 
-        assert _methods_for(app, "items-list") == {"GET", "POST"}
-        assert _methods_for(app, "items-detail") == {"GET"}
+        assert _methods_for(app, "items-list") == {"GET", "HEAD", "POST"}
+        assert _methods_for(app, "items-detail") == {"GET", "HEAD"}
 
     def test_register_routes_directly_on_sanic_app(self):
         class ItemsViewSet(DummyViewSet):
@@ -110,6 +110,34 @@ class TestSanicRouter:
         _, response = app.test_client.get("/api/items")
         assert response.status == 200
         assert response.json == {"action": "list"}
+
+    def test_head_request_uses_get_action(self):
+        class ItemsViewSet(DummyViewSet):
+            async def list(self, request):
+                from sanic.response import json
+
+                return json({"action": self.action})
+
+        app = Sanic("test-head-routes")
+        SanicRouter(app, prefix="api").register("items", ItemsViewSet, name="items")
+
+        _, response = app.test_client.head("/api/items")
+        assert response.status == 200
+
+    def test_sync_action_is_supported(self):
+        class ItemsViewSet(DummyViewSet):
+            @action(detail=False, url_path="sync", url_name="sync")
+            def sync_action(self, request):
+                from sanic.response import json
+
+                return json({"ok": True})
+
+        app = Sanic("test-sync-action")
+        SanicRouter(app).register("items", ItemsViewSet, name="items")
+
+        _, response = app.test_client.get("/items/sync")
+        assert response.status == 200
+        assert response.json == {"ok": True}
 
     def test_action_route_name_prefixed_with_register_name(self):
         class ActionViewSet(DummyViewSet):

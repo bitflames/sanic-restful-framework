@@ -23,9 +23,10 @@ class ProductViewSet(BaseViewSet):
 
 请求进入 ViewSet 前，`BaseViewSet.check_permissions()` 会在类上调用
 `has_permission(request, view)`（不实例化）。失败时抛出 Forbidden。
-没有认证信息时，中间件将 `request.ctx.user` 设为 `None`；例如
-`IsAuthenticated` 会拒绝该用户（403）。认证中间件只在请求头格式错误、JWT 未配置
-或用户不存在时返回 401；Token 缺失或签名/有效期校验失败会按匿名请求处理。
+认证中间件支持两种模式：默认未携带 Token 的请求回退为 `AnonymousUser`，
+`strict=True` 为强制认证，详见[认证中间件](../advanced/middleware/auth-middleware.md)。
+`AnonymousUser`（`is_active=False`）与 `None`（白名单跳过认证）都会被
+`IsAuthenticated` 拒绝（403）。
 
 ## 按 HTTP 方法设置权限
 

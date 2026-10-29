@@ -2,7 +2,7 @@
 
 Sanic RESTful framework 的版本发布历史和更新日志。
 
-当前包版本：`srf.__version__ == "0.1.1"`。
+当前包版本：`srf.__version__ == "0.1.3"`。
 
 ## 版本命名规则
 
@@ -15,6 +15,19 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
 格式：`主版本号.次版本号.修订号`
 
 ## 版本历史
+
+### v0.1.3
+
+**路由、分页、限流修复与认证接口拆分**
+
+- 修复 `HEAD` 请求 405、同步 `@action` 500、GitHub 登录缺少 `id` 等问题
+- 分页参数非法值回退并夹取到合法范围，空结果页码为 1
+- Redis 限流计数与过期时间改为 Lua 原子操作
+- 认证路由拆分为 `register_jwt_urls()` 等函数，新增 `change-password` / `reset-password`
+- 健康检查模块改为 `srf.health.route`；邮件配置可用 `app.config.EMAIL_CONFIG` 覆盖
+- 中英文文档同步，新增 `tests/test_jwt_flow.py`
+
+---
 
 ### v0.1.1
 
@@ -134,9 +147,9 @@ SRF 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
 
 ## 支持的 Python 版本
 
-| SRF 版本 | Python 版本 |
-|----------|-------------|
-| 0.0.x / 0.1.x | >= 3.11 |
+| SRF 版本      | Python 版本 |
+| ------------- | ----------- |
+| 0.0.x / 0.1.x | >= 3.11     |
 
 ---
 
@@ -182,4 +195,4 @@ Sanic RESTful framework 采用 MIT 许可证。
 
 ---
 
-*最后更新: 2026-08-06*
+_最后更新: 2026-08-06_

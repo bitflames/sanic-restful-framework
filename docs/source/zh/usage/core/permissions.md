@@ -33,9 +33,9 @@ class OrderViewSet(BaseViewSet):
 
 `BaseViewSet.check_permissions()` 会按顺序在**类上**调用
 `has_permission(request, view)` 同步和异步返回值都受支持。任一结果为假时抛出
-403 Forbidden。没有认证信息时，认证中间件会将 `request.ctx.user` 设为 `None`，由
-权限类决定是否允许请求；请求头格式错误、JWT 未配置或用户不存在时认证中间件返回
-401，而 Token 缺失或签名/有效期校验失败会按匿名请求处理。
+403 Forbidden。认证中间件的行为（默认未携带 Token 回退 `AnonymousUser`，
+`strict=True` 强制认证）见[认证中间件](../advanced/middleware/auth-middleware.md)；
+未认证请求由权限类决定是否放行（`IsAuthenticated` 会拒绝，返回 403）。
 
 权限方法是 `@staticmethod`：推荐继承 `BasePermission`，但不强制；只要提供同名静态方法即可（鸭式）。
 

@@ -55,7 +55,7 @@ REDIS_URL=redis://localhost:6379/0
 import os
 from sanic import Sanic
 from redis.asyncio import Redis
-from srf.auth.route import register_auth_urls
+from srf.auth.route import register_all_auth_urls
 from srf.config import settings
 
 app = Sanic("MyApp")
@@ -76,7 +76,7 @@ app.config.SOCIAL_CONFIG = {
 }
 
 settings.set_app(app)
-register_auth_urls(app, prefix="/api/auth")
+register_all_auth_urls(app, prefix="/api/auth")
 
 
 @app.before_server_start
@@ -92,14 +92,14 @@ async def close_redis(app):
 `SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY` 用于签名 OAuth state Cookie。生产环境应设置
 为独立的随机密钥。可选行为配置如下：
 
-| 配置项 | 默认值 | 作用 |
-| --- | --- | --- |
-| `SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY` | 回退到 `JWT_SECRET` | HMAC 签名 OAuth state Cookie |
-| `SOCIAL_LOGIN_COOKIE_KEY` | `oauth_state` | OAuth state Cookie 名称 |
-| `SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE` | `600` | state Cookie 有效期，秒 |
-| `SOCIAL_LOGIN_COOKIE_SECURE` | 根据当前请求是否为 HTTPS | 是否只通过 HTTPS 发送 Cookie |
-| `SOCIAL_LOGIN_REDIS_CODE_PREFIX` | `social-login` | Redis 一次性登录码 key 前缀 |
-| `SOCIAL_LOGIN_CODE_MAX_AGE` | `300` | 一次性登录码有效期，秒 |
+| 配置项                               | 默认值                   | 作用                         |
+| ------------------------------------ | ------------------------ | ---------------------------- |
+| `SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY` | 回退到 `JWT_SECRET`      | HMAC 签名 OAuth state Cookie |
+| `SOCIAL_LOGIN_COOKIE_KEY`            | `oauth_state`            | OAuth state Cookie 名称      |
+| `SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE`    | `600`                    | state Cookie 有效期，秒      |
+| `SOCIAL_LOGIN_COOKIE_SECURE`         | 根据当前请求是否为 HTTPS | 是否只通过 HTTPS 发送 Cookie |
+| `SOCIAL_LOGIN_REDIS_CODE_PREFIX`     | `social-login`           | Redis 一次性登录码 key 前缀  |
+| `SOCIAL_LOGIN_CODE_MAX_AGE`          | `300`                    | 一次性登录码有效期，秒       |
 
 ### 登录流程
 
@@ -133,7 +133,7 @@ async def close_redis(app):
 
 ### API 端点
 
-通过 `register_auth_urls(app)` 自动注册以下 GitHub OAuth 端点：
+通过 `register_all_auth_urls(app)`（或单独的 `register_social_auth_urls(app)`）自动注册以下 GitHub OAuth 端点：
 
 #### 1. 获取授权 URL
 
@@ -153,9 +153,9 @@ curl -i -X POST http://localhost:8000/api/auth/social/github/login
 **前端处理**：
 
 ```javascript
-const form = document.createElement('form');
-form.method = 'POST';
-form.action = '/api/auth/social/github/login';
+const form = document.createElement("form");
+form.method = "POST";
+form.action = "/api/auth/social/github/login";
 document.body.appendChild(form);
 form.submit(); // 浏览器跟随后端 302 跳转到 GitHub
 ```
@@ -165,6 +165,7 @@ form.submit(); // 浏览器跟随后端 302 跳转到 GitHub
 **端点**: `GET /api/auth/social/callback`
 
 这个端点由 GitHub 重定向触发，SRF 会自动：
+
 1. 验证 URL 中的 `state` 与带签名、带有效期的 Cookie
 2. 用 OAuth code 交换 access_token
 3. 获取 GitHub 用户信息，并选择已验证的主邮箱（没有主邮箱时选择首个已验证邮箱）
@@ -217,23 +218,19 @@ curl -X POST http://localhost:8000/api/auth/social/github/login_by_code \
 #### React 示例
 
 ```javascript
-import React, { useEffect } from 'react';
+import React, { useEffect } from "react";
 
 function GitHubLogin() {
   const handleGitHubLogin = () => {
     // 后端会直接重定向到 GitHub，并设置 OAuth state Cookie。
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/api/auth/social/github/login';
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "/api/auth/social/github/login";
     document.body.appendChild(form);
     form.submit(); // 由浏览器跟随后端 302 跳转到 GitHub
   };
 
-  return (
-    <button onClick={handleGitHubLogin}>
-      使用 GitHub 登录
-    </button>
-  );
+  return <button onClick={handleGitHubLogin}>使用 GitHub 登录</button>;
 }
 
 // 回调页面（前端路由，对应 OAUTHCALLBACK）
@@ -242,36 +239,33 @@ function GitHubCallback() {
     const handleCallback = async () => {
       // 从 URL 获取临时 code
       const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-      
+      const code = params.get("code");
+
       if (!code) {
-        console.error('未获取到 code');
+        console.error("未获取到 code");
         return;
       }
-      
+
       try {
         // 3. 将临时 code 放入 JSON 请求体，通过 POST 换取 JWT
-        const response = await fetch(
-          `/api/auth/social/github/login_by_code`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code }),
-          }
-        );
-        
+        const response = await fetch(`/api/auth/social/github/login_by_code`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+
         const data = await response.json();
-        
+
         // 4. 保存 token（响应为扁平结构）
-        localStorage.setItem('access_token', data.access_token);
-        
+        localStorage.setItem("access_token", data.access_token);
+
         // 5. 跳转到首页
-        window.location.href = '/';
+        window.location.href = "/";
       } catch (error) {
-        console.error('获取 token 失败:', error);
+        console.error("获取 token 失败:", error);
       }
     };
-    
+
     handleCallback();
   }, []);
 
@@ -295,14 +289,14 @@ export default {
   methods: {
     handleGitHubLogin() {
       // 后端会直接重定向到 GitHub，并设置 OAuth state Cookie。
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = '/api/auth/social/github/login';
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = "/api/auth/social/github/login";
       document.body.appendChild(form);
       form.submit(); // 由浏览器跟随后端 302 跳转到 GitHub
-    }
-  }
-}
+    },
+  },
+};
 </script>
 ```
 
@@ -317,38 +311,34 @@ export default {
 export default {
   async mounted() {
     const code = this.$route.query.code;
-    
+
     if (!code) {
-      this.$router.push('/login');
+      this.$router.push("/login");
       return;
     }
-    
+
     try {
-      const response = await fetch(
-        `/api/auth/social/github/login_by_code`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code }),
-        }
-      );
-      
+      const response = await fetch(`/api/auth/social/github/login_by_code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+
       const data = await response.json();
-      
+
       // 保存 token
-      localStorage.setItem('access_token', data.access_token);
-      
+      localStorage.setItem("access_token", data.access_token);
+
       // 跳转到首页
-      this.$router.push('/');
+      this.$router.push("/");
     } catch (error) {
-      console.error('获取 token 失败:', error);
-      this.$router.push('/login');
+      console.error("获取 token 失败:", error);
+      this.$router.push("/login");
     }
-  }
-}
+  },
+};
 </script>
 ```
-
 
 ## 扩展其他登录提供商
 

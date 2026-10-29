@@ -1,4 +1,4 @@
-#  Sanic RESTful Framework (SRF)
+# Sanic RESTful Framework (SRF)
 
 A RESTful API framework based on [Sanic](https://sanic.dev/), providing a Django REST Framework-like development experience to help you quickly build high-performance Web APIs.
 
@@ -160,7 +160,7 @@ Response format:
 
 #### Authentication Middleware
 
-The framework provides JWT authentication middleware:
+JWT authentication middleware. Requests without a token get `AnonymousUser`. See the [Authentication Middleware](https://sanic-restful-framework.bitflames.com/usage/advanced/middleware/auth-middleware/).
 
 ```python
 from srf.middleware.authmiddleware import set_user_to_request_ctx
@@ -197,21 +197,19 @@ Each check is a class that is instantiated with the Sanic `app` and exposes the 
 
 ## Configuration
 
-SRF reads configuration from `srf.config.settings` via `settings` (uppercase keys such as `NON_AUTH_ENDPOINTS`, `DEFAULT_FILTERS`, `EMAIL_CODE_REDIS`). Override via Sanic `app.config` after `settings.set_app(app)` (or pass config when creating the app). `srfconfig` is a deprecated alias.
+SRF reads configuration from `srf.config.settings` via `settings` (uppercase keys such as `DEFAULT_FILTERS`, `USER_REGISTER_EMAIL_CODE`). Override via Sanic `app.config` after `settings.set_app(app)` (or pass config when creating the app). `srfconfig` is a deprecated alias.
 
 ```python
 from srf.config import settings
 from srf.config.settings import DEFAULT_FILTERS
 
-app.config.JWT_SECRET = "your-secret-key"  # required for JWT / register_auth_urls
-app.config.NON_AUTH_ENDPOINTS = ("/api/auth/register", "/api/auth/login", "/api/auth/refresh")  # full request paths
+app.config.JWT_SECRET = "your-secret-key"  # required for JWT / register_all_auth_urls
 app.config.DEFAULT_FILTERS = DEFAULT_FILTERS
-app.config.EMAIL_CODE_REDIS = "EMAIL_CODE"
 app.config.REQUEST_LIMITERS = []
 settings.set_app(app)
 ```
 
-For auth email verification and social login, ensure Redis is on `app.ctx.redis`. Email codes use `EMAIL_CODE_REDIS` (default `"EMAIL_CODE"`). Social one-time codes use `SOCIAL_LOGIN_REDIS_CODE_PREFIX` (default `"social-login"`).
+For auth email verification and social login, ensure Redis is on `app.ctx.redis`. Email codes use the `USER_REGISTER_EMAIL_CODE` key template (default `"USER_REGISTER:EMAIL_CODE:{email}"`). Social one-time codes use `SOCIAL_LOGIN_REDIS_CODE_PREFIX` (default `"social-login"`).
 
 ## Dependencies
 

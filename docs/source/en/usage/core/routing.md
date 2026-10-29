@@ -71,14 +71,16 @@ router.register("products", ProductViewSet, name="products")
 
 Generated routes:
 
-| HTTP method | URL path | Operation | ViewSet method | Route name |
-| ----------- | ---------- | ------ | -------------- | ---------- |
-| GET | `/api/products` | List | `list()` | `products-list` |
-| POST | `/api/products` | Create | `create()` | `products-list` |
-| GET | `/api/products/<pk>` | Detail | `retrieve()` | `products-detail` |
-| PUT | `/api/products/<pk>` | Full update | `update()` | `products-detail` |
-| PATCH | `/api/products/<pk>` | Partial update | `update()` | `products-detail` |
-| DELETE | `/api/products/<pk>` | Delete | `destroy()` | `products-detail` |
+| HTTP method | URL path             | Operation        | ViewSet method | Route name        |
+| ----------- | -------------------- | ---------------- | -------------- | ----------------- |
+| GET         | `/api/products`      | List             | `list()`       | `products-list`   |
+| HEAD        | `/api/products`      | List (no body)   | `list()`       | `products-list`   |
+| POST        | `/api/products`      | Create           | `create()`     | `products-list`   |
+| GET         | `/api/products/<pk>` | Detail           | `retrieve()`   | `products-detail` |
+| HEAD        | `/api/products/<pk>` | Detail (no body) | `retrieve()`   | `products-detail` |
+| PUT         | `/api/products/<pk>` | Full update      | `update()`     | `products-detail` |
+| PATCH       | `/api/products/<pk>` | Partial update   | `update()`     | `products-detail` |
+| DELETE      | `/api/products/<pk>` | Delete           | `destroy()`    | `products-detail` |
 
 ### Custom action routes
 
@@ -364,8 +366,8 @@ for route in app.router.routes:
 Example output:
 
 ```
-[GET, POST] /api/products
-[GET, PUT, PATCH, DELETE] /api/products/<pk>
+[GET, HEAD, POST] /api/products
+[GET, HEAD, PUT, PATCH, DELETE] /api/products/<pk>
 [GET] /api/products/featured
 [POST] /api/products/<pk>/publish
 ```

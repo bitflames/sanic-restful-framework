@@ -92,7 +92,7 @@ class PageNumberPagination:
     PAGE_SIZE_QUERY_PARAM: str = 'page_size'  # 每页数量查询参数名
 ```
 
-**没有** `page_size` / `max_page_size` 类属性。缺少或非法的 `page_size` 时，`from_queryset` 回退为 `page=1`、`page_size=10`。请求的 `page_size` 会被限制在 `MAX_PAGE_SIZE` 以内。
+**没有** `page_size` / `max_page_size` 类属性。`from_queryset()` 中非整数的 `page` / `page_size` 会回退为默认值；小于 1 的值会夹到 `1`；`page_size` 上限为 `MAX_PAGE_SIZE`。直接构造 `PageNumberPagination` 时也会做同样的范围修正。
 
 #### 创建自定义分页类
 
@@ -304,12 +304,12 @@ class ProductViewSet(BaseViewSet):
 
 ```javascript
 // 获取第1页
-fetch('/api/products?page=1&page_size=20')
-  .then(res => res.json())
-  .then(data => {
-    console.log('总数:', data.count);
-    console.log('当前页:', data.results);
-    console.log('有下一页:', data.next);
+fetch("/api/products?page=1&page_size=20")
+  .then((res) => res.json())
+  .then((data) => {
+    console.log("总数:", data.count);
+    console.log("当前页:", data.results);
+    console.log("有下一页:", data.next);
   });
 ```
 
@@ -321,26 +321,26 @@ let currentPage = 1;
 async function loadPage(page) {
   const response = await fetch(`/api/products?page=${page}&page_size=20`);
   const data = await response.json();
-  
+
   // 显示数据
   renderProducts(data.results);
-  
+
   // 更新导航按钮
-  document.getElementById('prev-btn').disabled = !data.previous;
-  document.getElementById('next-btn').disabled = !data.next;
-  
+  document.getElementById("prev-btn").disabled = !data.previous;
+  document.getElementById("next-btn").disabled = !data.next;
+
   currentPage = page;
 }
 
 // 上一页
-document.getElementById('prev-btn').onclick = () => {
+document.getElementById("prev-btn").onclick = () => {
   if (currentPage > 1) {
     loadPage(currentPage - 1);
   }
 };
 
 // 下一页
-document.getElementById('next-btn').onclick = () => {
+document.getElementById("next-btn").onclick = () => {
   loadPage(currentPage + 1);
 };
 ```
@@ -354,15 +354,17 @@ let hasMore = true;
 
 async function loadMore() {
   if (isLoading || !hasMore) return;
-  
+
   isLoading = true;
-  
-  const response = await fetch(`/api/products?page=${currentPage}&page_size=20`);
+
+  const response = await fetch(
+    `/api/products?page=${currentPage}&page_size=20`,
+  );
   const data = await response.json();
-  
+
   // 追加数据
   appendProducts(data.results);
-  
+
   // 更新状态
   hasMore = data.next;
   currentPage++;
@@ -370,7 +372,7 @@ async function loadMore() {
 }
 
 // 监听滚动
-window.addEventListener('scroll', () => {
+window.addEventListener("scroll", () => {
   if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
     loadMore();
   }

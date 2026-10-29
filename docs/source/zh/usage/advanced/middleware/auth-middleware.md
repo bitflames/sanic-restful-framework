@@ -1,8 +1,16 @@
 # 认证中间件
 
 认证中间件从请求中读取 JWT，并把数据库中的用户对象写入
-`request.ctx.user`。没有认证信息时，`request.ctx.user` 会设为 `None`，请求仍可继续；
-权限类可据此区分匿名用户和已认证用户。
+`request.ctx.user`。`authenticate_request()` 支持两种模式：
+
+- **`strict=False`（默认，可选认证）**：完全未携带凭证（没有 `Authorization` 头）的请求回退为
+  `request.ctx.user = AnonymousUser()`（见 `srf.auth.models.AnonymousUser`）。**出示了**
+  但无效、过期、伪造或其用户已不存在的 token 仍然抛出 401——一旦客户端尝试认证，该次尝试必须成功。
+- **`strict=True`（强制认证）**：每个请求都必须携带有效且未过期的 access token；
+  否则（包括完全未携带凭证的请求）抛出 401。
+
+公开端点（登录、注册、刷新令牌、健康检查等）也可以由调用方在调用该函数**之前**过滤（白名单），
+使其完全跳过认证。
 
 ## 配置
 
@@ -12,7 +20,11 @@ from srf.middleware.authmiddleware import set_user_to_request_ctx
 
 @app.middleware("request")
 async def auth_middleware(request):
-    await set_user_to_request_ctx(request)
+    # 白名单先行过滤：公开端点完全跳过认证
+    if request.path == "/health" or request.path.startswith("/api/auth/"):
+        request.ctx.user = None
+        return
+    await set_user_to_request_ctx(request, strict=True)  # 强制认证
 ```
 
 应用必须提供与签发 Token 相同的密钥：
@@ -23,14 +35,14 @@ app.config.JWT_SECRET = "从安全的环境变量读取"
 
 ## 请求流程
 
-1. 从 `request.app.ctx.auth` 提取 JWT payload。
-2. 没有 payload 时，将 `request.ctx.user` 设为 `None` 并继续处理请求。
-3. 有 payload 时，调用 `retrieve_user(request, payload)` 加载用户，并将 ORM 用户放到
-   `request.ctx.user`。
+1. 从 `Authorization: Bearer <token>` 提取 token。头缺失时：`strict=True` 抛出 401，
+   否则回退为 `request.ctx.user = AnonymousUser()`；格式错误时一律抛出 401。
+2. 通过 `request.app.ctx.auth` 验签并校验有效期；过期、伪造或无法解码时抛出 401
+   （两种模式一致）。
+3. 调用 `retrieve_user(request, payload)` 加载用户，并将 ORM 用户放到
+   `request.ctx.user`；用户不存在或被禁用时抛出 401。
 
-`Authorization` 请求头格式错误、未初始化 JWT 或 Token 对应的用户不存在时返回 401；
-Token 缺失，或签名/有效期校验失败时 payload 为 `None`，请求按匿名请求继续执行
-（`request.ctx.user` 为 `None`），是否拒绝由权限类决定。
+注意：白名单路径完全跳过认证——即使携带有效 token，`request.ctx.user` 也是 `None`。
 
 ## 核心函数
 
@@ -49,14 +61,16 @@ token = extract_bearer_token(request)
 ```python
 from srf.middleware.authmiddleware import authenticate_request
 
-await authenticate_request(request)
+await authenticate_request(request)               # 可选认证（默认）：无 token -> AnonymousUser
+await authenticate_request(request, strict=True)  # 强制认证：无 token -> 401
 user = request.ctx.user
 ```
 
 ### set_user_to_request_ctx
 
-该函数调用 `authenticate_request(request)`，可直接用于应用 middleware。没有认证信息时，
-`request.ctx.user` 为 `None`；携带有效 Token 时则为对应的 ORM 用户。
+该函数透传参数给 `authenticate_request` 并作为应用 middleware 使用。`strict=False`（默认）为可选认证：
+无凭证回退 `AnonymousUser`；`strict=True` 为强制认证。出示了但无效的 token 在两种模式下都抛出 401
+（见 [authenticate_request](#authenticate_request)）。
 
 ## 中间件顺序
 

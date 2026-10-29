@@ -99,7 +99,7 @@ SRF 提供了多种过滤器，可以组合使用：
 
 - **IPRateLimit**：基于 IP 地址限流
 - **UserRateLimit**：基于用户 ID 限流
-- **PathRateLimit**：基于请求路径限流
+- **PathRateLimit**：基于请求路径 + 用户/IP 限流
 - **HeaderRateLimit**：基于请求头限流
 
 **存储方式：**
@@ -209,16 +209,16 @@ SRF 适合以下场景：
 
 ## 对比其他框架
 
-| 特性 | Sanic RESTful framework | FastAPI | Django REST framework |
-| ------ | ----- | --------- | ------------- |
-| 异步支持 | ✅ 完整 | ✅ 完整 | ⚠️ 部分 |
-| 性能 | 🚀很高 | 🚀 较高 | ⚡ 中等 |
-| 开发速度 | 很快 | 快 | 很快 |
-| 学习曲线 | 📈 平缓 | 📈 平缓 | 📈 陡峭 |
-| ViewSet | ✅ 支持 | ❌ 不支持 | ✅ 支持 |
-| 数据验证 | Pydantic | Pydantic | Serializer |
-| ORM | Tortoise(其他ORM扩展中) | SQLAlchemy/其他 | Django ORM |
-| 社区 | 🌱 成长中 | 🌳 活跃 | 🌲 成熟 |
+| 特性     | Sanic RESTful framework | FastAPI         | Django REST framework |
+| -------- | ----------------------- | --------------- | --------------------- |
+| 异步支持 | ✅ 完整                 | ✅ 完整         | ⚠️ 部分               |
+| 性能     | 🚀很高                  | 🚀 较高         | ⚡ 中等               |
+| 开发速度 | 很快                    | 快              | 很快                  |
+| 学习曲线 | 📈 平缓                 | 📈 平缓         | 📈 陡峭               |
+| ViewSet  | ✅ 支持                 | ❌ 不支持       | ✅ 支持               |
+| 数据验证 | Pydantic                | Pydantic        | Serializer            |
+| ORM      | Tortoise(其他ORM扩展中) | SQLAlchemy/其他 | Django ORM            |
+| 社区     | 🌱 成长中               | 🌳 活跃         | 🌲 成熟               |
 
 ## 下一步
 

@@ -6,12 +6,13 @@ validation errors into 422 exceptions. It does not install a global unified exce
 ## SRF exceptions
 
 ```python
-from srf.exceptions import ImproperlyConfigured, PydanticValidationException, TargetObjectAlreadyExist
+from srf.exceptions import ImproperlyConfigured, PydanticValidationException, TargetObjectAlreadyExist, TooManyRequest
 ```
 
 - `TargetObjectAlreadyExist`: An `HTTPException` subclass with status code 409 (`quiet=True`).
 - `ImproperlyConfigured`: An `HTTPException` subclass with status code 500.
 - `PydanticValidationException`: An `HTTPException` subclass with status code 422 (`quiet=True`).
+- `TooManyRequest`: An `HTTPException` subclass with status code 429 (`quiet=True`), raised when verification code attempts exceed the limit.
 
 They only define status codes and have no custom JSON response structure; the final response format is decided by Sanic's default
 exception handling (or handlers registered by the application).
@@ -20,10 +21,10 @@ exception handling (or handlers registered by the application).
 
 `as_view()` only catches two kinds of validation errors in the `try` block around the handler call:
 
-| Exception | Handling |
-|---|---|
-| `pydantic.ValidationError` | Converted to `PydanticValidationException` (422), with message `str(error)` |
-| `tortoise.exceptions.ValidationError` | Same as above, converted to 422 |
+| Exception                             | Handling                                                                    |
+| ------------------------------------- | --------------------------------------------------------------------------- |
+| `pydantic.ValidationError`            | Converted to `PydanticValidationException` (422), with message `str(error)` |
+| `tortoise.exceptions.ValidationError` | Same as above, converted to 422                                             |
 
 Apart from these two kinds, `as_view()` **does not catch** other exceptions:
 
@@ -112,6 +113,7 @@ except ValidationError as error:
 5. **Hide internal details**: do not expose internal errors in production
 6. **Use appropriate status codes**: use the correct HTTP status code for different errors
 7. **Internationalization**: support error messages in multiple languages
+
 ## Next steps
 
 - Study [HTTP Status](http-status.md) to learn about using status codes

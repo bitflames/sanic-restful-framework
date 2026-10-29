@@ -92,7 +92,7 @@ class PageNumberPagination:
     PAGE_SIZE_QUERY_PARAM: str = 'page_size'  # Page size query parameter name
 ```
 
-There are **no** `page_size` / `max_page_size` class attributes. When `page_size` is missing or invalid, `from_queryset` falls back to `page=1` and `page_size=10`. The requested `page_size` is limited to at most `MAX_PAGE_SIZE`.
+There are **no** `page_size` / `max_page_size` class attributes. In `from_queryset()`, non-integer `page` / `page_size` values fall back to defaults; values below 1 clamp to `1`; and `page_size` is limited to at most `MAX_PAGE_SIZE`. Constructing `PageNumberPagination` directly applies the same range fixes.
 
 #### Creating a custom pagination class
 
@@ -304,12 +304,12 @@ class ProductViewSet(BaseViewSet):
 
 ```javascript
 // Get page 1
-fetch('/api/products?page=1&page_size=20')
-  .then(res => res.json())
-  .then(data => {
-    console.log('Total:', data.count);
-    console.log('Current page:', data.results);
-    console.log('Has next page:', data.next);
+fetch("/api/products?page=1&page_size=20")
+  .then((res) => res.json())
+  .then((data) => {
+    console.log("Total:", data.count);
+    console.log("Current page:", data.results);
+    console.log("Has next page:", data.next);
   });
 ```
 
@@ -321,26 +321,26 @@ let currentPage = 1;
 async function loadPage(page) {
   const response = await fetch(`/api/products?page=${page}&page_size=20`);
   const data = await response.json();
-  
+
   // Render the data
   renderProducts(data.results);
-  
+
   // Update the navigation buttons
-  document.getElementById('prev-btn').disabled = !data.previous;
-  document.getElementById('next-btn').disabled = !data.next;
-  
+  document.getElementById("prev-btn").disabled = !data.previous;
+  document.getElementById("next-btn").disabled = !data.next;
+
   currentPage = page;
 }
 
 // Previous page
-document.getElementById('prev-btn').onclick = () => {
+document.getElementById("prev-btn").onclick = () => {
   if (currentPage > 1) {
     loadPage(currentPage - 1);
   }
 };
 
 // Next page
-document.getElementById('next-btn').onclick = () => {
+document.getElementById("next-btn").onclick = () => {
   loadPage(currentPage + 1);
 };
 ```
@@ -354,15 +354,17 @@ let hasMore = true;
 
 async function loadMore() {
   if (isLoading || !hasMore) return;
-  
+
   isLoading = true;
-  
-  const response = await fetch(`/api/products?page=${currentPage}&page_size=20`);
+
+  const response = await fetch(
+    `/api/products?page=${currentPage}&page_size=20`,
+  );
   const data = await response.json();
-  
+
   // Append data
   appendProducts(data.results);
-  
+
   // Update state
   hasMore = data.next;
   currentPage++;
@@ -370,7 +372,7 @@ async function loadMore() {
 }
 
 // Listen for scrolling
-window.addEventListener('scroll', () => {
+window.addEventListener("scroll", () => {
   if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
     loadMore();
   }

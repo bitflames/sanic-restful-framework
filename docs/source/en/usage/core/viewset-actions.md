@@ -6,6 +6,8 @@ ViewSet decorators extend and customize ViewSet behavior. The most important one
 
 The `@action` decorator adds custom actions to a ViewSet, beyond the standard CRUD operations.
 
+Action methods may be declared as `async def` or plain `def`; `as_view()` checks whether the return value is awaitable and awaits it only when needed.
+
 ### Basic usage
 
 ```python
@@ -71,12 +73,12 @@ action(
 
 **Parameter reference**:
 
-| Parameter | Type | Default | Description |
-| ------ | ------ | -------- | ------ |
-| `methods` | Sequence[str] | `("GET",)` | List of HTTP methods, such as `["get"]`, `["post"]`, `["get", "post"]` (case-insensitive on registration) |
-| `detail` | bool | `False` | `True` for a detail-level action (requires pk), `False` for a collection-level action |
-| `url_path` | str \| None | `/<method name>` | Custom URL path segment |
-| `url_name` | str \| None | Method name | Route name, used for URL reverse resolution |
+| Parameter  | Type          | Default          | Description                                                                                               |
+| ---------- | ------------- | ---------------- | --------------------------------------------------------------------------------------------------------- |
+| `methods`  | Sequence[str] | `("GET",)`       | List of HTTP methods, such as `["get"]`, `["post"]`, `["get", "post"]` (case-insensitive on registration) |
+| `detail`   | bool          | `False`          | `True` for a detail-level action (requires pk), `False` for a collection-level action                     |
+| `url_path` | str \| None   | `/<method name>` | Custom URL path segment                                                                                   |
+| `url_name` | str \| None   | Method name      | Route name, used for URL reverse resolution                                                               |
 
 ### Collection-level vs detail-level actions
 
@@ -100,14 +102,14 @@ from tortoise.functions import Count, Avg, Sum
 
 @action(methods=["get"], detail=False, url_path="statistics")
 async def get_statistics(self, request):
-    """Get product statistics"""    
-    
+    """Get product statistics"""
+
     stats = await Product.all().annotate(
         total=Count("id"),
         avg_price=Avg("price"),
         total_value=Sum("price")
     ).values("total", "avg_price", "total_value")
-    
+
     return json(stats[0] if stats else {})
 
 
@@ -285,10 +287,10 @@ async def change_status(self, request, pk):
     """Change status"""
     product = await self.get_object(pk)
     new_status = request.json.get("status")
-    
+
     product.status = new_status
     await product.save()
-    
+
     return json({"message": "Status updated"})
 ```
 

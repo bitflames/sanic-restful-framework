@@ -3,19 +3,23 @@ from typing import ClassVar
 import jwt
 from jwt.exceptions import InvalidTokenError
 from redis.asyncio import Redis
-from sanic import Request, Sanic
-from sanic.exceptions import BadRequest, Forbidden, HTTPException, InternalServerError, ServerError
+from sanic import Request
+from sanic.exceptions import BadRequest, Forbidden, InternalServerError, ServerError
 from sanic.response import HTTPResponse, JSONResponse
-from sanic_jwt import Initialize
 from sanic_jwt.authentication import Authentication
-from sanic_jwt.exceptions import MissingAuthorizationCookie, MissingAuthorizationHeader, MissingAuthorizationQueryArg
+from sanic_jwt.exceptions import (
+    InvalidAuthorizationHeader,
+    MissingAuthorizationCookie,
+    MissingAuthorizationHeader,
+    MissingAuthorizationQueryArg,
+)
 from tortoise.exceptions import IntegrityError
 from tortoise.queryset import QuerySet
 from tortoise.transactions import in_transaction
 
 from srf.auth import models, schema
 from srf.config import settings
-from srf.exceptions import TargetObjectAlreadyExist
+from srf.exceptions import TargetObjectAlreadyExist, TooManyRequest
 from srf.permission.permission import IsAuthenticated
 from srf.tools.email import EmailCodeVerifySchema, EmailValidator, send_template_email
 from srf.tools.utils import generate_code
@@ -23,72 +27,22 @@ from srf.views import BaseViewSet, action
 from srf.views.decorators import validate_request
 from srf.views.http_status import HTTPStatus
 
-from .auth import (
-    authenticate,
-    gen_user_access_token,
-    retrieve_refresh_token,
-    retrieve_user,
-    revoke_refresh_token,
-    store_refresh_token,
-    update_user_last_login,
-)
+from .auth import gen_user_access_token, revoke_refresh_token
 from .models import RefreshToken
 
 __all__ = [
     "UserViewSet",
     "logout",
     "register",
-    "setup_auth",
     "verify_email",
 ]
 
 
-def setup_auth(app: Sanic, *args, **kwargs) -> Initialize:
-    """
-    Setup authentication for the application.
-
-    Args:
-        app: The Sanic application instance.
-        url_prefix: The URL prefix for the authentication endpoints.
-        login_path: The path to the login endpoint.
-    """
-
-    jwt_secret = app.config.get("JWT_SECRET")
-    if not isinstance(jwt_secret, (str, bytes)) or not jwt_secret:
-        raise ServerError("app.config.JWT_SECRET must be a non-empty string or bytes")
-    refresh_token_secret = app.config.get("SECRET_KEY")
-    if not isinstance(refresh_token_secret, (str, bytes)) or not refresh_token_secret:
-        raise ServerError("app.config.SECRET_KEY must be a non-empty string or bytes")
-
-    url_prefix = kwargs.pop("url_prefix", "/api/auth")
-
-    # setup_auth is authoritative for these; drop caller-provided values instead of
-    # forwarding them into Initialize() where they would collide.
-    for reserved in (
-        "authenticate",
-        "retrieve_user",
-        "secret",
-        "refresh_token_enabled",
-        "store_refresh_token",
-        "retrieve_refresh_token",
-        "expiration_delta",
-    ):
-        kwargs.pop(reserved, None)
-
-    # TODO: sanic_jwt does not read app.config from Configuration; SRF will replace sanic_jwt in the future
-
-    return Initialize(
-        app,
-        authenticate=authenticate,
-        retrieve_user=retrieve_user,
-        secret=jwt_secret,
-        url_prefix=url_prefix,
-        refresh_token_enabled=True,
-        store_refresh_token=store_refresh_token,
-        retrieve_refresh_token=retrieve_refresh_token,
-        expiration_delta=int(settings.JWT_ACCESS_TOKEN_EXPIRES.total_seconds()),
-        **kwargs,
-    )
+def _require_json_object(request: Request) -> dict:
+    """Return the request body when it is a JSON object, otherwise 400."""
+    if not isinstance(request.json, dict):
+        raise BadRequest("JSON request body is required.")
+    return request.json
 
 
 def _decode_access_token(auth: Authentication, token: str, secret) -> dict:
@@ -110,12 +64,18 @@ def _decode_access_token(auth: Authentication, token: str, secret) -> dict:
 async def logout(request: Request):
     auth: Authentication | None = getattr(request.app.ctx, "auth", None)
     if auth is None:
-        raise ServerError("JWT is not configured; call register_auth_urls() first")
+        raise ServerError("JWT is not configured; call register_jwt_urls() first")
     try:
         token = auth._get_token(request)
         secret = await auth._get_secret(token)
         payload = _decode_access_token(auth, token, secret)
-    except (InvalidTokenError, MissingAuthorizationHeader, MissingAuthorizationCookie, MissingAuthorizationQueryArg):
+    except (
+        InvalidTokenError,
+        InvalidAuthorizationHeader,
+        MissingAuthorizationHeader,
+        MissingAuthorizationCookie,
+        MissingAuthorizationQueryArg,
+    ):
         return HTTPResponse(status=HTTPStatus.HTTP_200_OK)
     user_id = payload.get("user_id")
     if user_id is not None:
@@ -158,11 +118,12 @@ return 2
 @validate_request(show_errors=True)
 async def register(request: Request):
     """Register a new user after verifying email code."""
-    if not request.json:
-        raise BadRequest("JSON request body is required.")
+    request_data = _require_json_object(request)
+    if getattr(request.app.ctx, "auth", None) is None:
+        raise ServerError("JWT is not configured; call register_jwt_urls() first")
 
-    sch_email_verification = EmailCodeVerifySchema.model_validate(request.json, extra="ignore")
-    sch_user_in = schema.UserSchemaWriter.model_validate(request.json, extra="ignore")
+    sch_email_verification = EmailCodeVerifySchema.model_validate(request_data, extra="ignore")
+    sch_user_in = schema.UserSchemaWriter.model_validate(request_data, extra="ignore")
 
     redis: Redis = request.app.ctx.redis
     email = sch_email_verification.email.lower()
@@ -173,6 +134,9 @@ async def register(request: Request):
     user_data = sch_user_in.model_dump(exclude_unset=True, exclude_none=True, exclude={"password", "password_confirm"}, by_alias=False)
     user_data["password"] = schema.unwrap_secret(sch_user_in.password)
 
+    # TODO: The code is consumed before the user row is created.
+    # A duplicate username/email (or DB failure) therefore burns the code and forces a new
+    # verification email. Pre-check uniqueness or revisit the ordering.
     result = await redis.eval(
         VERIFY_EMAIL_CODE_LUA,
         2,
@@ -188,15 +152,15 @@ async def register(request: Request):
     if result == 2:
         raise BadRequest("The verification code is invalid.")
     if result == 3:
-        raise HTTPException("Too many incorrect attempts. Please request a new verification code.", status=HTTPStatus.HTTP_429_TOO_MANY_REQUESTS)
+        raise TooManyRequest("Too many incorrect attempts. Please request a new verification code.")
     if result != 1:
         raise InternalServerError("Unexpected email verification result.")
 
-    user_db = await models.User.create_user(user_data)
-    await update_user_last_login(user_db)
+    async with in_transaction():
+        user_db = await models.User.create_user(user_data)
+        user_return_data = await gen_user_access_token(request, user_db)
 
-    user_return_data = await gen_user_access_token(request, user_db)
-    return JSONResponse(user_return_data, status=HTTPStatus.HTTP_200_OK)
+    return JSONResponse(user_return_data, status=HTTPStatus.HTTP_201_CREATED)
 
 
 CREATE_EMAIL_CODE_LUA = """
@@ -222,10 +186,9 @@ return 0
 
 async def _send_email_with_redis_code(request: Request):
     """Send a verification code email and store the code in Redis."""
-    if not request.json:
-        raise BadRequest("JSON request body is required.")
+    request_data = _require_json_object(request)
 
-    email = EmailValidator.model_validate(request.json, extra="ignore").email.lower()
+    email = EmailValidator.model_validate(request_data, extra="ignore").email.lower()
 
     redis: Redis = request.app.ctx.redis
     email_cache_key = settings.USER_REGISTER_EMAIL_CODE.format(email=email)
@@ -272,6 +235,14 @@ async def verify_email(request: Request):
     return await _send_email_with_redis_code(request)
 
 
+async def _apply_new_password(user: models.User, new_password: str) -> None:
+    """Hash and save the new password, revoking all refresh tokens in one transaction."""
+    user.password = models.User.hash_password(new_password)
+    async with in_transaction() as conn:
+        await user.save(using_db=conn)
+        await RefreshToken.filter(user=user).using_db(conn).delete()
+
+
 class UserViewSet(BaseViewSet):
     permission_classes = (IsAuthenticated,)
     search_fields: ClassVar[list[str]] = ["username", "email"]
@@ -289,16 +260,24 @@ class UserViewSet(BaseViewSet):
 
     @property
     def queryset(self) -> QuerySet:
-        return models.User.filter(id=self.request.ctx.user.id) if not self.request.ctx.user.is_superuser else models.User.all()
+        # Roles are always prefetched so UserSchemaReader serializes them
+        # consistently across list/retrieve (never None from a lazy relation).
+        qs = models.User.all().prefetch_related("roles")
+        if not self.request.ctx.user.is_superuser:
+            return qs.filter(id=self.request.ctx.user.id)
+        return qs
 
     def get_schema(self):
         action = getattr(self, "action", None)
         if action in ("list", "retrieve", "get_self"):
             return schema.UserSchemaReader
+
+        user = getattr(getattr(getattr(self, "request", None), "ctx", None), "user", None)
+        is_superuser = bool(getattr(user, "is_superuser", False))
         if action == "create":
-            return schema.UserSchemaWriter
+            return schema.UserSchemaAdminCreate if is_superuser else schema.UserSchemaWriter
         if action == "update":
-            return schema.UserSchemaUpdate
+            return schema.UserSchemaAdminUpdate if is_superuser else schema.UserSchemaUpdate
         return schema.UserSchemaReader
 
     @action(detail=False, url_name="self", url_path="self")
@@ -309,54 +288,70 @@ class UserViewSet(BaseViewSet):
     @action(detail=False, methods=["post"], url_name="change-password", url_path="change-password")
     async def change_password(self, request: Request):
         """Change password for the authenticated user (SHA-256 + bcrypt)."""
-        if not request.json:
-            raise BadRequest("JSON request body is required.")
-        sch = schema.ChangePasswordSchema.model_validate(request.json)
+        request_data = _require_json_object(request)
+        sch = schema.ChangePasswordSchema.model_validate(request_data)
         user: models.User = request.ctx.user
         old_password = schema.unwrap_secret(sch.old_password)
         if not old_password or not user.verify_password(old_password):
             raise BadRequest("The old password is incorrect.")
         new_password = schema.unwrap_secret(sch.password)
-        assert new_password is not None  # validated by ChangePasswordSchema
-        user.password = models.User.hash_password(new_password)
+        if not new_password:
+            raise BadRequest("password1 is required.")
+        await _apply_new_password(user, new_password)
+        return HTTPResponse(status=HTTPStatus.HTTP_200_OK)
 
-        # update and delete refresh token in a transaction
-        async with in_transaction() as conn:
-            await user.save(using_db=conn)
-            await RefreshToken.filter(user=user).using_db(conn).delete()
+    @action(detail=True, methods=["post"], url_name="reset-password", url_path="reset-password")
+    async def reset_password(self, request: Request, pk):
+        """Reset a user's password (superuser only); revokes all refresh tokens."""
+        if not request.ctx.user.is_superuser:
+            raise Forbidden(message="Forbidden")
+        request_data = _require_json_object(request)
+        sch = schema.AdminPasswordResetSchema.model_validate(request_data)
+        user = await self.get_object(pk)
+        new_password = schema.unwrap_secret(sch.password)
+        if not new_password:
+            raise BadRequest("password1 is required.")
+        await _apply_new_password(user, new_password)
         return HTTPResponse(status=HTTPStatus.HTTP_200_OK)
 
     async def create(self, request: Request, *args, **kwargs) -> HTTPResponse:
-        """Create a user by superuser. The write schema validates input; the read schema serializes the new row."""
-        if request.json is None:
-            return HTTPResponse(status=HTTPStatus.HTTP_400_BAD_REQUEST)
+        """Create a user by superuser. The admin write schema validates input; the read schema serializes the new row."""
+        request_data = _require_json_object(request)
         if not self.request.ctx.user.is_superuser:
             raise Forbidden(message="Forbidden")
-        sch_model_in = schema.UserSchemaWriter.model_validate(request.json, strict=True)
+        sch_model_in = self.get_schema().model_validate(request_data, strict=True)
         orm_model = await self.perform_create(sch_model_in)
+        await orm_model.fetch_related("roles")
         sch_model_out = schema.UserSchemaReader.model_validate(orm_model, from_attributes=True)
         return JSONResponse(sch_model_out.model_dump(mode="json"), status=HTTPStatus.HTTP_201_CREATED)
 
-    async def perform_create(self, sch_model: schema.UserSchemaWriter):
-        """Create ORM user from Pydantic schema. TODO: verify email availability.
-        Only superuser can create user.  # TODO , is_superuser, is_active, roles
+    async def perform_create(self, sch_model: schema.UserSchemaAdminCreate):
+        """Create ORM user from the admin create schema (superuser only).
+
+        Privilege fields (is_superuser, is_active, roles) flow into create_user here;
+        the self-service register() path never passes them.  # TODO: verify email availability
         """
         if not self.request.ctx.user.is_superuser:
             raise Forbidden(message="Forbidden")
         user_data = sch_model.model_dump(
             exclude_unset=True,
             exclude_none=True,
-            exclude={"password", "password_confirm", "is_superuser", "is_active"},
+            exclude={"password", "password_confirm"},
             by_alias=False,
         )
         user_data["password"] = schema.unwrap_secret(sch_model.password)
         return await models.User.create_user(user_data)
 
     async def update(self, request: Request, pk, *args, **kwargs) -> JSONResponse:
-        """Update a user. The update schema validates input; the read schema serializes the row."""
-        if request.json is None:
-            return HTTPResponse(status=HTTPStatus.HTTP_400_BAD_REQUEST)
-        sch_model_in = schema.UserSchemaUpdate.model_validate(request.json, strict=True)
+        """Update a user. Superusers get the admin schema (privilege fields); users updating themselves get the profile schema."""
+        request_data = _require_json_object(request)
+        # Neither update schema has password fields (extras are ignored), so
+        # reject password keys explicitly — password changes go through the
+        # change-password / reset-password actions.
+        if any(key in request_data for key in ("email", "password", "password1", "password2")):
+            raise BadRequest("Email and change-password is not supported.")
+        write_schema = self.get_schema()
+        sch_model_in = write_schema.model_validate(request_data, strict=True)
         orm_model = await self.get_object(pk)
         orm_model = await self.perform_update(sch_model_in, orm_model)
         sch_model_out = schema.UserSchemaReader.model_validate(orm_model, from_attributes=True)
@@ -364,10 +359,25 @@ class UserViewSet(BaseViewSet):
 
     async def perform_update(self, sch_model: schema.UserSchemaUpdate, orm_model: models.User) -> models.User:
         """
-        sch_model: instance of BaseModel
+        sch_model: instance of UserSchemaUpdate or UserSchemaAdminUpdate
         orm_model: instance of TorModel
+
+        M2M roles cannot go through update_from_dict; they are replaced by name
+        after the row save, and the prefetch cache is refreshed for serialization.
         """
+        data = sch_model.model_dump(exclude_unset=True, by_alias=False, exclude_none=False)
+        role_names = data.pop("roles", None)
         try:
-            return await super().perform_update(sch_model, orm_model)
+            async with in_transaction() as conn:
+                if data:
+                    orm_model.update_from_dict(data)
+                    await orm_model.save(using_db=conn)
+                if role_names is not None:
+                    roles = await models.Role.filter(name__in=role_names).using_db(conn)
+                    await orm_model.roles.clear(using_db=conn)
+                    if roles:
+                        await orm_model.roles.add(*roles, using_db=conn)
         except IntegrityError:
             raise TargetObjectAlreadyExist(message="data conflict")
+        await orm_model.fetch_related("roles")
+        return orm_model

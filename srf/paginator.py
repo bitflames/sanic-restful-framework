@@ -2,7 +2,7 @@ from functools import lru_cache
 from math import ceil
 from typing import Any, TypeVar
 
-from pydantic import BaseModel, TypeAdapter, field_validator
+from pydantic import BaseModel, TypeAdapter
 from sanic.exceptions import BadRequest
 from sanic.request import Request
 from tortoise.exceptions import ValidationError
@@ -30,17 +30,6 @@ def serialize_page(schema: type[BaseModel], rows: list[Any]) -> list[dict[str, A
     validated = adapter.validate_python(list(rows), from_attributes=True)
     dumped = adapter.dump_python(validated, by_alias=True, mode="json")
     return list(dumped)
-
-
-class PaginationParams(BaseModel):
-    page: int = 1
-    page_size: int = 10
-
-    @field_validator("page", "page_size")
-    def validate_positive(cls, v):
-        if v < 1:
-            raise ValueError("page and page_size must be integers greater than 0")
-        return v
 
 
 class PaginationResult(BaseModel):
@@ -93,7 +82,6 @@ class PageNumberPagination(BasePagination):
         queryset: The Tortoise QuerySet being paginated.
         page: Current page number (1-based).
         page_size: Items per page.
-        max_page_size: Effective page-size cap for this instance.
     """
 
     MAX_PAGE_SIZE: int = 100
@@ -105,32 +93,32 @@ class PageNumberPagination(BasePagination):
         queryset: QuerySet[T],
         page: int = 1,
         page_size: int = 10,
-        max_page_size: int = MAX_PAGE_SIZE,
     ):
         """
         :param queryset: Tortoise ORM queryset
-        :param page:
-        :param page_size:
-        :param max_page_size:
+        :param page: 1-based page number; values below 1 are clamped.
+        :param page_size: Items per page; clamped to 1..MAX_PAGE_SIZE.
         """
         self.queryset = queryset
-        self.page = page
-        self.page_size = page_size
-        self.max_page_size = max_page_size
+        self.page = max(int(page), 1)
+        self.page_size = min(max(int(page_size), 1), max(self.MAX_PAGE_SIZE, 1))
+
+    @staticmethod
+    def _positive_int(value, default: int) -> int:
+        """Parse an int and fall back to ``default`` when missing/invalid."""
+        try:
+            return max(int(value), 1)
+        except (TypeError, ValueError):
+            return default
 
     @classmethod
     def from_queryset(cls, queryset: QuerySet[T], request: Request) -> "PageNumberPagination":
-        """Parse page and page_size from request; ensure they are positive and within limits."""
-        try:
-            page = max(int(request.args.get(cls.PAGE_QUERY_PARAM, 1)), 1)
-        except (TypeError, ValueError):
-            page = 1
-
-        try:
-            page_size = min(max(int(request.args.get(cls.PAGE_SIZE_QUERY_PARAM)), 1), cls.MAX_PAGE_SIZE)
-        except (TypeError, ValueError):
-            page_size = 10
-
+        """Parse page and page_size from request; fall back to defaults when invalid."""
+        page = cls._positive_int(request.args.get(cls.PAGE_QUERY_PARAM, 1), 1)
+        page_size = min(
+            cls._positive_int(request.args.get(cls.PAGE_SIZE_QUERY_PARAM, 10), 10),
+            max(cls.MAX_PAGE_SIZE, 1),
+        )
         return cls(queryset=queryset, page=page, page_size=page_size)
 
     async def paginate(self, sch_model: type[BaseModel] | None = None) -> PaginationResult:
@@ -157,9 +145,7 @@ class PageNumberPagination(BasePagination):
         return result.model_dump(by_alias=True)
 
     def num_pages(self, total_count: int) -> int:
-        """Return the total number of pages."""
+        """Return the total number of pages (empty results still have one page)."""
 
         total_count = total_count or 0
-        if total_count == 0:
-            return 0
-        return ceil(total_count / self.page_size)
+        return max(ceil(total_count / self.page_size), 1)

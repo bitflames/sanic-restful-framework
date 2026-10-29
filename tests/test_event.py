@@ -113,3 +113,24 @@ class TestEventViewSet:
         assert kwargs["obj_id"] == 7
         assert kwargs["user_id"] == 9
         assert "organizer_id" not in kwargs
+
+    @pytest.mark.asyncio
+    async def test_perform_create_drops_read_only_fields(self):
+        vs = EventViewSet()
+        vs.request = MagicMock()
+        vs.request.ctx.user = MagicMock(id=9)
+        sch = EventSchema.model_validate(
+            {
+                "id": 1,
+                "create_time": datetime(2026, 8, 14, 4, 0, tzinfo=UTC),
+                "action": "user.update",
+            }
+        )
+        with patch.object(Event, "create", new_callable=AsyncMock) as create_mock:
+            create_mock.return_value = MagicMock()
+            await vs.perform_create(sch)
+        kwargs = create_mock.await_args.kwargs
+        assert "id" not in kwargs
+        assert "create_time" not in kwargs
+        assert kwargs["action"] == "user.update"
+        assert kwargs["user_id"] == 9

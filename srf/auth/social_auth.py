@@ -18,7 +18,7 @@ from srf.tools.signing import sign_state, unsign_state
 from srf.views.http_status import HTTPStatus
 
 from . import models
-from .auth import check_active, gen_user_access_token, update_user_last_login
+from .auth import gen_user_access_token
 
 DEFAULT_EXCHANGE_CODE_TTL = 300
 DEFAULT_EXCHANGE_CODE_PREFIX = "social-login"
@@ -29,6 +29,11 @@ __all__ = [
     "github_login_by_code",
     "github_login_callback",
 ]
+
+
+def _github_config(request: Request) -> dict:
+    """Return the GitHub OAuth config, preferring app.config over env defaults."""
+    return getattr(request.app.config, "SOCIAL_CONFIG", settings.SOCIAL_CONFIG)["github"]
 
 
 def _state_secret(request: Request) -> str:
@@ -87,8 +92,8 @@ async def _github_request_json(
 
 
 def _verified_email(emails: list[dict]) -> str | None:
-    """Prefer GitHub's verified primary email, then any verified email."""
-    verified = [email for email in emails if email.get("verified") and email.get("email")]
+    """Prefer GitHub's verified primary email, then any verified email. TODO config github data by schema"""
+    verified = [email for email in emails if isinstance(email, dict) and email.get("verified") and email.get("email")]
     primary = next((email for email in verified if email.get("primary")), None)
     selected = primary or (verified[0] if verified else None)
     return selected["email"] if selected else None
@@ -127,7 +132,7 @@ async def github_login_access(request: Request):
     """Redirect the user to the GitHub login page."""
 
     # get the github configurations from the request
-    github_config = request.app.config.SOCIAL_CONFIG["github"]
+    github_config = _github_config(request)
     # generate a random state
     state = secrets.token_urlsafe(32)
     # get the cookie settings from the request
@@ -161,7 +166,7 @@ async def github_login_access(request: Request):
 def clear_oauth_state_cookie(func):
     @wraps(func)
     async def wrapper(request: Request):
-        config = request.app.config.SOCIAL_CONFIG["github"]
+        config = _github_config(request)
         try:
             resp = await func(request)
         except Exception:  # noqa: BLE001
@@ -180,7 +185,7 @@ def clear_oauth_state_cookie(func):
 async def github_login_callback(request: Request):
     """Handle the GitHub callback and exchange the code for a JWT."""
     # get the github configurations from the request
-    github_config = request.app.config.SOCIAL_CONFIG["github"]
+    github_config = _github_config(request)
     # get the cookie settings from the request
     cookie_name, max_age, _ = _cookie_settings(request)
     # get the code from the request
@@ -252,10 +257,16 @@ async def github_login_callback(request: Request):
         github_username = github_user.get("name") or github_user.get("login") or fallback_username
     else:
         github_username = fallback_username
+
+    github_user_id = github_user.get("id") if isinstance(github_user, dict) else None
+    if github_user_id is None:
+        error_logger.error("GitHub OAuth failed: provider=github stage=user-provisioning missing user id")
+        return JSONResponse({"error": "GitHub did not provide a user id"}, status=HTTPStatus.HTTP_502_BAD_GATEWAY)
+
     try:
         oauth = await models.OAuthAccount.get_or_none(
             provider="github",
-            provider_user_id=github_user['id'],
+            provider_user_id=github_user_id,
         ).prefetch_related("user")
 
         if oauth is not None:
@@ -271,7 +282,7 @@ async def github_login_callback(request: Request):
                 )
             await models.OAuthAccount.create(
                 provider="github",
-                provider_user_id=github_user['id'],
+                provider_user_id=github_user_id,
                 user=user_db,
             )
         # Redirect with a temporary code so the JWT is never exposed in a URL.
@@ -308,9 +319,9 @@ async def github_login_by_code(request: Request):
         raise NotFound("Invalid authorization code") from None
 
     user_db = await models.User.filter(pk=user_id).prefetch_related("roles").first()
-    if user_db is None or not check_active(user_db):
+    if user_db is None or not user_db.check_active():
         raise NotFound("User not found or inactive")
 
-    await update_user_last_login(user_db)
+    await user_db.update_user_last_login()
     user_return_data = await gen_user_access_token(request, user_db)
     return JSONResponse(user_return_data, status=HTTPStatus.HTTP_200_OK)

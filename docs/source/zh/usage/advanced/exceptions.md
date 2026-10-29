@@ -6,12 +6,13 @@ SRF 定义了多个异常类，并在 `GenericAPIView.as_view()` 内将 Pydantic
 ## SRF 异常
 
 ```python
-from srf.exceptions import ImproperlyConfigured, PydanticValidationException, TargetObjectAlreadyExist
+from srf.exceptions import ImproperlyConfigured, PydanticValidationException, TargetObjectAlreadyExist, TooManyRequest
 ```
 
 - `TargetObjectAlreadyExist`：`HTTPException` 子类，状态码 409（`quiet=True`）。
 - `ImproperlyConfigured`：`HTTPException` 子类，状态码 500。
 - `PydanticValidationException`：`HTTPException` 子类，状态码 422（`quiet=True`）。
+- `TooManyRequest`：`HTTPException` 子类，状态码 429（`quiet=True`），用于验证码错误次数超限。
 
 它们只定义状态码，没有自定义 JSON 响应结构；最终响应格式由 Sanic 的默认
 异常处理（或应用注册的处理器）决定。
@@ -20,10 +21,10 @@ from srf.exceptions import ImproperlyConfigured, PydanticValidationException, Ta
 
 `as_view()` 只在调用 handler 的 `try` 块中捕获两类验证错误：
 
-| 异常 | 处理 |
-|---|---|
-| `pydantic.ValidationError` | 转为 `PydanticValidationException`（422），message 为 `str(error)` |
-| `tortoise.exceptions.ValidationError` | 同上，转为 422 |
+| 异常                                  | 处理                                                               |
+| ------------------------------------- | ------------------------------------------------------------------ |
+| `pydantic.ValidationError`            | 转为 `PydanticValidationException`（422），message 为 `str(error)` |
+| `tortoise.exceptions.ValidationError` | 同上，转为 422                                                     |
 
 除这两类之外，`as_view()` **不捕获**其他异常：
 
@@ -112,6 +113,7 @@ except ValidationError as error:
 5. **隐藏内部细节**：生产环境不暴露内部错误
 6. **使用适当的状态码**：为不同错误使用正确的 HTTP 状态码
 7. **国际化**：支持多语言错误消息
+
 ## 下一步
 
 - 学习 [HTTP 状态码](http-status.md) 了解状态码使用

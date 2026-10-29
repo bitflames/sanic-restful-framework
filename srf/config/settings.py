@@ -65,6 +65,8 @@ class EmailConfig:
     password = os.getenv("PASSWORD")
 
 
+EMAIL_CONFIG = EmailConfig
+
 SOCIAL_CONFIG = {
     "github": {
         "CLIENT_ID": os.getenv("GITHUB_CLIENT_ID"),

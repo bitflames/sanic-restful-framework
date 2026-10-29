@@ -23,42 +23,40 @@ settings.set_app(app)
 
 ## 注册认证路由
 
-推荐使用 `register_auth_urls()`。它会调用 `setup_auth()`，并注册认证、注册、
-注销和验证邮件路由：
+推荐使用 `register_all_auth_urls()`：一次性完成 JWT 初始化并注册登录、注册、
+注销、邮件验证和 GitHub 社交登录路由：
 
 ```python
-from srf.auth.route import register_auth_urls
+from srf.auth.route import register_all_auth_urls
 
-register_auth_urls(app, prefix="/api/auth")
+register_all_auth_urls(app, prefix="/api/auth")
 ```
 
-`register_auth_urls()` 会从 `app.config` 读取并校验 `JWT_SECRET` 与 `SECRET_KEY`。
+JWT 初始化会从 `app.config` 读取并校验 `JWT_SECRET` 与 `SECRET_KEY`，缺失时抛出
+`ServerError`。
 
-不要先调用 `setup_auth()` 再调用 `register_auth_urls()`，否则会重复初始化
-`sanic-jwt`。
+只需其中一部分时，可以按需组合三个细粒度函数：
 
-如需向 `setup_auth()` 传入 `sanic-jwt` 的其他初始化参数，可直接初始化：
+| 函数                                          | 注册的端点                                                                                            |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `register_jwt_urls(app, prefix)`              | `POST {prefix}/login`、`GET {prefix}/me`、`GET {prefix}/verify`、`POST {prefix}/refresh`（sanic-jwt） |
+| `register_auth_urls(instance, prefix)`        | `POST {prefix}/register`、`POST {prefix}/verify_email`、`POST {prefix}/logout`                        |
+| `register_social_auth_urls(instance, prefix)` | GitHub OAuth 三个端点                                                                                 |
 
-```python
-from srf.auth.viewset import setup_auth
+注意：
 
-jwt = setup_auth(
-    app,
-    url_prefix="/api/auth",
-    # 其余关键字参数传给 sanic_jwt.Initialize
-)
-```
-
-`setup_auth()` 已固定使用 SRF 自带的 `authenticate` 和 `retrieve_user`，不要再通过关键字传入这两个名称，否则会发生重复参数错误。
-`setup_auth()` 不从关键字参数读取 JWT 密钥；缺少有效的 `app.config.JWT_SECRET` 或 `app.config.SECRET_KEY` 时会在初始化阶段抛出 `ServerError`。
+- `register_jwt_urls()` 只接受 Sanic 应用实例。在 Blueprint 上初始化 sanic-jwt 会把
+  `ctx.auth` 挂到 Blueprint 上，认证中间件读取的是 `request.app.ctx.auth`，会找不到。
+- 这三个函数都不转发 `sanic_jwt.Initialize` 的关键字参数。如需自定义 sanic-jwt 行为
+  （例如 `leeway`、`claim_iss`），请直接调用 `sanic_jwt.Initialize`。
 
 ## 登录
 
-默认登录地址是 `POST /api/auth`。请求字段为 `account` 和 `password`，`account` 可以是邮箱或用户名：
+默认登录地址是 `POST /api/auth/login`。请求字段为 `account` 和 `password`，`account` 可以是邮箱或用户名：
 
 ```bash
 # 邮箱登录
-curl -X POST http://localhost:8000/api/auth \
+curl -X POST http://localhost:8000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"account":"user@example.com","password":"password123"}'
 ```
@@ -73,8 +71,28 @@ curl -X POST http://localhost:8000/api/auth \
 ```
 
 `authenticate()` 使用 `UserLoginSchema`（`account`、`password`），
-查询 `srf.auth.models.User`、检查用户是否启用并验证密码，然后把 `user_id`、
-`username` 和角色名称放入 JWT payload。
+查询 `srf.auth.models.User`、检查用户是否启用并验证密码。sanic-jwt 的 `build_payload()` 只会把 `user_id` 写入 access token（另加 `exp`）；
+`username` 和角色名称由 `retrieve_user()` 在 `/me` 或 refresh 时返回，不会写进 token。
+
+## 刷新令牌
+
+access token 过期后，携带 access token（过期也可以）和 refresh token 换取新的
+access token：
+
+```bash
+curl -X POST http://localhost:8000/api/auth/refresh \
+  -H "Authorization: Bearer <access-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token":"<refresh-token>"}'
+```
+
+响应只包含新的 `access_token`；sanic-jwt 不会轮换 refresh token。refresh token 以
+HMAC 摘要形式持久化，绝对有效期为 `JWT_REFRESH_TOKEN_EXPIRES`（默认 30 天），过期或
+登出后必须重新登录。
+
+另外两个 sanic-jwt 端点：`GET /api/auth/me` 返回当前用户信息（`{"me": {...}}`），
+`GET /api/auth/verify` 校验令牌有效性。两者都受保护：缺失或失效的
+`Authorization: Bearer` 头会返回 401。
 
 ## 密码与 Token 的算法
 
@@ -84,32 +102,13 @@ SRF 的密码存储方式是 **bcrypt(SHA-256(密码))**：密码先按 UTF-8 �
 
 ## 认证中间件
 
-```python
-from srf.middleware.authmiddleware import set_user_to_request_ctx
+SRF 提供独立的请求中间件 `set_user_to_request_ctx`：校验 `Authorization: Bearer`
+Token 并把用户写入 `request.ctx.user`。默认（`strict=False`）为可选认证——未携带
+Token 的请求回退为 `AnonymousUser`，出示了无效 Token 则返回 401；`strict=True`
+为强制认证。配置示例、白名单过滤与请求流程见
+[认证中间件](../advanced/middleware/auth-middleware.md)。
 
-
-@app.middleware("request")
-async def auth_middleware(request):
-    await set_user_to_request_ctx(request)
-```
-
-携带 Token 时，请求头格式为：
-
-```http
-Authorization: Bearer <token>
-```
-
-中间件使用 HS256 和 `app.config.JWT_SECRET` 解码 Token，通过
-`retrieve_user()` 查询用户，并设置 `request.ctx.user`。具体行为：
-
-- 没有认证信息，或 Token 的签名/有效期校验失败时，`extract_payload()` 返回
-  `None`，`request.ctx.user` 被设为 `None`，请求按匿名请求继续执行。此时是否
-  拒绝由权限类决定（例如 `IsAuthenticated` 会返回 403）。
-- `Authorization` 请求头格式错误（例如缺少 `Bearer` 前缀）、JWT 未初始化，
-  或 Token 对应的用户不存在时，中间件抛出 `Unauthorized`（401）。
-
-因此，需要 401 与 403 语义区分时，不要只依赖认证中间件；可在权限类或全局异常
-处理器中统一处理。
+由此 401（认证失败，来自中间件）与 403（授权失败，来自 `IsAuthenticated` 等权限类）的语义清晰分离。
 
 ## 获取当前用户
 
@@ -121,7 +120,7 @@ from srf.views import BaseViewSet
 class ProductViewSet(BaseViewSet):
     async def create(self, request):
         user = self.get_current_user(request)
-        if user is None:
+        if user is None or getattr(user, "is_anonymous", False):
             return json({"error": "未登录"}, status=401)
         # ...
 ```
@@ -131,20 +130,24 @@ class ProductViewSet(BaseViewSet):
 
 ## 注册和邮箱验证码
 
-`register_auth_urls()` 注册以下常用 SRF 路由：
+`register_all_auth_urls()` 注册以下认证路由（除 sanic-jwt 的四个 JWT 端点外）：
 
 - `POST /api/auth/register`
 - `POST /api/auth/verify_email`
 - `POST /api/auth/logout`
 
+`register` 成功后会直接签发 token，因此应用必须已经调用 `register_jwt_urls()`（或 `register_all_auth_urls()`）。未配置 JWT 时接口返回 500，且不会消费验证码。
+
+验证码错误次数达到 `USER_REGISTER_EMAIL_CODE_TIMES_LIMIT` 后，验证码会被删除，接口返回 429（`TooManyRequest`），需要重新获取验证码。
+
 邮箱验证码相关配置定义在 `srf.config.settings`：
 
-| 配置项 | 默认值 | 用途 |
-| --- | --- | --- |
-| `USER_REGISTER_EMAIL_VERIFY_CODE_TTL` | `60` | 验证码有效期，单位为秒 |
-| `USER_REGISTER_EMAIL_CODE` | `USER_REGISTER:EMAIL_CODE:{email}` | Redis 中验证码的 key 格式，`{email}` 会替换为邮箱地址 |
-| `USER_REGISTER_EMAIL_CODE_TIMES` | `USER_REGISTER:EMAIL_CODE_TIMES:{email}` | Redis 中错误尝试次数的 key 格式 |
-| `USER_REGISTER_EMAIL_CODE_TIMES_LIMIT` | `10` | 验证码允许的错误尝试次数上限 |
+| 配置项                                 | 默认值                                   | 用途                                                  |
+| -------------------------------------- | ---------------------------------------- | ----------------------------------------------------- |
+| `USER_REGISTER_EMAIL_VERIFY_CODE_TTL`  | `60`                                     | 验证码有效期，单位为秒                                |
+| `USER_REGISTER_EMAIL_CODE`             | `USER_REGISTER:EMAIL_CODE:{email}`       | Redis 中验证码的 key 格式，`{email}` 会替换为邮箱地址 |
+| `USER_REGISTER_EMAIL_CODE_TIMES`       | `USER_REGISTER:EMAIL_CODE_TIMES:{email}` | Redis 中错误尝试次数的 key 格式                       |
+| `USER_REGISTER_EMAIL_CODE_TIMES_LIMIT` | `10`                                     | 验证码允许的错误尝试次数上限                          |
 
 ### 注册调用流程
 
@@ -170,7 +173,7 @@ curl -X POST http://localhost:8000/api/auth/logout \
 
 ## 注册用户资源 API
 
-`register_auth_urls()` 只注册认证流程路由，不会自动注册用户管理资源。需要用户资料及密码修改 API 时，可显式导入 `UserViewSet` 并通过 `SanicRouter` 注册：
+`register_all_auth_urls()` 只注册认证流程路由，不会自动注册用户管理资源。需要用户资料及密码修改 API 时，可显式导入 `UserViewSet` 并通过 `SanicRouter` 注册：
 
 ```python
 from srf.auth.viewset import UserViewSet
@@ -180,19 +183,25 @@ user_router = SanicRouter(app, prefix="api")
 user_router.register("users", UserViewSet, name="users")
 ```
 
-该资源提供 `GET /api/users/self`、`POST /api/users/change-password`，以及 `/api/users` 的 CRUD 路由。普通用户只能访问自己的用户记录；超级用户可管理其他用户。修改密码请求体为：
+该资源提供 `GET /api/users/self`、`POST /api/users/change-password`、`POST /api/users/<user-id>/reset-password`（仅超级用户），以及 `/api/users` 等等 CRUD 路由。普通用户只能访问自己的用户记录；超级用户可管理其他用户。修改密码请求体为：
 
 ```json
-{"old_password": "old-password", "password1": "new-password", "password2": "new-password"}
+{
+  "old_password": "old-password",
+  "password1": "new-password",
+  "password2": "new-password"
+}
 ```
 
 修改成功后会撤销该用户已保存的 refresh token；已签发的 access token 在过期前仍可使用。
+
+更新接口（PUT/PATCH `/api/users/<user-id>`）；提交 `email`、`password`、`password1` 或 `password2` 都会返回 400。修改邮箱暂不通过该接口提供；密码修改只走两个专用接口：`change-password` 自助改密（校验旧密码）；`reset-password` 超管重置
 
 ### 用户资源调用流程
 
 ```bash
 # 1. 登录获取 Token（account 支持用户名或邮箱）
-curl -X POST http://localhost:8000/api/auth \
+curl -X POST http://localhost:8000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"account":"user@example.com","password":"Passw0rd123"}'
 

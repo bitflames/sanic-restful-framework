@@ -178,6 +178,69 @@ class TestJsonLogicFilter:
         assert result is filtered_qs
         qs.filter.assert_called_once()
 
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"and": 1},
+            {"and": []},
+            {"or": "not-a-list"},
+            {"not": 1},
+            {"==": [{"var": "name"}]},
+            {"==": "not-a-list"},
+            {"==": [{"var": 1}, "alice"]},
+            {"unknown": []},
+            {"and": [{"==": [{"var": "name"}, "a"]}], "or": []},
+            [],
+            "not-an-object",
+        ],
+    )
+    def test_invalid_structure_raises_bad_request(self, payload):
+        view = ViewWithFilterFields()
+        f = JsonLogicFilter(view)
+        request = MagicMock()
+        request.args.get.return_value = json.dumps(payload)
+
+        with pytest.raises(BadRequest):
+            f.filter_queryset(request, MagicMock())
+
+    def test_error_messages_point_to_docs(self):
+        view = ViewWithFilterFields()
+        f = JsonLogicFilter(view)
+        request = MagicMock()
+        request.args.get.return_value = json.dumps({"and": 1})
+
+        with pytest.raises(BadRequest) as exc_info:
+            f.filter_queryset(request, MagicMock())
+        assert JsonLogicFilter.DOCS_URL in str(exc_info.value)
+
+    def test_nesting_depth_is_limited_to_three_levels(self):
+        view = ViewWithFilterFields()
+        f = JsonLogicFilter(view)
+        qs = MagicMock()
+
+        expr = {"==": [{"var": "name"}, "alice"]}
+        for _ in range(2):
+            expr = {"and": [expr]}
+        request = MagicMock()
+        request.args.get.return_value = json.dumps(expr)
+        f.filter_queryset(request, qs)
+        qs.filter.assert_called_once()
+
+        too_deep = {"and": [expr]}
+        request.args.get.return_value = json.dumps(too_deep)
+        with pytest.raises(BadRequest, match="too complex"):
+            f.filter_queryset(request, MagicMock())
+
+    def test_node_count_is_limited(self):
+        view = ViewWithFilterFields()
+        f = JsonLogicFilter(view)
+        expr = {"and": [{"==": [{"var": "name"}, f"v{i}"]} for i in range(JsonLogicFilter.MAX_NODES)]}
+        request = MagicMock()
+        request.args.get.return_value = json.dumps(expr)
+
+        with pytest.raises(BadRequest, match="too complex"):
+            f.filter_queryset(request, MagicMock())
+
 
 class TestQueryParamFilter:
     def test_filter_fields_list_maps_names_to_themselves(self):

@@ -1,8 +1,13 @@
-"""Unit tests for srf.views.decorators (action)."""
+"""Unit tests for srf.views.decorators (action, validate_request)."""
+
+from unittest.mock import MagicMock
 
 import pytest
+from pydantic import BaseModel
+from sanic.exceptions import BadRequest
 
-from srf.views.decorators import action
+from srf.exceptions import PydanticValidationException
+from srf.views.decorators import action, validate_request
 
 
 class TestActionDecorator:
@@ -69,3 +74,47 @@ class TestActionDecorator:
             @action(False, ("GET",), "path")
             def positional_args(self, request):
                 pass
+
+
+class _Body(BaseModel):
+    name: str
+    age: int
+
+
+class TestValidateRequest:
+    @pytest.mark.asyncio
+    async def test_validation_error_becomes_422(self):
+        @validate_request(show_errors=True)
+        async def handler(request):
+            return _Body.model_validate(request.json)
+
+        request = MagicMock()
+        request.json = {"age": "not-an-int"}
+
+        with pytest.raises(PydanticValidationException) as exc_info:
+            await handler(request)
+
+        assert exc_info.value.status_code == 422
+        assert "name" in str(exc_info.value)
+        assert "age" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_validation_error_hides_details_by_default(self):
+        @validate_request()
+        async def handler(request):
+            return _Body.model_validate(request.json)
+
+        request = MagicMock()
+        request.json = {}
+
+        with pytest.raises(PydanticValidationException, match="Invalid request parameters"):
+            await handler(request)
+
+    @pytest.mark.asyncio
+    async def test_non_validation_errors_pass_through(self):
+        @validate_request()
+        async def handler(request):
+            raise BadRequest("business error")
+
+        with pytest.raises(BadRequest, match="business error"):
+            await handler(MagicMock())

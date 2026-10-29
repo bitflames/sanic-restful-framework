@@ -12,6 +12,8 @@ sanic_restful_framework.egg-info/
 venv/
 env/
 ENV/
+dist/
+sanic_restful_framework.egg-info/
 
 # IDE
 .vscode/

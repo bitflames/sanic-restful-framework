@@ -81,19 +81,20 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite://db.sqlite3")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        
+
     # JWT 配置
     JWT_SECRET = os.getenv("JWT_SECRET", SECRET_KEY)
     # JWT_ACCESS_TOKEN_EXPIRES 在 srf.config.settings 中以 timedelta 定义；
-    # setup_auth 会把它换算成秒并传给 sanic-jwt
-    
-    # 邮件：send_email 读取 srf.config.settings.EmailConfig（FROM_EMAIL/SMTP_SERVER/SMTP_PORT/PASSWORD 环境变量），不是本 Config 类属性
-    
+    # register_jwt_urls 会把它换算成秒并传给 sanic-jwt
+
+    # 邮件：send_email 读取 settings.EMAIL_CONFIG；可用 app.config.EMAIL_CONFIG 覆盖，
+    # 默认值来自 FROM_EMAIL/SMTP_SERVER/SMTP_PORT/PASSWORD 环境变量
+
     # 社交登录（键名大写，与 SOCIAL_CONFIG 一致）
     SOCIAL_CONFIG = {
         "github": {...}
     }
-    
+
     # CORS 配置
     CORS_ORIGINS = ["http://localhost:3000", "http://localhost:8080"]
 
@@ -275,23 +276,18 @@ tortoise -c config.TORTOISE_ORM downgrade
 
 ### JWT 与路由注册（推荐）
 
-优先使用 `register_auth_urls`：它会内部调用 `setup_auth`，并注册认证、注册、
-注销和邮件验证路由。**不要**先 `setup_auth` 再 `register_auth_urls`（会双重初始化）。
+优先使用 `register_all_auth_urls`：一次性完成 JWT 初始化（登录 /me /verify /refresh）
+并注册注册、注销、邮件验证和社交登录路由：
 
 ```python
-from srf.auth.route import register_auth_urls
+from srf.auth.route import register_all_auth_urls
 
-# 初始化 JWT 并注册认证路由（内部已调用 setup_auth）
-register_auth_urls(app, prefix="/api/auth")
+register_all_auth_urls(app, prefix="/api/auth")
 ```
 
-仅在不使用 `register_auth_urls`、需要自定义 `sanic-jwt` 参数时，才直接调用 `setup_auth`：
-
-```python
-from srf.auth.viewset import setup_auth
-
-jwt = setup_auth(app, url_prefix="/api/auth")
-```
+只需其中一部分时，可分别调用 `register_jwt_urls`（仅 JWT 端点，只接受 Sanic 应用
+实例）、`register_auth_urls`（注册/邮件验证/注销）或 `register_social_auth_urls`
+（GitHub OAuth）。需要自定义 `sanic-jwt` 参数时，直接调用 `sanic_jwt.Initialize`。
 
 ## 中间件设置
 
@@ -300,12 +296,12 @@ jwt = setup_auth(app, url_prefix="/api/auth")
 ```python
 from srf.middleware.authmiddleware import set_user_to_request_ctx
 
-
-@app.middleware("request")
-async def auth_middleware(request):
-    """认证中间件"""
-    await set_user_to_request_ctx(request)
+app.middleware("request")(set_user_to_request_ctx)
 ```
+
+默认（`strict=False`）未携带 Token 的请求回退为 `AnonymousUser`；需要强制认证时传
+`strict=True`，或先用白名单过滤公开端点。完整说明见
+[认证中间件](advanced/middleware/auth-middleware.md)。
 
 ### 限流中间件
 
@@ -411,7 +407,7 @@ def register_routes(app):
 
 ```python
 from srf.health.checks import RedisCheck
-from srf.health.viewset import health_check
+from srf.health.route import health_check
 
 # 注册健康检查路由
 app.add_route(health_check, "/health", methods=["GET"])
@@ -485,9 +481,9 @@ async def handle_exception(request, exception):
 from sanic import Sanic
 from sanic_cors import CORS
 from tortoise.contrib.sanic import register_tortoise
-from srf.auth.route import register_auth_urls
+from srf.auth.route import register_all_auth_urls
 from srf.config import settings
-from srf.health.viewset import health_check
+from srf.health.route import health_check
 from srf.middleware.authmiddleware import set_user_to_request_ctx
 from config import config
 from routes import register_routes
@@ -515,15 +511,13 @@ register_tortoise(
 )
 
 
-# 注册中间件
-@app.middleware("request")
-async def auth_middleware(request):
-    await set_user_to_request_ctx(request)
+# 注册中间件（默认可选认证：未携带 Token 回退 AnonymousUser，strict=True 强制认证）
+app.middleware("request")(set_user_to_request_ctx)
 
 
 # 注册路由
 register_routes(app)
-register_auth_urls(app, prefix="/api/auth")
+register_all_auth_urls(app, prefix="/api/auth")
 app.add_route(health_check, "/health", methods=["GET"])
 
 
@@ -577,7 +571,7 @@ CMD ["python", "app.py"]
 创建 `docker-compose.yml`：
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   web:
@@ -591,7 +585,7 @@ services:
     depends_on:
       - db
       - redis
-  
+
   db:
     image: postgres:14
     environment:
@@ -600,7 +594,7 @@ services:
       - POSTGRES_DB=mydb
     volumes:
       - postgres_data:/var/lib/postgresql/data
-  
+
   redis:
     image: redis:7
     volumes:

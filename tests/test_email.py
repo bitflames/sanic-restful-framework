@@ -27,11 +27,18 @@ class TestEmailSchemas:
         with pytest.raises(ValidationError):
             EmailCodeVerifySchema(email="user@example.com", confirmations=code)
 
+    @pytest.mark.parametrize("payload", [{}, {"confirmations": "123456"}, {"email": None, "confirmations": "123456"}])
+    def test_register_flow_still_requires_email(self, payload):
+        # The framework User model allows a missing email, but the built-in
+        # register endpoint verifies one before creating the user.
+        with pytest.raises(ValidationError, match="email"):
+            EmailCodeVerifySchema.model_validate(payload)
+
 
 class TestSendEmail:
     def test_sends_using_starttls(self):
         server = MagicMock()
-        with patch("srf.tools.email.EmailConfig") as config, patch("srf.tools.email.smtplib.SMTP") as smtp:
+        with patch("srf.tools.email.settings.EMAIL_CONFIG") as config, patch("srf.tools.email.smtplib.SMTP") as smtp:
             config.from_email = "from@example.com"
             config.smtp_server = "smtp.example.com"
             config.smtp_port = "587"
@@ -47,7 +54,7 @@ class TestSendEmail:
 
     def test_uses_ssl_on_port_465(self):
         server = MagicMock()
-        with patch("srf.tools.email.EmailConfig") as config, patch("srf.tools.email.smtplib.SMTP_SSL") as smtp_ssl:
+        with patch("srf.tools.email.settings.EMAIL_CONFIG") as config, patch("srf.tools.email.smtplib.SMTP_SSL") as smtp_ssl:
             config.from_email = "from@example.com"
             config.smtp_server = "smtp.example.com"
             config.smtp_port = "465"
@@ -62,7 +69,7 @@ class TestSendEmail:
     def test_returns_false_on_smtp_error_and_closes_connection(self):
         server = MagicMock()
         server.login.side_effect = OSError("connection failed")
-        with patch("srf.tools.email.EmailConfig") as config, patch("srf.tools.email.smtplib.SMTP") as smtp:
+        with patch("srf.tools.email.settings.EMAIL_CONFIG") as config, patch("srf.tools.email.smtplib.SMTP") as smtp:
             config.from_email = "from@example.com"
             config.smtp_server = "smtp.example.com"
             config.smtp_port = "587"
@@ -72,6 +79,28 @@ class TestSendEmail:
             assert send_email("to@example.com", "subject", "body") is False
 
         server.quit.assert_called_once()
+
+    def test_failure_log_omits_recipient_email(self):
+        server = MagicMock()
+        server.login.side_effect = OSError("connection failed")
+        with (
+            patch("srf.tools.email.settings.EMAIL_CONFIG") as config,
+            patch("srf.tools.email.smtplib.SMTP") as smtp,
+            patch("srf.tools.email.logger.exception") as log_exc,
+        ):
+            config.from_email = "from@example.com"
+            config.smtp_server = "smtp.example.com"
+            config.smtp_port = "587"
+            config.password = "secret"
+            smtp.return_value = server
+
+            assert send_email("alice@example.com", "subject", "body") is False
+
+        # logger.exception() records the traceback (including the OSError reason);
+        # the recipient must never be part of the message.
+        log_exc.assert_called_once_with("Email send failed")
+        assert "alice" not in str(log_exc.call_args)
+        assert "example.com" not in str(log_exc.call_args)
 
     @pytest.mark.asyncio
     async def test_template_email_renders_then_offloads_smtp(self):
@@ -166,6 +195,7 @@ class TestRegisterEmailCode:
         request = make_request(
             {"email": "user@example.com", "confirmations": "123456", "username": "alice", "password1": "Secret123", "password2": "Secret123"},
             redis,
+            auth=MagicMock(),
         )
         with pytest.raises(BadRequest, match="invalid or has expired"):
             await register(request)
@@ -179,22 +209,22 @@ class TestRegisterEmailCode:
         request = make_request(
             {"email": "user@example.com", "confirmations": "001234", "username": "alice", "password1": "Secret123", "password2": "Secret123"},
             redis,
+            auth=MagicMock(),
         )
         user = MagicMock(id=7)
         token_payload = {"id": 7, "username": "alice", "access_token": "access", "refresh_token": "refresh"}
         with (
+            patch("srf.auth.viewset.in_transaction", return_value=AsyncMock()),
             patch("srf.auth.viewset.models.User.create_user", new_callable=AsyncMock, return_value=user) as create_user,
-            patch("srf.auth.viewset.update_user_last_login", new_callable=AsyncMock) as update_last_login,
             patch("srf.auth.viewset.gen_user_access_token", new_callable=AsyncMock, return_value=token_payload),
         ):
             response = await register(request)
 
-        assert response.status == HTTPStatus.HTTP_200_OK
+        assert response.status == HTTPStatus.HTTP_201_CREATED
         assert json.loads(response.body) == token_payload
         create_user.assert_awaited_once()
         assert create_user.await_args.args[0]["email"] == "user@example.com"
         assert create_user.await_args.args[0]["password"] == "Secret123"
-        update_last_login.assert_awaited_once_with(user)
         assert redis.eval.await_args.args[1:4] == (
             2,
             "USER_REGISTER:EMAIL_CODE:user@example.com",
@@ -210,6 +240,7 @@ class TestRegisterEmailCode:
         request = make_request(
             {"email": "user@example.com", "confirmations": "123456", "username": "alice", "password1": "Secret123", "password2": "Secret123"},
             redis,
+            auth=MagicMock(),
         )
         with pytest.raises(BadRequest, match="verification code is invalid"):
             await register(request)

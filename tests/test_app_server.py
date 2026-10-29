@@ -26,7 +26,7 @@ def client():
 
 
 def _login(client, email: str, password: str) -> dict:
-    _, response = client.post("/api/auth", json={"account": email, "password": password})
+    _, response = client.post("/api/auth/login", json={"account": email, "password": password})
     assert response.status == 200, response.body
     body = response.json
     assert body["access_token"]
@@ -39,7 +39,7 @@ def _auth(token: str) -> dict:
 
 
 def test_login_wrong_password(client):
-    _, response = client.post("/api/auth", json={"account": SEED_EMAIL, "password": "wrong-password"})
+    _, response = client.post("/api/auth/login", json={"account": SEED_EMAIL, "password": "wrong-password"})
     assert response.status == 401
 
 

@@ -18,11 +18,16 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 import jwt
 
-from .app_server import JWT_SECRET
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from tests.app_server import JWT_SECRET
 
 BASE = "http://127.0.0.1:8800"
 AUTH = f"{BASE}/api/auth"
@@ -135,7 +140,7 @@ def call_registration_styles(token: str | None = None) -> None:
 def call_login_email() -> dict:
     status, data = _request(
         "POST",
-        AUTH,
+        f"{AUTH}/login",
         body={"account": SEED_EMAIL, "password": SEED_PASSWORD},
     )
     ok = status == 200 and bool(data.get("access_token")) and bool(data.get("refresh_token"))
@@ -146,8 +151,8 @@ def call_login_email() -> dict:
 def call_login_username() -> dict:
     status, data = _request(
         "POST",
-        AUTH,
-        body={"username": SEED_USERNAME, "password": SEED_PASSWORD},
+        f"{AUTH}/login",
+        body={"account": SEED_USERNAME, "password": SEED_PASSWORD},
     )
     ok = status == 200 and bool(data.get("access_token"))
     _ok("POST /api/auth/login (username)", ok, (status, data))
@@ -157,7 +162,7 @@ def call_login_username() -> dict:
 def call_login_wrong_password() -> None:
     status, _ = _request(
         "POST",
-        AUTH,
+        f"{AUTH}/login",
         body={"account": SEED_EMAIL, "password": "wrong-password"},
     )
     _ok("POST /api/auth/login wrong password → 401", status == 401, status)

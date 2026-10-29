@@ -81,20 +81,20 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite://db.sqlite3")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        
+
     # JWT configuration
     JWT_SECRET = os.getenv("JWT_SECRET", SECRET_KEY)
     # JWT_ACCESS_TOKEN_EXPIRES is defined as a timedelta in srf.config.settings;
-    # setup_auth converts it to seconds and passes it to sanic-jwt
-    
-    # Email: send_email reads srf.config.settings.EmailConfig (FROM_EMAIL/SMTP_SERVER/SMTP_PORT/PASSWORD
-    # environment variables), not attributes of this Config class
-    
+    # register_jwt_urls converts it to seconds and passes it to sanic-jwt
+
+    # Email: send_email reads settings.EMAIL_CONFIG; app.config.EMAIL_CONFIG can override it.
+    # Defaults come from the FROM_EMAIL/SMTP_SERVER/SMTP_PORT/PASSWORD environment variables.
+
     # Social login (uppercase key names, consistent with SOCIAL_CONFIG)
     SOCIAL_CONFIG = {
         "github": {...}
     }
-    
+
     # CORS configuration
     CORS_ORIGINS = ["http://localhost:3000", "http://localhost:8080"]
 
@@ -276,23 +276,18 @@ development can use `generate_schemas=True` to create tables automatically; prod
 
 ### JWT and route registration (recommended)
 
-Prefer `register_auth_urls`: it calls `setup_auth` internally and registers authentication, registration,
-logout, and email verification routes. Do **not** call `setup_auth` and then `register_auth_urls` (that would initialize twice).
+Prefer `register_all_auth_urls`: it initializes JWT (login /me /verify /refresh) and registers
+registration, logout, email verification, and social login routes in one call:
 
 ```python
-from srf.auth.route import register_auth_urls
+from srf.auth.route import register_all_auth_urls
 
-# Initialize JWT and register authentication routes (setup_auth is called internally)
-register_auth_urls(app, prefix="/api/auth")
+register_all_auth_urls(app, prefix="/api/auth")
 ```
 
-Call `setup_auth` directly only when you are not using `register_auth_urls` and need custom `sanic-jwt` parameters:
-
-```python
-from srf.auth.viewset import setup_auth
-
-jwt = setup_auth(app, url_prefix="/api/auth")
-```
+If you only need a subset, call `register_jwt_urls` (JWT endpoints only; requires a Sanic app
+instance), `register_auth_urls` (register/verify_email/logout), or `register_social_auth_urls`
+(GitHub OAuth) separately. To customize `sanic-jwt` parameters, call `sanic_jwt.Initialize` directly.
 
 ## Middleware setup
 
@@ -301,12 +296,12 @@ jwt = setup_auth(app, url_prefix="/api/auth")
 ```python
 from srf.middleware.authmiddleware import set_user_to_request_ctx
 
-
-@app.middleware("request")
-async def auth_middleware(request):
-    """Authentication middleware"""
-    await set_user_to_request_ctx(request)
+app.middleware("request")(set_user_to_request_ctx)
 ```
+
+By default (`strict=False`) a request with no token falls back to `AnonymousUser`; pass
+`strict=True` for mandatory authentication, or filter public endpoints with a whitelist first.
+See [Authentication Middleware](advanced/middleware/auth-middleware.md) for details.
 
 ### Rate limiting middleware
 
@@ -415,7 +410,7 @@ def register_routes(app):
 
 ```python
 from srf.health.checks import RedisCheck
-from srf.health.viewset import health_check
+from srf.health.route import health_check
 
 # Register the health check route
 app.add_route(health_check, "/health", methods=["GET"])
@@ -489,9 +484,9 @@ async def handle_exception(request, exception):
 from sanic import Sanic
 from sanic_cors import CORS
 from tortoise.contrib.sanic import register_tortoise
-from srf.auth.route import register_auth_urls
+from srf.auth.route import register_all_auth_urls
 from srf.config import settings
-from srf.health.viewset import health_check
+from srf.health.route import health_check
 from srf.middleware.authmiddleware import set_user_to_request_ctx
 from config import config
 from routes import register_routes
@@ -519,15 +514,14 @@ register_tortoise(
 )
 
 
-# Register middleware
-@app.middleware("request")
-async def auth_middleware(request):
-    await set_user_to_request_ctx(request)
+# Register middleware (optional auth by default: no token -> AnonymousUser,
+# strict=True for mandatory authentication)
+app.middleware("request")(set_user_to_request_ctx)
 
 
 # Register routes
 register_routes(app)
-register_auth_urls(app, prefix="/api/auth")
+register_all_auth_urls(app, prefix="/api/auth")
 app.add_route(health_check, "/health", methods=["GET"])
 
 
@@ -581,7 +575,7 @@ CMD ["python", "app.py"]
 Create a `docker-compose.yml`:
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   web:
@@ -595,7 +589,7 @@ services:
     depends_on:
       - db
       - redis
-  
+
   db:
     image: postgres:14
     environment:
@@ -604,7 +598,7 @@ services:
       - POSTGRES_DB=mydb
     volumes:
       - postgres_data:/var/lib/postgresql/data
-  
+
   redis:
     image: redis:7
     volumes:

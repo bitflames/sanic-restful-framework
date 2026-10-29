@@ -71,14 +71,16 @@ router.register("products", ProductViewSet, name="products")
 
 生成的路由：
 
-| HTTP 方法 | URL 路径 | 操作 | ViewSet 方法 | 路由名称 |
-| ----------- | ---------- | ------ | -------------- | ---------- |
-| GET | `/api/products` | 列表 | `list()` | `products-list` |
-| POST | `/api/products` | 创建 | `create()` | `products-list` |
-| GET | `/api/products/<pk>` | 详情 | `retrieve()` | `products-detail` |
-| PUT | `/api/products/<pk>` | 完整更新 | `update()` | `products-detail` |
-| PATCH | `/api/products/<pk>` | 部分更新 | `update()` | `products-detail` |
-| DELETE | `/api/products/<pk>` | 删除 | `destroy()` | `products-detail` |
+| HTTP 方法 | URL 路径             | 操作             | ViewSet 方法 | 路由名称          |
+| --------- | -------------------- | ---------------- | ------------ | ----------------- |
+| GET       | `/api/products`      | 列表             | `list()`     | `products-list`   |
+| HEAD      | `/api/products`      | 列表（无响应体） | `list()`     | `products-list`   |
+| POST      | `/api/products`      | 创建             | `create()`   | `products-list`   |
+| GET       | `/api/products/<pk>` | 详情             | `retrieve()` | `products-detail` |
+| HEAD      | `/api/products/<pk>` | 详情（无响应体） | `retrieve()` | `products-detail` |
+| PUT       | `/api/products/<pk>` | 完整更新         | `update()`   | `products-detail` |
+| PATCH     | `/api/products/<pk>` | 部分更新         | `update()`   | `products-detail` |
+| DELETE    | `/api/products/<pk>` | 删除             | `destroy()`  | `products-detail` |
 
 ### 自定义操作路由
 
@@ -364,8 +366,8 @@ for route in app.router.routes:
 输出示例：
 
 ```
-[GET, POST] /api/products
-[GET, PUT, PATCH, DELETE] /api/products/<pk>
+[GET, HEAD, POST] /api/products
+[GET, HEAD, PUT, PATCH, DELETE] /api/products/<pk>
 [GET] /api/products/featured
 [POST] /api/products/<pk>/publish
 ```

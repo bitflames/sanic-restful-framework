@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from srf.paginator import (
     BasePagination,
     PageNumberPagination,
-    PaginationParams,
     PaginationResult,
     _list_type_adapter,
     serialize_page,
@@ -42,21 +41,6 @@ class TestSerializePage:
         a1 = _list_type_adapter(_Reader)
         a2 = _list_type_adapter(_Reader)
         assert a1 is a2
-
-
-class TestPaginationParams:
-    def test_defaults(self):
-        p = PaginationParams()
-        assert p.page == 1
-        assert p.page_size == 10
-
-    def test_validate_positive_rejects_zero_page(self):
-        with pytest.raises(ValueError):
-            PaginationParams(page=0)
-
-    def test_validate_positive_rejects_negative_page_size(self):
-        with pytest.raises(ValueError):
-            PaginationParams(page_size=-1)
 
 
 class TestPaginationResult:
@@ -117,6 +101,15 @@ class TestPageNumberPagination:
         assert paginator.page == 3
         assert paginator.page_size == 10
 
+    def test_from_queryset_uses_subclass_max_page_size(self):
+        class SmallPagePagination(PageNumberPagination):
+            MAX_PAGE_SIZE = 5
+
+        request = MagicMock()
+        request.args.get.side_effect = lambda k, d=None: {"page_size": 100}.get(k, d)
+        paginator = SmallPagePagination.from_queryset(MagicMock(), request)
+        assert paginator.page_size == 5
+
     @pytest.mark.asyncio
     async def test_paginate_requires_sch_model(self):
         paginator = PageNumberPagination(queryset=MagicMock(), page=1, page_size=10)
@@ -148,9 +141,27 @@ class TestPageNumberPagination:
         assert result["next"] is True
         assert result["results"][0]["username"] == "carol"
 
+    @pytest.mark.asyncio
+    async def test_class_max_page_size_clamps_page_size(self):
+        class SmallPagePagination(PageNumberPagination):
+            MAX_PAGE_SIZE = 5
+
+        paginator = SmallPagePagination(queryset=MagicMock(), page=1, page_size=10)
+        paginator.queryset.count = AsyncMock(return_value=20)
+        paginator.queryset.offset.return_value.limit = AsyncMock(return_value=[])
+        await paginator.paginate(sch_model=_Reader)
+        paginator.queryset.offset.assert_called_once_with(0)
+        paginator.queryset.offset.return_value.limit.assert_awaited_once_with(5)
+        assert paginator.num_pages(20) == 4
+
+    def test_constructor_clamps_non_positive_values(self):
+        paginator = PageNumberPagination(queryset=MagicMock(), page=0, page_size=0)
+        assert paginator.page == 1
+        assert paginator.page_size == 1
+
     def test_num_pages_zero_count(self):
         paginator = PageNumberPagination(queryset=MagicMock(), page=1, page_size=10)
-        assert paginator.num_pages(total_count=0) == 0
+        assert paginator.num_pages(total_count=0) == 1
 
     def test_num_pages_positive(self):
         paginator = PageNumberPagination(queryset=MagicMock(), page=1, page_size=10)

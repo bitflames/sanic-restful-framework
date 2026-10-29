@@ -55,7 +55,7 @@ into the Sanic configuration and register the authentication routes:
 import os
 from sanic import Sanic
 from redis.asyncio import Redis
-from srf.auth.route import register_auth_urls
+from srf.auth.route import register_all_auth_urls
 from srf.config import settings
 
 app = Sanic("MyApp")
@@ -76,7 +76,7 @@ app.config.SOCIAL_CONFIG = {
 }
 
 settings.set_app(app)
-register_auth_urls(app, prefix="/api/auth")
+register_all_auth_urls(app, prefix="/api/auth")
 
 
 @app.before_server_start
@@ -92,14 +92,14 @@ async def close_redis(app):
 `SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY` is used to sign the OAuth state cookie. Production environments should set
 it to an independent random secret. Optional behavior settings are as follows:
 
-| Option | Default | Purpose |
-| --- | --- | --- |
-| `SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY` | Falls back to `JWT_SECRET` | HMAC-signs the OAuth state cookie |
-| `SOCIAL_LOGIN_COOKIE_KEY` | `oauth_state` | OAuth state cookie name |
-| `SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE` | `600` | State cookie lifetime in seconds |
-| `SOCIAL_LOGIN_COOKIE_SECURE` | Based on whether the current request is HTTPS | Whether to send the cookie only over HTTPS |
-| `SOCIAL_LOGIN_REDIS_CODE_PREFIX` | `social-login` | Redis key prefix for one-time login codes |
-| `SOCIAL_LOGIN_CODE_MAX_AGE` | `300` | One-time login code lifetime in seconds |
+| Option                               | Default                                       | Purpose                                    |
+| ------------------------------------ | --------------------------------------------- | ------------------------------------------ |
+| `SOCIAL_LOGIN_COOKIE_KEY_SECRET_KEY` | Falls back to `JWT_SECRET`                    | HMAC-signs the OAuth state cookie          |
+| `SOCIAL_LOGIN_COOKIE_KEY`            | `oauth_state`                                 | OAuth state cookie name                    |
+| `SOCIAL_LOGIN_COOKIE_KEY_MAX_AGE`    | `600`                                         | State cookie lifetime in seconds           |
+| `SOCIAL_LOGIN_COOKIE_SECURE`         | Based on whether the current request is HTTPS | Whether to send the cookie only over HTTPS |
+| `SOCIAL_LOGIN_REDIS_CODE_PREFIX`     | `social-login`                                | Redis key prefix for one-time login codes  |
+| `SOCIAL_LOGIN_CODE_MAX_AGE`          | `300`                                         | One-time login code lifetime in seconds    |
 
 ### Login flow
 
@@ -133,7 +133,7 @@ it to an independent random secret. Optional behavior settings are as follows:
 
 ### API endpoints
 
-The following GitHub OAuth endpoints are registered automatically by `register_auth_urls(app)`:
+The following GitHub OAuth endpoints are registered automatically by `register_all_auth_urls(app)` (or `register_social_auth_urls(app)` alone):
 
 #### 1. Get the authorization URL
 
@@ -152,9 +152,9 @@ is controlled by `SOCIAL_LOGIN_COOKIE_SECURE` and, when not configured, is decid
 **Frontend handling**:
 
 ```javascript
-const form = document.createElement('form');
-form.method = 'POST';
-form.action = '/api/auth/social/github/login';
+const form = document.createElement("form");
+form.method = "POST";
+form.action = "/api/auth/social/github/login";
 document.body.appendChild(form);
 form.submit(); // The browser follows the backend 302 redirect to GitHub
 ```
@@ -164,6 +164,7 @@ form.submit(); // The browser follows the backend 302 redirect to GitHub
 **Endpoint**: `GET /api/auth/social/callback`
 
 This endpoint is triggered by the GitHub redirect. SRF automatically:
+
 1. Validates the `state` in the URL against the signed, time-limited cookie
 2. Exchanges the OAuth code for an access_token
 3. Fetches GitHub user information and selects a verified primary email (or the first verified email if there is no primary email)
@@ -216,23 +217,19 @@ curl -X POST http://localhost:8000/api/auth/social/github/login_by_code \
 #### React example
 
 ```javascript
-import React, { useEffect } from 'react';
+import React, { useEffect } from "react";
 
 function GitHubLogin() {
   const handleGitHubLogin = () => {
     // The backend redirects directly to GitHub and sets the OAuth state cookie.
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/api/auth/social/github/login';
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "/api/auth/social/github/login";
     document.body.appendChild(form);
     form.submit(); // The browser follows the backend 302 redirect to GitHub
   };
 
-  return (
-    <button onClick={handleGitHubLogin}>
-      Sign in with GitHub
-    </button>
-  );
+  return <button onClick={handleGitHubLogin}>Sign in with GitHub</button>;
 }
 
 // Callback page (frontend route, corresponding to OAUTHCALLBACK)
@@ -241,36 +238,33 @@ function GitHubCallback() {
     const handleCallback = async () => {
       // Get the temporary code from the URL
       const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-      
+      const code = params.get("code");
+
       if (!code) {
-        console.error('No code received');
+        console.error("No code received");
         return;
       }
-      
+
       try {
         // 3. Put the temporary code in the JSON request body and exchange it for a JWT via POST
-        const response = await fetch(
-          `/api/auth/social/github/login_by_code`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code }),
-          }
-        );
-        
+        const response = await fetch(`/api/auth/social/github/login_by_code`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+
         const data = await response.json();
-        
+
         // 4. Save the token (the response has a flat structure)
-        localStorage.setItem('access_token', data.access_token);
-        
+        localStorage.setItem("access_token", data.access_token);
+
         // 5. Redirect to the home page
-        window.location.href = '/';
+        window.location.href = "/";
       } catch (error) {
-        console.error('Failed to get token:', error);
+        console.error("Failed to get token:", error);
       }
     };
-    
+
     handleCallback();
   }, []);
 
@@ -294,14 +288,14 @@ export default {
   methods: {
     handleGitHubLogin() {
       // The backend redirects directly to GitHub and sets the OAuth state cookie.
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = '/api/auth/social/github/login';
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = "/api/auth/social/github/login";
       document.body.appendChild(form);
       form.submit(); // The browser follows the backend 302 redirect to GitHub
-    }
-  }
-}
+    },
+  },
+};
 </script>
 ```
 
@@ -316,38 +310,34 @@ export default {
 export default {
   async mounted() {
     const code = this.$route.query.code;
-    
+
     if (!code) {
-      this.$router.push('/login');
+      this.$router.push("/login");
       return;
     }
-    
+
     try {
-      const response = await fetch(
-        `/api/auth/social/github/login_by_code`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code }),
-        }
-      );
-      
+      const response = await fetch(`/api/auth/social/github/login_by_code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+
       const data = await response.json();
-      
+
       // Save the token
-      localStorage.setItem('access_token', data.access_token);
-      
+      localStorage.setItem("access_token", data.access_token);
+
       // Redirect to the home page
-      this.$router.push('/');
+      this.$router.push("/");
     } catch (error) {
-      console.error('Failed to get token:', error);
-      this.$router.push('/login');
+      console.error("Failed to get token:", error);
+      this.$router.push("/login");
     }
-  }
-}
+  },
+};
 </script>
 ```
-
 
 ## Extending to other login providers
 

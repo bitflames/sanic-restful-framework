@@ -79,3 +79,19 @@ class TestLazySettings:
             assert validate_password_strength("Abcdefghijk1") == "Abcdefghijk1"
         finally:
             _restore_settings_app(previous)
+
+    def test_email_config_exposed_as_uppercase_setting(self):
+        from srf.config.settings import EmailConfig
+
+        assert settings.EMAIL_CONFIG is EmailConfig
+
+    def test_email_config_can_be_overridden_by_app_config(self):
+        previous = getattr(settings, "app", None)
+        try:
+            custom = SimpleNamespace(from_email="custom@example.com")
+            app = MagicMock()
+            app.config = SimpleNamespace(EMAIL_CONFIG=custom)
+            settings.set_app(app)
+            assert settings.EMAIL_CONFIG is custom
+        finally:
+            _restore_settings_app(previous)

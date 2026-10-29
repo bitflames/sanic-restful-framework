@@ -1,5 +1,6 @@
 """Unit tests for srf.views.base (ViewSet mixins and BaseViewSet)."""
 
+import asyncio
 from typing import ClassVar
 from unittest.mock import AsyncMock, MagicMock
 
@@ -30,7 +31,6 @@ class TestCreateModelMixin:
     @pytest.mark.asyncio
     async def test_create_rejects_none_json(self):
         mixin = CreateModelMixin()
-        mixin._get_schema = MagicMock()
         mixin.check_permissions = AsyncMock()
         request = MagicMock()
         request.json = None
@@ -111,6 +111,34 @@ class TestUpdateModelMixin:
         orm_model.update_from_dict.assert_called_once_with({"name": "alice"})
         orm_model.save.assert_awaited_once()
         assert result is orm_model
+
+    @pytest.mark.asyncio
+    async def test_perform_update_propagates_integrity_error(self):
+        """The generic mixin does not translate IntegrityError; subclasses map it if needed."""
+        from tortoise.exceptions import IntegrityError
+
+        mixin = UpdateModelMixin()
+        sch_model = MagicMock()
+        sch_model.model_dump.return_value = {"name": "alice"}
+        orm_model = MagicMock()
+        orm_model._meta.pk_attr = "id"
+        orm_model.update_from_dict = MagicMock(side_effect=IntegrityError("conflict"))
+
+        with pytest.raises(IntegrityError):
+            await mixin.perform_update(sch_model, orm_model)
+
+    @pytest.mark.asyncio
+    async def test_perform_update_propagates_validation_error(self):
+        """ValueError is surfaced unchanged; as_view() only maps validation errors."""
+        mixin = UpdateModelMixin()
+        sch_model = MagicMock()
+        sch_model.model_dump.return_value = {"name": None}
+        orm_model = MagicMock()
+        orm_model._meta.pk_attr = "id"
+        orm_model.update_from_dict = MagicMock(side_effect=ValueError("name is non nullable field"))
+
+        with pytest.raises(ValueError):
+            await mixin.perform_update(sch_model, orm_model)
 
     @pytest.mark.asyncio
     async def test_perform_update_strips_custom_pk_attr(self):
@@ -371,6 +399,16 @@ class TestBaseViewSet:
         view = MinimalViewSet()
         perm_cls = MagicMock()
         perm_cls.has_permission = AsyncMock(return_value=True)
+        view.permission_classes = [perm_cls]
+        request = MagicMock()
+        await view.check_permissions(request)
+
+    @pytest.mark.asyncio
+    async def test_check_permissions_awaits_non_coroutine_awaitable(self):
+        view = MinimalViewSet()
+        perm_cls = MagicMock()
+        perm_cls.has_permission = MagicMock(return_value=asyncio.Future())
+        perm_cls.has_permission.return_value.set_result(True)
         view.permission_classes = [perm_cls]
         request = MagicMock()
         await view.check_permissions(request)

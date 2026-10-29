@@ -1,9 +1,10 @@
-import asyncio
+import inspect
 from collections.abc import Callable, Sequence
 from functools import wraps
 
 from pydantic import ValidationError
-from sanic.exceptions import BadRequest
+
+from srf.exceptions import PydanticValidationException
 
 
 def action(
@@ -26,7 +27,7 @@ def action(
         raise TypeError("detail must be bool")
 
     def decorator(fun):
-        is_async = asyncio.iscoroutinefunction(fun)
+        is_async = inspect.iscoroutinefunction(fun)
 
         if is_async:
 
@@ -71,7 +72,7 @@ def validate_request(show_errors: bool = False):
                         for error in exc.errors()
                     ]
 
-                raise BadRequest(message) from None
+                raise PydanticValidationException(message=message) from None
 
         return wrapper
 

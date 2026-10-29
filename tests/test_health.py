@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from srf.health.checks import BaseHealthCheck, HealthCheckRegistry, RedisCheck, SQLiteCheck
-from srf.health.viewset import health_check
+from srf.health.route import health_check
 
 
 def make_app(**clients):
@@ -149,11 +149,24 @@ class TestBuiltinChecks:
         assert "Unexpected SQLite response" in str(log_exc.call_args.args[2])
 
 
-class TestHealthViewset:
+class TestHealthRoute:
+    def test_package_exports_health_check(self):
+        from srf.health import health_check as exported
+
+        assert exported is health_check
+
     @pytest.mark.asyncio
     async def test_empty_health_check_list_returns_ok(self):
         request = MagicMock()
         request.app.config.HEALTH_CHECK_LIST = []
+        response = await health_check(request)
+        assert response.status == 200
+        assert response.body == b"{}"
+
+    @pytest.mark.asyncio
+    async def test_missing_health_check_list_defaults_to_empty(self):
+        request = MagicMock()
+        request.app.config = SimpleNamespace()
         response = await health_check(request)
         assert response.status == 200
         assert response.body == b"{}"

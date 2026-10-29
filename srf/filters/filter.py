@@ -7,22 +7,8 @@ from typing import Any, ClassVar
 
 from sanic import Request
 from sanic.exceptions import BadRequest
-from sanic.log import logger
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
-
-
-def visualize_q(q: Q, indent=0):
-    prefix = " " * indent
-    if isinstance(q.children, list):
-        for child in q.children:
-            if isinstance(child, Q):
-                visualize_q(child, indent + 4)
-            else:
-                k, v = child
-                logger.info(f"{' ' * (indent + 4)}{k} = {v}")
-    else:
-        logger.info(f"{prefix}{q}")
 
 
 class BaseFilter(ABC):
@@ -115,9 +101,14 @@ class JsonLogicFilter(BaseFilter):
 
     Attributes:
         OPERATOR_MAP: Mapping of JSON-logic operators to ``Q`` expression builders.
+        DOCS_URL: Documentation URL included in every 400 response message.
     """
 
     cls_fields = "filter_fields"
+    DOCS_URL: ClassVar[str] = "https://bitflames.com/api/filters/#srf.filters.filter.JsonLogicFilter"
+    # Reject malformed/deeply nested expressions instead of failing inside the ORM.
+    MAX_DEPTH: ClassVar[int] = 3
+    MAX_NODES: ClassVar[int] = 50
     OPERATOR_MAP: ClassVar[dict[str, Callable]] = {
         "==": lambda k, v: Q(**{k: v}),
         "!=": lambda k, v: ~Q(**{k: v}),
@@ -131,6 +122,10 @@ class JsonLogicFilter(BaseFilter):
         "like": lambda k, v: Q(**{f"{k}__icontains": v}),
     }
 
+    def _usage_error(self, message: str) -> BadRequest:
+        """Build a 400 error that points to the filter documentation."""
+        return BadRequest(f"{message}. See {self.DOCS_URL} for usage.")
+
     def filter_queryset(self, request, queryset: QuerySet):
         raw_logic = request.args.get("filter")
         if not raw_logic or not self.filter_fields:
@@ -140,42 +135,57 @@ class JsonLogicFilter(BaseFilter):
             try:
                 raw_logic = json.loads(raw_logic)
             except (json.JSONDecodeError, TypeError) as exc:
-                raise BadRequest("Invalid filter JSON") from exc
+                raise self._usage_error("Invalid filter JSON") from exc
 
         q_expr = self._parse_logic_recursively(raw_logic)
         if q_expr:
             return queryset.filter(q_expr)
         return queryset
 
-    def _parse_logic_recursively(self, logic: dict[str, Any]) -> Q | None:
-        """Recursively parse JSON Logic into a Tortoise ORM Q expression."""
+    def _parse_logic_recursively(self, logic: Any, depth: int = 0, nodes: list[int] | None = None) -> Q | None:
+        """Recursively parse JSON Logic into a Tortoise ORM Q expression.
+
+        Invalid structures raise ``BadRequest`` (400).
+        Nesting is capped at ``MAX_DEPTH`` levels and ``MAX_NODES`` nodes.
+        """
+        if nodes is None:
+            nodes = [0]
+        nodes[0] += 1
+        if depth >= self.MAX_DEPTH or nodes[0] > self.MAX_NODES:
+            raise self._usage_error("Filter expression is too complex")
         if not isinstance(logic, dict):
+            raise self._usage_error("Invalid filter expression")
+        if not logic:
             return None
+        if len(logic) != 1:
+            raise self._usage_error("Filter expression must contain exactly one operator")
 
-        for op, args in logic.items():
-            if op in ("and", "or"):
-                sub_qs = [self._parse_logic_recursively(sub) for sub in args]
-                sub_qs = [q for q in sub_qs if q is not None]
-                if not sub_qs:
-                    return None
-                if op == "and":
-                    return functools.reduce(operator.and_, sub_qs)
-                elif op == "or":
-                    return functools.reduce(operator.or_, sub_qs)
+        op, args = next(iter(logic.items()))
 
-            elif op == "not":
-                inner_q = self._parse_logic_recursively(args)
-                return ~inner_q if inner_q else None
+        if op in ("and", "or"):
+            if not isinstance(args, list) or not args:
+                raise self._usage_error(f"Invalid '{op}' arguments")
+            sub_qs = [q for q in (self._parse_logic_recursively(sub, depth + 1, nodes) for sub in args) if q is not None]
+            if not sub_qs:
+                return None
+            return functools.reduce(operator.and_ if op == "and" else operator.or_, sub_qs)
 
-            elif op in self.OPERATOR_MAP:
-                if isinstance(args, list) and len(args) == 2:
-                    left, right = args
-                    key = left.get("var") if isinstance(left, dict) and "var" in left else None
-                    value = right
-                    if key and self.filter_fields.get(key):
-                        return self.OPERATOR_MAP[op](self.filter_fields[key], value)
-                    return None
-        return None
+        if op == "not":
+            if not isinstance(args, dict):
+                raise self._usage_error("Invalid 'not' argument")
+            inner_q = self._parse_logic_recursively(args, depth + 1, nodes)
+            return ~inner_q if inner_q is not None else None
+
+        if op in self.OPERATOR_MAP:
+            if not isinstance(args, list) or len(args) != 2:
+                raise self._usage_error(f"Invalid '{op}' arguments")
+            left, right = args
+            if not isinstance(left, dict) or not isinstance(left.get("var"), str):
+                raise self._usage_error(f"Invalid '{op}' field operand")
+            field = self.filter_fields.get(left["var"])
+            return self.OPERATOR_MAP[op](field, right) if field else None
+
+        raise self._usage_error(f"Unknown filter operator: {op!r}")
 
 
 class QueryParamFilter(BaseFilter):

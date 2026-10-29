@@ -23,9 +23,11 @@ class ProductViewSet(BaseViewSet):
 
 Before a request enters the ViewSet, `BaseViewSet.check_permissions()` calls
 `has_permission(request, view)` on the class (without instantiating it). It raises Forbidden on failure.
-When there is no authentication information, the middleware sets `request.ctx.user` to `None`; for example,
-`IsAuthenticated` rejects that user (403). The authentication middleware returns 401 only when the request header format is invalid, JWT is not configured,
-or the user does not exist; a missing token or a failed signature/expiry check is treated as an anonymous request.
+The authentication middleware supports two modes: by default a request with no token falls back to
+`AnonymousUser`; `strict=True` enforces mandatory authentication — see
+[Authentication Middleware](../advanced/middleware/auth-middleware.md). Both `AnonymousUser`
+(`is_active=False`) and `None` (whitelisted paths that skip authentication) are rejected by
+`IsAuthenticated` (403).
 
 ## Setting permissions by HTTP method
 

@@ -6,6 +6,8 @@ ViewSet 装饰器用于扩展和定制 ViewSet 的行为，其中最重要的是
 
 `@action` 装饰器用于为 ViewSet 添加自定义操作，超越标准的 CRUD 操作。
 
+action 方法可以写成 `async def` 或普通 `def`；`as_view()` 会根据返回值是否为 awaitable 自动决定是否 `await`。
+
 ### 基本用法
 
 ```python
@@ -71,12 +73,12 @@ action(
 
 **参数说明**：
 
-| 参数 | 类型 | 默认值 | 说明 |
-| ------ | ------ | -------- | ------ |
-| `methods` | Sequence[str] | `("GET",)` | HTTP 方法列表，如 `["get"]`, `["post"]`, `["get", "post"]`（注册时大小写不敏感） |
-| `detail` | bool | `False` | `True` 为详情级操作（需要 pk），`False` 为集合级操作 |
-| `url_path` | str \| None | `/<方法名>` | 自定义 URL 路径段 |
-| `url_name` | str \| None | 方法名 | 路由名称，用于 URL 反向解析 |
+| 参数       | 类型          | 默认值      | 说明                                                                             |
+| ---------- | ------------- | ----------- | -------------------------------------------------------------------------------- |
+| `methods`  | Sequence[str] | `("GET",)`  | HTTP 方法列表，如 `["get"]`, `["post"]`, `["get", "post"]`（注册时大小写不敏感） |
+| `detail`   | bool          | `False`     | `True` 为详情级操作（需要 pk），`False` 为集合级操作                             |
+| `url_path` | str \| None   | `/<方法名>` | 自定义 URL 路径段                                                                |
+| `url_name` | str \| None   | 方法名      | 路由名称，用于 URL 反向解析                                                      |
 
 ### 集合级操作 vs 详情级操作
 
@@ -100,14 +102,14 @@ from tortoise.functions import Count, Avg, Sum
 
 @action(methods=["get"], detail=False, url_path="statistics")
 async def get_statistics(self, request):
-    """获取产品统计信息"""    
-    
+    """获取产品统计信息"""
+
     stats = await Product.all().annotate(
         total=Count("id"),
         avg_price=Avg("price"),
         total_value=Sum("price")
     ).values("total", "avg_price", "total_value")
-    
+
     return json(stats[0] if stats else {})
 
 
@@ -285,10 +287,10 @@ async def change_status(self, request, pk):
     """更改状态"""
     product = await self.get_object(pk)
     new_status = request.json.get("status")
-    
+
     product.status = new_status
     await product.save()
-    
+
     return json({"message": "状态已更新"})
 ```
 

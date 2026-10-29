@@ -18,6 +18,7 @@ class EventViewSet(CreateAndReadOnlyModelViewSet):
     ordering_fields: ClassVar[list[str]] = filter_fields + ["create_time"]
 
     schema = schema.EventSchema
+    read_only_fields: ClassVar[tuple[str, ...]] = ("id", "create_time")
 
     @property
     def queryset(self) -> QuerySet:
@@ -27,6 +28,8 @@ class EventViewSet(CreateAndReadOnlyModelViewSet):
 
     async def perform_create(self, sch_model: BaseModel) -> models.Event:
         data = sch_model.model_dump(exclude_unset=True, exclude_none=True, by_alias=False)
+        for field in self.read_only_fields:
+            data.pop(field, None)
         request = getattr(self, "request", None)
         user = getattr(getattr(request, "ctx", None), "user", None) if request is not None else None
         if user is not None:

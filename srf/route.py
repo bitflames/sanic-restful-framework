@@ -4,8 +4,8 @@ from sanic import Blueprint, Sanic
 
 from srf.views.base import GenericAPIView
 
-COLLECTION_ACTIONS = {"get": "list", "post": "create"}
-DETAIL_ACTIONS = {"get": "retrieve", "put": "update", "patch": "update", "delete": "destroy"}
+COLLECTION_ACTIONS = {"get": "list", "head": "list", "post": "create"}
+DETAIL_ACTIONS = {"get": "retrieve", "head": "retrieve", "put": "update", "patch": "update", "delete": "destroy"}
 
 
 def implemented_actions(view_cls: type[GenericAPIView], mapping: dict[str, str]) -> dict[str, str]:

@@ -23,7 +23,7 @@ The route reads `app.config.HEALTH_CHECK_LIST` (an empty list by default) and ru
 ```python
 from sanic import Sanic
 from srf.health.checks import RedisCheck, SQLiteCheck
-from srf.health.viewset import health_check
+from srf.health.route import health_check
 
 app = Sanic("MyApp")
 app.config.HEALTH_CHECK_LIST = [RedisCheck, SQLiteCheck]
@@ -54,7 +54,7 @@ curl http://localhost:8000/health
 The response is a JSON mapping from check names to statuses, for example:
 
 ```json
-{"redis": "up", "sqlite": "down"}
+{ "redis": "up", "sqlite": "down" }
 ```
 
 Even when a check returns `"down"`, the current handler still returns HTTP 200. If the client has not been mounted on `app.ctx` in advance, constructing the check instance raises an exception, which Sanic handles.
@@ -113,7 +113,7 @@ from sanic import Sanic
 from redis.asyncio import Redis
 from aiosqlite import connect
 from srf.health.checks import RedisCheck, SQLiteCheck
-from srf.health.viewset import health_check
+from srf.health.route import health_check
 
 app = Sanic("MyApp")
 app.config.HEALTH_CHECK_LIST = [RedisCheck, SQLiteCheck]

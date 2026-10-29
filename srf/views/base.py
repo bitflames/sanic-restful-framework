@@ -1,4 +1,4 @@
-import asyncio
+import inspect
 from collections.abc import Iterable
 from typing import ClassVar
 
@@ -175,7 +175,7 @@ class GenericAPIView(HTTPMethodView):
         """
         for permission_class in self.permission_classes:
             result = permission_class.has_object_permission(self.request, self, obj)
-            if asyncio.iscoroutine(result):
+            if inspect.isawaitable(result):
                 result = await result
             if not result:
                 raise Forbidden(message="Forbidden")
@@ -188,7 +188,7 @@ class GenericAPIView(HTTPMethodView):
         """
         for permission_class in self.permission_classes:
             result = permission_class.has_permission(request, self)
-            if asyncio.iscoroutine(result):
+            if inspect.isawaitable(result):
                 result = await result
             if not result:
                 raise Forbidden(message="Forbidden")
@@ -266,7 +266,10 @@ class GenericAPIView(HTTPMethodView):
             await self.check_permissions(request)
 
             try:
-                return await handler(request, *args, **kwargs)
+                result = handler(request, *args, **kwargs)
+                if inspect.isawaitable(result):
+                    result = await result
+                return result
             except (PydanticValidationError, TortoiseValidationError) as e:
                 raise PydanticValidationException(message=str(e))
 

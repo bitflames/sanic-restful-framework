@@ -58,6 +58,10 @@ class TestVerifiedEmail:
     def test_none_when_no_verified(self):
         assert social_auth._verified_email([{"email": "x@example.com", "verified": False}]) is None
 
+    def test_ignores_non_dict_entries(self):
+        emails = ["not-a-dict", {"email": "ok@example.com", "verified": True, "primary": True}]
+        assert social_auth._verified_email(emails) == "ok@example.com"
+
 
 class TestGithubLogin:
     @pytest.mark.asyncio
@@ -71,8 +75,9 @@ class TestGithubLogin:
         qs = parse_qs(parsed.query)
         assert qs["client_id"] == ["client-id"]
         assert qs["state"]
-        # cookie set via add_cookie
-        assert hasattr(response, "cookies") or True
+        state_cookie = next((c for c in response.cookies.cookies if c.key == "oauth_state"), None)
+        assert state_cookie is not None
+        assert state_cookie.value
 
 
 class TestGithubCallback:
@@ -160,6 +165,8 @@ class TestLoginByCode:
         mock_user.update_time = None
         mock_user.roles = []
         mock_user.save = AsyncMock()
+        mock_user.update_user_last_login = AsyncMock()
+        mock_user.fetch_related = AsyncMock()
 
         auth_instance = MagicMock()
         auth_instance.generate_access_token = AsyncMock(return_value="jwt-token")

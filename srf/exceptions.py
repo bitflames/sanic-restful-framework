@@ -25,3 +25,12 @@ class PydanticValidationException(HTTPException):
 
     status_code = 422
     quiet = True
+
+
+class TooManyRequest(HTTPException):
+    """
+    Request too frequent
+    """
+
+    status_code = 429
+    quiet = True

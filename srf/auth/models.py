@@ -5,14 +5,37 @@ from tortoise import fields
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 from tortoise.models import Model as TorModel
+from tortoise.timezone import now as tortoise_timezone_now
 from tortoise.transactions import in_transaction
 
 from srf.exceptions import TargetObjectAlreadyExist
 
 
+class AnonymousUser:
+    """Placeholder user for unauthenticated requests (Django/DRF style).
+
+    Assigned to ``request.ctx.user`` by optional authentication (``authenticate_request(strict=False)``) when no credentials are presented.
+    ``is_active=False`` and ``is_superuser=False`` make ``IsAuthenticated`` and ``SuperuserOnly`` reject it out of the box.
+    """
+
+    id = None
+    username = ""
+    email = ""
+    is_active = False
+    is_superuser = False
+    is_anonymous = True
+    is_authenticated = False
+
+    def __repr__(self) -> str:
+        return "AnonymousUser"
+
+    def __str__(self) -> str:
+        return "AnonymousUser"
+
+
 class Role(TorModel):
     name = fields.CharField(max_length=256, null=False, unique=True)
-    description = fields.CharField(max_length=256, null=False)
+    description = fields.CharField(max_length=256, null=True)
 
     class Meta:
         table = "auth_role"
@@ -65,7 +88,7 @@ class PasswordMixin(TorModel):
 
 class AbstractUser(TorModel):
     username = fields.CharField(max_length=150, unique=True, null=False)
-    email = fields.CharField(max_length=256, null=False, unique=True)
+    email = fields.CharField(max_length=256, null=True, unique=True)
     is_active = fields.BooleanField(default=True, null=False)
     is_superuser = fields.BooleanField(default=False, null=False)
     last_login = fields.DatetimeField(null=True)
@@ -104,34 +127,48 @@ class User(AbstractUser, PasswordMixin):
         user_info.pop("id", None)
         raw_password = user_info.pop("password", None)
         role_names = user_info.pop("roles", None)
-        user_info["email"] = user_info["email"].lower()
+        if not user_info.get("username"):
+            raise ValueError("username is required")
+        if user_info.get("email") is not None:
+            user_info["email"] = str(user_info["email"]).lower()
         if raw_password:
             user_info["password"] = cls.hash_password(raw_password)
         else:
             user_info["password"] = None
-        user_info["is_superuser"] = False
-        user_info["is_active"] = True
+        # Privilege flags default to safe values; only superuser-facing callers
+        # (UserViewSet admin schema) pass them explicitly. register() never does.
+        user_info.setdefault("is_superuser", False)
+        user_info.setdefault("is_active", True)
 
         async with in_transaction() as conn:
-            existing = await cls.filter(Q(username=user_info["username"]) | Q(email=user_info["email"])).using_db(conn).first()
+            query = Q(username=user_info["username"])
+            if user_info.get("email") is not None:
+                query |= Q(email=user_info["email"])
+            existing = await cls.filter(query).using_db(conn).first()
             if existing:
                 if existing.username == user_info["username"]:
-                    raise TargetObjectAlreadyExist(message="username already exists")
-                if existing.email == user_info["email"]:
-                    raise TargetObjectAlreadyExist(message="email already exists")
+                    raise TargetObjectAlreadyExist(message="username or email already exists")
+                if user_info.get("email") is not None and existing.email == user_info["email"]:
+                    raise TargetObjectAlreadyExist(message="username or email already exists")
+            roles = await Role.filter(name__in=role_names).using_db(conn) if role_names else []
 
             user_orm = cls(**user_info)
             try:
                 await user_orm.save(using_db=conn)
-                if role_names:
-                    # One batched query; role names that do not exist are silently ignored.
-                    roles = await Role.filter(name__in=role_names).using_db(conn)
-                    if roles:
-                        await user_orm.roles.add(*roles, using_db=conn)
             except IntegrityError:
                 raise TargetObjectAlreadyExist(message="username or email already exists") from None
+            if roles:
+                await user_orm.roles.add(*roles, using_db=conn)
 
             return user_orm
+
+    def check_active(self):
+        return getattr(self, "is_active", True)
+
+    async def update_user_last_login(self) -> None:
+        """Record successful login time without rewriting unrelated columns."""
+        self.last_login = tortoise_timezone_now()
+        await self.save(update_fields=["last_login"])
 
 
 class OAuthAccount(TorModel):

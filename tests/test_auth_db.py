@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 from sanic.exceptions import Unauthorized
 
-from srf.auth.auth import authenticate, build_user_payload, retrieve_user
+from srf.auth.auth import _build_user_payload, authenticate, retrieve_user
 from srf.auth.models import Role, User
 from srf.exceptions import TargetObjectAlreadyExist
 
@@ -30,15 +30,23 @@ class TestCreateUserDB:
         assert user.email == "alice@example.com"
 
     @pytest.mark.asyncio
+    async def test_username_is_required_but_email_is_optional(self, db):
+        with pytest.raises(ValueError, match="username is required"):
+            await User.create_user({"email": "no-username@example.com"})
+
+        user = await User.create_user({"username": "no-email"})
+        assert user.email is None
+
+    @pytest.mark.asyncio
     async def test_duplicate_username_raises(self, db):
         await _create_user()
-        with pytest.raises(TargetObjectAlreadyExist, match="username already exists"):
+        with pytest.raises(TargetObjectAlreadyExist, match="username or email already exists"):
             await _create_user(email="other@example.com")
 
     @pytest.mark.asyncio
     async def test_duplicate_email_is_case_insensitive(self, db):
         await _create_user()
-        with pytest.raises(TargetObjectAlreadyExist, match="email already exists"):
+        with pytest.raises(TargetObjectAlreadyExist, match="username or email already exists"):
             await _create_user(username="bob", email="ALICE@example.com")
 
     @pytest.mark.asyncio
@@ -163,7 +171,7 @@ class TestBuildUserPayloadDB:
         await Role.create(name="admin", description="admin role")
         user = await _create_user(roles=["admin"])
         fetched = await User.get(id=user.id).prefetch_related("roles")
-        payload = await build_user_payload(fetched)
+        payload = await _build_user_payload(fetched)
         assert payload == {"user_id": user.id, "username": "alice", "roles": ["admin"]}
 
     @pytest.mark.asyncio
@@ -171,11 +179,11 @@ class TestBuildUserPayloadDB:
         await Role.create(name="admin", description="admin role")
         user = await _create_user(roles=["admin"])
         fresh = await User.get(id=user.id)  # roles relation not fetched
-        payload = await build_user_payload(fresh)
+        payload = await _build_user_payload(fresh)
         assert payload["roles"] == ["admin"]
 
     @pytest.mark.asyncio
     async def test_user_without_roles(self, db):
         user = await _create_user()
-        payload = await build_user_payload(user)
+        payload = await _build_user_payload(user)
         assert payload["roles"] == []

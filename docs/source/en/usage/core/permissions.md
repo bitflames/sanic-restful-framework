@@ -33,9 +33,10 @@ class OrderViewSet(BaseViewSet):
 
 `BaseViewSet.check_permissions()` calls
 `has_permission(request, view)` **on the class** in order; both synchronous and asynchronous return values are supported. If any result is falsy, it raises
-403 Forbidden. When there is no authentication information, the authentication middleware sets `request.ctx.user` to `None`, and the
-permission class decides whether to allow the request; when the request header format is invalid, JWT is not configured, or the user does not exist, the authentication middleware returns
-401, while a missing token or a failed signature/expiry check is treated as an anonymous request.
+403 Forbidden. For the authentication middleware behavior (by default a request with no token
+falls back to `AnonymousUser`; `strict=True` enforces mandatory authentication), see
+[Authentication Middleware](../advanced/middleware/auth-middleware.md); unauthenticated requests
+are decided by permission classes (`IsAuthenticated` rejects them with 403).
 
 Permission methods are `@staticmethod`s: inheriting from `BasePermission` is recommended but not required; providing a static method with the same name is enough (duck typing).
 

@@ -23,7 +23,7 @@ Redis 已包含在 SRF 依赖中；SQLite 检查使用的 `aiosqlite` 是可选�
 ```python
 from sanic import Sanic
 from srf.health.checks import RedisCheck, SQLiteCheck
-from srf.health.viewset import health_check
+from srf.health.route import health_check
 
 app = Sanic("MyApp")
 app.config.HEALTH_CHECK_LIST = [RedisCheck, SQLiteCheck]
@@ -54,7 +54,7 @@ curl http://localhost:8000/health
 响应是检查名称到状态的 JSON 映射，例如：
 
 ```json
-{"redis": "up", "sqlite": "down"}
+{ "redis": "up", "sqlite": "down" }
 ```
 
 即使检查返回 `"down"`，当前 handler 仍返回 HTTP 200。若客户端未预先挂载到 `app.ctx`，构造检查实例会抛出异常并由 Sanic 处理。
@@ -113,7 +113,7 @@ from sanic import Sanic
 from redis.asyncio import Redis
 from aiosqlite import connect
 from srf.health.checks import RedisCheck, SQLiteCheck
-from srf.health.viewset import health_check
+from srf.health.route import health_check
 
 app = Sanic("MyApp")
 app.config.HEALTH_CHECK_LIST = [RedisCheck, SQLiteCheck]

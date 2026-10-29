@@ -49,7 +49,7 @@ def validate_secret(v: SecretStr) -> SecretStr:
     return v
 
 
-def _require_matching_passwords(password: SecretStr, password_confirm: SecretStr) -> None:
+def require_matching_passwords(password: SecretStr, password_confirm: SecretStr) -> None:
     plain = password.get_secret_value()
     confirm = password_confirm.get_secret_value()
     if plain != confirm:
@@ -58,7 +58,7 @@ def _require_matching_passwords(password: SecretStr, password_confirm: SecretStr
 
 class RoleSchemaReader(BaseModel):
     id: int = Field(..., frozen=True)
-    name: str = Field(..., min_length=1, max_length=255)
+    name: str = Field(..., min_length=1, max_length=256)
     description: str | None = Field(None)
 
     model_config = ConfigDict(from_attributes=True)
@@ -72,15 +72,14 @@ class SchemaBaseUser(BaseModel):
 
 
 class UserSchemaUpdate(BaseModel):
-    """Profile update payload — no password fields (use change-password action)."""
+    """Profile update payload — email and password are immutable here."""
 
     username: str | None = Field(None, min_length=1, max_length=150)
-    email: EmailStr | None = Field(None)
 
     @model_validator(mode="after")
-    def check_email(self) -> "UserSchemaUpdate":
-        if self.email is not None:
-            self.email = self.email.lower()
+    def reject_null_username(self) -> "UserSchemaUpdate":
+        if "username" in self.model_fields_set and self.username is None:
+            raise ValueError("username may not be null")
         return self
 
 
@@ -96,12 +95,45 @@ class UserSchemaWriter(SchemaBaseUser):
     def check_passwords(self) -> "UserSchemaWriter":
         if self.password is None or self.password_confirm is None:
             raise ValueError("password1 and password2 are required")
-        _require_matching_passwords(self.password, self.password_confirm)
+        require_matching_passwords(self.password, self.password_confirm)
         return self
 
 
-class ChangePasswordSchema(BaseModel):
-    old_password: SecretStr
+class UserSchemaAdminBase(BaseModel):
+    is_superuser: bool | None = None
+    is_active: bool | None = None
+    roles: list[str] | None = None
+
+    @model_validator(mode="after")
+    def reject_null_flags(self) -> "UserSchemaAdminBase":
+        for field in ("is_superuser", "is_active"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} may not be null")
+        return self
+
+
+class UserSchemaAdminCreate(UserSchemaWriter, UserSchemaAdminBase):
+    """Superuser-only create payload: required username/password plus privilege fields.
+
+    ``is_superuser`` / ``is_active``: omitted falls back to the safe defaults in
+    ``User.create_user`` (``False`` / ``True``).
+
+    ``roles`` takes role names; unknown names are ignored.
+    """
+
+
+class UserSchemaAdminUpdate(UserSchemaUpdate, UserSchemaAdminBase):
+    """Superuser-only update payload: optional privilege fields, no password/email.
+
+    Omitted fields stay untouched. ``roles`` replaces the whole role set
+    (``[]`` clears all); omitted leaves it untouched.
+    Password changes go through the change-password / reset-password actions.
+    """
+
+
+class AdminPasswordResetSchema(BaseModel):
+    """Superuser password reset payload (no old-password verification)."""
+
     password: StrongPassword = Field(..., alias="password1")
     password_confirm: StrongPassword = Field(..., alias="password2")
 
@@ -109,8 +141,12 @@ class ChangePasswordSchema(BaseModel):
 
     @model_validator(mode="after")
     def check_passwords(self) -> "ChangePasswordSchema":
-        _require_matching_passwords(self.password, self.password_confirm)
+        require_matching_passwords(self.password, self.password_confirm)
         return self
+
+
+class ChangePasswordSchema(AdminPasswordResetSchema):
+    old_password: SecretStr
 
 
 class UserSchemaReader(SchemaBaseUser):
@@ -120,7 +156,7 @@ class UserSchemaReader(SchemaBaseUser):
     last_login: datetime.datetime | None = None
     roles: list[RoleSchemaReader] | None = None
     create_time: datetime.datetime = Field(default_factory=tortoise_timezone_now)
-    update_time: datetime.datetime = Field(default_factory=tortoise_timezone_now)
+    update_time: datetime.datetime | None = Field(default_factory=tortoise_timezone_now)
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 

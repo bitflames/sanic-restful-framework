@@ -1,12 +1,19 @@
 """Unit tests for authentication and throttling middleware."""
 
+import hashlib
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sanic.exceptions import Unauthorized
-from sanic_jwt.exceptions import InvalidAuthorizationHeader
+from sanic_jwt.exceptions import (
+    InvalidAuthorizationHeader,
+    MissingAuthorizationCookie,
+    MissingAuthorizationHeader,
+    MissingAuthorizationQueryArg,
+)
 
+from srf.auth.models import AnonymousUser
 from srf.middleware.authmiddleware import authenticate_request, extract_bearer_token, set_user_to_request_ctx
 from srf.middleware.throttlemiddleware import (
     HeaderRateLimit,
@@ -46,19 +53,72 @@ class TestAuthenticateRequest:
             await authenticate_request(request)
 
     @pytest.mark.asyncio
-    async def test_invalid_jwt_becomes_unauthorized(self):
+    async def test_malformed_header_becomes_unauthorized(self):
         request = MagicMock()
-        request.app.ctx.auth.extract_payload = AsyncMock(side_effect=InvalidAuthorizationHeader("bad token"))
+        request.app.ctx.auth._get_token = MagicMock(side_effect=InvalidAuthorizationHeader("bad token"))
         with pytest.raises(Unauthorized):
             await authenticate_request(request)
 
     @pytest.mark.asyncio
-    async def test_empty_payload_sets_anonymous_user(self):
+    async def test_missing_token_strict_is_unauthorized(self):
+        """Strict mode: no credentials at all is also a 401."""
+        request = MagicMock()
+        request.app.ctx.auth._get_token = MagicMock(side_effect=MissingAuthorizationHeader())
+        request.app.ctx.auth.extract_payload = AsyncMock()
+        request.app.ctx.auth.retrieve_user = AsyncMock()
+        with pytest.raises(Unauthorized, match="Authentication required"):
+            await authenticate_request(request, strict=True)
+        request.app.ctx.auth.extract_payload.assert_not_called()
+        request.app.ctx.auth.retrieve_user.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_missing_token_optional_becomes_anonymous(self):
+        """Optional mode (default): no credentials -> AnonymousUser, no 401."""
+        request = MagicMock()
+        request.app.ctx.auth._get_token = MagicMock(side_effect=MissingAuthorizationHeader())
+        request.app.ctx.auth.extract_payload = AsyncMock()
+        request.app.ctx.auth.retrieve_user = AsyncMock()
+
+        await authenticate_request(request)
+
+        assert isinstance(request.ctx.user, AnonymousUser)
+        assert request.ctx.user.is_active is False
+        assert request.ctx.user.is_authenticated is False
+        request.app.ctx.auth.extract_payload.assert_not_called()
+        request.app.ctx.auth.retrieve_user.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("missing_exc", [MissingAuthorizationCookie, MissingAuthorizationQueryArg])
+    async def test_missing_cookie_or_query_token_optional_becomes_anonymous(self, missing_exc):
+        """Cookie/query-string auth with no credentials is still anonymous in optional mode."""
+        request = MagicMock()
+        request.app.ctx.auth._get_token = MagicMock(side_effect=missing_exc())
+        request.app.ctx.auth.extract_payload = AsyncMock()
+        request.app.ctx.auth.retrieve_user = AsyncMock()
+
+        await authenticate_request(request)
+
+        assert isinstance(request.ctx.user, AnonymousUser)
+        request.app.ctx.auth.extract_payload.assert_not_called()
+        request.app.ctx.auth.retrieve_user.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("missing_exc", [MissingAuthorizationCookie, MissingAuthorizationQueryArg])
+    async def test_missing_cookie_or_query_token_strict_is_unauthorized(self, missing_exc):
+        request = MagicMock()
+        request.app.ctx.auth._get_token = MagicMock(side_effect=missing_exc())
+
+        with pytest.raises(Unauthorized, match="Authentication required"):
+            await authenticate_request(request, strict=True)
+
+    @pytest.mark.asyncio
+    async def test_rejected_token_is_unauthorized(self):
+        """Expired or forged tokens both fail verification -> 401."""
         request = MagicMock()
         request.app.ctx.auth.extract_payload = AsyncMock(return_value=None)
         request.app.ctx.auth.retrieve_user = AsyncMock()
-        await authenticate_request(request)
-        assert request.ctx.user is None
+        with pytest.raises(Unauthorized, match="Invalid or expired token"):
+            await authenticate_request(request)
         request.app.ctx.auth.retrieve_user.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -90,7 +150,17 @@ class TestAuthenticateRequest:
         monkeypatch.setattr(middleware, "authenticate_request", authenticate)
         request = MagicMock()
         await set_user_to_request_ctx(request)
-        authenticate.assert_awaited_once_with(request)
+        authenticate.assert_awaited_once_with(request, strict=False)
+
+    @pytest.mark.asyncio
+    async def test_request_middleware_forwards_strict_flag(self, monkeypatch):
+        import srf.middleware.authmiddleware as middleware
+
+        authenticate = AsyncMock()
+        monkeypatch.setattr(middleware, "authenticate_request", authenticate)
+        request = MagicMock()
+        await set_user_to_request_ctx(request, strict=True)
+        authenticate.assert_awaited_once_with(request, strict=True)
 
 
 class TestThrottleStorage:
@@ -113,14 +183,42 @@ class TestThrottleStorage:
             RedisStorage(None)
 
     @pytest.mark.asyncio
-    async def test_redis_storage_sets_expiry_only_for_first_hit(self):
+    async def test_redis_storage_incr_is_one_atomic_script(self):
         redis = AsyncMock()
-        redis.incr = AsyncMock(side_effect=[1, 2])
+        redis.eval = AsyncMock(side_effect=[1, 2])
         storage = RedisStorage(redis, prefix="test")
 
         assert await storage.incr("user:7", 60) == 1
         assert await storage.incr("user:7", 60) == 2
-        redis.expire.assert_awaited_once_with("test:user:7", 60)
+        assert redis.eval.await_count == 2
+        args = redis.eval.await_args_list[0].args
+        assert "INCR" in args[0]
+        assert args[1:] == (1, "test:user:7", 60)
+
+    def test_allow_lua_repairs_missing_ttl(self):
+        assert "redis.call('EXPIRE', KEYS[1], ttl)" in RedisStorage.ALLOW_LUA
+
+    @pytest.mark.asyncio
+    async def test_redis_storage_allow_returns_retry_after(self):
+        redis = AsyncMock()
+        storage = RedisStorage(redis, prefix="test")
+
+        redis.eval = AsyncMock(return_value=[1, 0])
+        assert await storage.allow("k", 60, 5) == (True, 0)
+
+        redis.eval = AsyncMock(return_value=[0, 42])
+        assert await storage.allow("k", 60, 5) == (False, 42)
+
+    @pytest.mark.asyncio
+    async def test_memory_storage_allow_does_not_count_rejected_hits(self):
+        storage = MemoryStorage()
+
+        assert await storage.allow("k", 60, 1) == (True, 0)
+        allowed, retry_after = await storage.allow("k", 60, 1)
+        assert allowed is False
+        assert retry_after >= 1
+        # The rejected hit was not appended: the bucket still has one entry.
+        assert len(storage.data["k"]) == 1
 
 
 class TestRateLimiters:
@@ -132,18 +230,82 @@ class TestRateLimiters:
         request.headers = {"X-Client": "abc"}
         request.ctx.user = SimpleNamespace(id=9)
         storage = MemoryStorage()
+        header_digest = hashlib.sha256(b"abc").hexdigest()[:16]
 
         assert await IPRateLimit(1, 60, storage).get_key(request) == "ip:127.0.0.1"
         assert await UserRateLimit(1, 60, storage).get_key(request) == "user:9"
-        assert await PathRateLimit(1, 60, storage).get_key(request) == "path:/items"
-        assert await HeaderRateLimit("X-Client", 1, 60, storage).get_key(request) == "header:X-Client:abc"
+        assert await PathRateLimit(1, 60, storage).get_key(request) == "path:user:9:/items"
+        assert await HeaderRateLimit("X-Client", 1, 60, storage).get_key(request) == f"header:X-Client:{header_digest}"
 
     @pytest.mark.asyncio
-    async def test_user_limiter_uses_anonymous_bucket(self):
+    async def test_missing_header_falls_back_to_ip(self):
+        request = MagicMock()
+        request.remote_addr = "127.0.0.1"
+        request.headers = {}
+        limiter = HeaderRateLimit("X-Client", 1, 60, MemoryStorage())
+        assert await limiter.get_key(request) == "header:X-Client:missing:127.0.0.1"
+
+    @pytest.mark.asyncio
+    async def test_ip_falls_back_to_socket_peer_when_no_proxy_config(self):
+        request = MagicMock()
+        request.remote_addr = ""
+        request.ip = "192.0.2.10"
+        limiter = IPRateLimit(1, 60, MemoryStorage())
+        assert await limiter.get_key(request) == "ip:192.0.2.10"
+
+    @pytest.mark.parametrize("limit", [0, -1, True, 1.5, "1"])
+    def test_rejects_invalid_limit(self, limit):
+        with pytest.raises(ValueError, match="limit must be a positive integer"):
+            IPRateLimit(limit, 60, MemoryStorage())
+
+    @pytest.mark.parametrize("window", [0, -1, True, 1.5, "60"])
+    def test_rejects_invalid_window(self, window):
+        with pytest.raises(ValueError, match="window must be a positive integer"):
+            IPRateLimit(1, window, MemoryStorage())
+
+    @pytest.mark.asyncio
+    async def test_limiters_with_different_settings_do_not_share_a_bucket(self):
+        storage = MemoryStorage()
+        request = MagicMock()
+        request.remote_addr = "127.0.0.1"
+        request.ctx.user = SimpleNamespace(id=9)
+
+        short = UserRateLimit(1, 60, storage)
+        long = UserRateLimit(5, 3600, storage)
+        assert await short.allow(request) is True
+        assert await long.allow(request) is True
+        assert len(storage.data) == 2
+
+    @pytest.mark.asyncio
+    async def test_user_limiter_falls_back_to_ip_without_user(self):
         request = MagicMock()
         request.ctx.user = None
+        request.remote_addr = "127.0.0.1"
         limiter = UserRateLimit(1, 60, MemoryStorage())
-        assert await limiter.get_key(request) == "anonymous"
+        assert await limiter.get_key(request) == "anon:127.0.0.1"
+
+    @pytest.mark.asyncio
+    async def test_user_limiter_treats_anonymous_user_placeholder_as_ip(self):
+        request = MagicMock()
+        request.ctx.user = AnonymousUser()
+        request.remote_addr = "10.0.0.7"
+        limiter = UserRateLimit(1, 60, MemoryStorage())
+        assert await limiter.get_key(request) == "anon:10.0.0.7"
+
+    @pytest.mark.asyncio
+    async def test_anonymous_clients_do_not_share_a_bucket(self):
+        limiter = UserRateLimit(1, 60, MemoryStorage())
+        first = MagicMock()
+        first.ctx.user = AnonymousUser()
+        first.remote_addr = "10.0.0.7"
+        second = MagicMock()
+        second.ctx.user = AnonymousUser()
+        second.remote_addr = "10.0.0.8"
+
+        assert await limiter.get_key(first) != await limiter.get_key(second)
+        assert await limiter.allow(first) is True
+        assert await limiter.allow(second) is True
+        assert await limiter.allow(first) is False
 
     @pytest.mark.asyncio
     async def test_limit_denies_request_after_threshold(self):
@@ -171,3 +333,13 @@ class TestRateLimiters:
         first.allow.assert_awaited_once_with(request)
         rejected.allow.assert_awaited_once_with(request)
         never_reached.allow.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_throttle_rate_exposes_retry_after(self):
+        request = MagicMock()
+        request.remote_addr = "127.0.0.1"
+        request.app.config = SimpleNamespace(REQUEST_LIMITERS=[IPRateLimit(1, 60, MemoryStorage())])
+
+        assert await throttle_rate(request) is True
+        assert await throttle_rate(request) is False
+        assert request.ctx.throttle_retry_after >= 1

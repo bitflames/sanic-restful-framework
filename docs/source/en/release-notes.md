@@ -2,7 +2,7 @@
 
 Release history and changelog for Sanic RESTful Framework.
 
-Current package version: `srf.__version__ == "0.1.1"`.
+Current package version: `srf.__version__ == "0.1.3"`.
 
 ## Versioning scheme
 
@@ -15,6 +15,19 @@ SRF follows [Semantic Versioning](https://semver.org/):
 Format: `major.minor.patch`
 
 ## Version history
+
+### v0.1.3
+
+**Routing, pagination and rate limiting fixes; auth API split**
+
+- Fixed `HEAD` requests returning 405, synchronous `@action` returning 500, and GitHub login without `id`
+- Pagination falls back and clamps invalid parameters; empty results report page 1
+- Redis rate limiting increments and expires keys atomically via Lua
+- Auth route registration split into `register_jwt_urls()` and friends; added `change-password` / `reset-password`
+- Health check module moved to `srf.health.route`; email config can be overridden via `app.config.EMAIL_CONFIG`
+- English and Chinese docs synced; added `tests/test_jwt_flow.py`
+
+---
 
 ### v0.1.1
 
@@ -134,9 +147,9 @@ Format: `major.minor.patch`
 
 ## Supported Python versions
 
-| SRF version | Python version |
-|----------|-------------|
-| 0.0.x / 0.1.x | >= 3.11 |
+| SRF version   | Python version |
+| ------------- | -------------- |
+| 0.0.x / 0.1.x | >= 3.11        |
 
 ---
 
@@ -182,4 +195,4 @@ Pull Requests to help improve SRF are welcome!
 
 ---
 
-*Last updated: 2026-08-06*
+_Last updated: 2026-08-06_

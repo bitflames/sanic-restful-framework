@@ -24,9 +24,9 @@ from sanic.exceptions import BadRequest, ServerError
 from tortoise.contrib.sanic import register_tortoise
 from tortoise.exceptions import IntegrityError
 
-from srf.auth.auth import gen_user_access_token, update_user_last_login
+from srf.auth.auth import gen_user_access_token
 from srf.auth.models import Role, User
-from srf.auth.route import register_auth_urls
+from srf.auth.route import register_all_auth_urls
 from srf.auth.viewset import UserViewSet
 from srf.config import settings
 from srf.event.viewset import EventViewSet
@@ -94,8 +94,8 @@ class SecretNoteViewSet(BaseViewSet):
     def queryset(self):
         return SecretNote.all()
 
-    def get_schema(self, request, *args, is_safe=False, **kwargs):
-        if request.method.lower() in ("get", "head", "options") or is_safe:
+    def get_schema(self):
+        if self.request.is_safe:
             return SecretNoteSchemaReader
         return SecretNoteSchemaWriter
 
@@ -206,18 +206,10 @@ def create_app() -> Sanic:
     app = Sanic("srf-local-server")
     app.config.JWT_SECRET = JWT_SECRET
     app.config.SECRET_KEY = SECRET_KEY
-    app.config.NON_AUTH_ENDPOINTS = (
-        "/api/public/hello",
-        "/api/public/router-widgets",
-        "/api/public/manual-widgets",
-        "/api/public/qwe",
-        "/health",
-        "/api/auth/test/social-provision",
-    )
     settings.set_app(app)
 
     register_tortoise(app, config=TORTOISE_ORM, generate_schemas=True)
-    register_auth_urls(app, prefix="/api/auth")
+    register_all_auth_urls(app, prefix="/api/auth")
 
     api = Blueprint("api")
     router = SanicRouter(api, prefix="api")
@@ -278,13 +270,18 @@ def create_app() -> Sanic:
                     "roles": [role.name],
                 }
             )
-        await update_user_last_login(user_db)
+        await user_db.update_user_last_login()
         payload = await gen_user_access_token(request, user_db)
         payload["created"] = created
         return json(payload)
 
     @app.middleware("request")
     async def auth_middleware(request):
+        # Whitelist public and auth endpoints BEFORE strict authentication;
+        # authenticate_request requires a valid, non-expired access token.
+        if request.path == "/health" or request.path.startswith(("/api/public/", "/api/auth/")):
+            request.ctx.user = None
+            return
         await set_user_to_request_ctx(request)
 
     @app.after_server_start

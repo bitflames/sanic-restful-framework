@@ -99,7 +99,7 @@ Protect your API from abuse with multiple rate limiting strategies:
 
 - **IPRateLimit**: Rate limiting based on IP address
 - **UserRateLimit**: Rate limiting based on user ID
-- **PathRateLimit**: Rate limiting based on the request path
+- **PathRateLimit**: Rate limiting based on request path plus user/IP
 - **HeaderRateLimit**: Rate limiting based on request headers
 
 **Storage backends:**
@@ -209,16 +209,16 @@ SRF is suitable for the following scenarios:
 
 ## Comparison with other frameworks
 
-| Feature | Sanic RESTful Framework | FastAPI | Django REST framework |
-| ------ | ----- | --------- | ------------- |
-| Async support | ✅ Complete | ✅ Complete | ⚠️ Partial |
-| Performance | 🚀 Very high | 🚀 High | ⚡ Medium |
-| Development speed | Very fast | Fast | Very fast |
-| Learning curve | 📈 Gentle | 📈 Gentle | 📈 Steep |
-| ViewSet | ✅ Supported | ❌ Not supported | ✅ Supported |
-| Data validation | Pydantic | Pydantic | Serializer |
-| ORM | Tortoise (other ORM extensions in progress) | SQLAlchemy/others | Django ORM |
-| Community | 🌱 Growing | 🌳 Active | 🌲 Mature |
+| Feature           | Sanic RESTful Framework                     | FastAPI           | Django REST framework |
+| ----------------- | ------------------------------------------- | ----------------- | --------------------- |
+| Async support     | ✅ Complete                                 | ✅ Complete       | ⚠️ Partial            |
+| Performance       | 🚀 Very high                                | 🚀 High           | ⚡ Medium             |
+| Development speed | Very fast                                   | Fast              | Very fast             |
+| Learning curve    | 📈 Gentle                                   | 📈 Gentle         | 📈 Steep              |
+| ViewSet           | ✅ Supported                                | ❌ Not supported  | ✅ Supported          |
+| Data validation   | Pydantic                                    | Pydantic          | Serializer            |
+| ORM               | Tortoise (other ORM extensions in progress) | SQLAlchemy/others | Django ORM            |
+| Community         | 🌱 Growing                                  | 🌳 Active         | 🌲 Mature             |
 
 ## Next steps
 

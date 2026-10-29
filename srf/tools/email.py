@@ -7,7 +7,7 @@ from email.mime.text import MIMEText
 from pydantic import BaseModel, EmailStr, Field
 from sanic.log import logger
 
-from srf.config.settings import EmailConfig
+from srf.config import settings
 from srf.templates.template import templates
 
 
@@ -20,10 +20,10 @@ class EmailCodeVerifySchema(EmailValidator):
 
 
 def send_email(to_email: str, subject: str, content: str) -> bool:
-    from_email = EmailConfig.from_email
-    smtp_server = EmailConfig.smtp_server
-    smtp_port = int(EmailConfig.smtp_port)
-    password = EmailConfig.password
+    from_email = settings.EMAIL_CONFIG.from_email
+    smtp_server = settings.EMAIL_CONFIG.smtp_server
+    smtp_port = int(settings.EMAIL_CONFIG.smtp_port)
+    password = settings.EMAIL_CONFIG.password
 
     message = MIMEMultipart("alternative")
     message["From"] = from_email
@@ -47,7 +47,7 @@ def send_email(to_email: str, subject: str, content: str) -> bool:
         return True
 
     except Exception:  # noqa: BLE001
-        logger.exception("Email send failed to=%s", to_email)
+        logger.exception("Email send failed")
         return False
 
     finally:
